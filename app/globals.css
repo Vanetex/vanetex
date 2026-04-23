@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  background: #07080b;
+  color: #0B0C0F;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 12% -10%, rgba(31, 111, 235, 0.35), transparent 40%),
+    radial-gradient(circle at 88% -6%, rgba(86, 140, 239, 0.16), transparent 34%),
+    linear-gradient(180deg, #090b11 0%, #0a0d13 38%, #0b1119 100%);
+}
+
+/* Subtle transitions for the core flow steps */
+.fade-in {
+  animation: fade-in 260ms ease-out both;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Progress bar (AI evaluation loading) */
+.progress-bar {
+  position: relative;
+  overflow: hidden;
+  background: rgba(31, 111, 235, 0.08);
+  border-radius: 999px;
+}
+.progress-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(31, 111, 235, 0.35),
+    transparent
+  );
+  animation: sweep 1.4s linear infinite;
+}
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+.slide-up {
+  animation: slide-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.surface-card {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 248, 253, 0.97) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 1px 1px rgba(11, 12, 15, 0.05),
+    0 22px 54px rgba(3, 7, 16, 0.28);
+  transition: box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.surface-card:hover {
+  border-color: rgba(31, 111, 235, 0.28);
+  box-shadow:
+    0 1px 1px rgba(11, 12, 15, 0.05),
+    0 26px 62px rgba(3, 7, 16, 0.34);
+}
+
+.surface-soft {
+  background: linear-gradient(180deg, rgba(11, 12, 15, 0.03), rgba(11, 12, 15, 0.02));
+  border: 1px solid rgba(11, 12, 15, 0.09);
+}
+
+.cta-primary {
+  background: linear-gradient(135deg, #0B0C0F 0%, #1F6FEB 155%);
+  box-shadow:
+    0 14px 34px rgba(8, 15, 30, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.cta-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 18px 42px rgba(8, 15, 30, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.cta-primary:active {
+  transform: translateY(0);
+}
+
+.field-focus {
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.field-focus:focus {
+  border-color: rgba(31, 111, 235, 0.6);
+  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.14);
+}
+
+.app-shell {
+  background:
+    linear-gradient(180deg, rgba(23, 28, 40, 0.58), rgba(15, 18, 28, 0.62)),
+    radial-gradient(circle at 20% -10%, rgba(31, 111, 235, 0.22), transparent 34%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 35px 80px rgba(5, 11, 24, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .interactive-panel {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .interactive-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.28) 50%, transparent 75%);
+    transform: translateX(-140%);
+    transition: transform 700ms ease;
+    pointer-events: none;
+  }
+
+  .interactive-panel:hover::before {
+    transform: translateX(140%);
+  }
+}
