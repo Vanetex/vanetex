@@ -1,4 +1,4 @@
-import type { Track } from "@/lib/types";
+import type { Track, Lesson } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Track 1 — Financial Metrics 101
@@ -1263,6 +1263,82 @@ const financialMetrics101: Track = {
   ],
 };
 
+const dividendYield: Lesson = {
+  id: "dividend-yield",
+  trackId: "financial-metrics-101",
+  order: 12,
+  title: "Dividend Yield & Payout Ratio",
+  concept: "Dividend Income & Sustainability",
+  difficulty: "Easy",
+  fields: ["AM", "HF", "IB"],
+  teaching: {
+    intro: "Not all investment returns come from price appreciation. Dividends — cash payments companies make to shareholders — are a critical part of total return. Knowing how to evaluate them separates income investors from traders.",
+    sections: [
+      {
+        heading: "What Is Dividend Yield?",
+        body: "Dividend yield measures how much a company pays in dividends each year relative to its stock price. It tells you the income return you earn just from holding the stock, independent of any price change.",
+        example: "A stock priced at $50 that pays $2 per year in dividends has a yield of 4% ($2 ÷ $50). If the price falls to $40 with no dividend change, the yield rises to 5% — which is why a rising yield can be a warning sign rather than a reward.",
+      },
+      {
+        heading: "What Is the Payout Ratio?",
+        body: "The payout ratio shows what percentage of earnings a company pays out as dividends. It tells you whether the dividend is sustainable. A ratio below 50% is generally conservative. Above 80% is high-risk. Above 100% means the company is paying out more than it earns — a dividend cut is likely.",
+        example: "Company A earns $4/share and pays $1.60 in dividends: payout ratio = 40% — very sustainable. Company B earns $3/share and pays $2.90: payout ratio = 97% — one bad quarter and the dividend is at risk.",
+      },
+      {
+        heading: "What Makes a Good Dividend?",
+        body: "The best dividends have three qualities: consistency (paid reliably for 10+ years), growth (increased over time), and sustainability (payout ratio in the 30–60% range with strong free cash flow coverage). A high yield with a stretched payout ratio is a yield trap — the income looks attractive until it's cut.",
+      },
+    ],
+    keyTakeaway: "Dividend yield tells you what you earn today; payout ratio tells you if it will still be there tomorrow.",
+  },
+  practice: [
+    {
+      question: "A stock is priced at $40 and pays an annual dividend of $1.60 per share. What is the dividend yield?",
+      options: ["2%", "4%", "6%", "8%"],
+      correctIndex: 1,
+      explanation: "$1.60 ÷ $40 = 0.04 = 4%. Dividend yield = Annual dividend per share ÷ Stock price.",
+    },
+    {
+      question: "A company earns $5.00 per share and pays $4.50 per share in dividends. What is the payout ratio?",
+      options: ["45%", "90%", "110%", "50%"],
+      correctIndex: 1,
+      explanation: "$4.50 ÷ $5.00 = 90%. A 90% payout ratio leaves very little cushion if earnings decline even modestly.",
+    },
+    {
+      question: "A stock's dividend yield jumped from 3% to 6% over six months without any dividend increase. What most likely happened?",
+      options: ["Earnings doubled", "The stock price fell roughly 50%", "The dividend was doubled", "Interest rates rose"],
+      correctIndex: 1,
+      explanation: "Yield = dividend ÷ price. If the dividend is unchanged and yield doubled, the price must have halved. A rising yield caused by a falling stock price is a warning, not an opportunity — investigate why the stock is falling.",
+    },
+    {
+      question: "Which payout ratio is generally the most sustainable for a mature consumer staples company?",
+      options: ["15%", "45%", "85%", "105%"],
+      correctIndex: 1,
+      explanation: "45% leaves room for earnings volatility while still returning meaningful capital to shareholders. 85% leaves little buffer. 105% means the company is paying out more than it earns — unsustainable. 15% is conservative but fine.",
+    },
+  ],
+  apply: {
+    setup: "You are comparing two mature consumer staples companies that both pay dividends. Company A: stock at $60, annual dividend $2.40/share, net income $4.00/share. Company B: stock at $45, annual dividend $2.70/share, net income $2.80/share.",
+    data: [
+      { label: "Company A — Stock price", value: "$60" },
+      { label: "Company A — Annual dividend", value: "$2.40/share" },
+      { label: "Company A — Net income/share", value: "$4.00" },
+      { label: "Company B — Stock price", value: "$45" },
+      { label: "Company B — Annual dividend", value: "$2.70/share" },
+      { label: "Company B — Net income/share", value: "$2.80" },
+    ],
+    question: "Which company's dividend appears more sustainable, and why?",
+    options: [
+      "Company A — its lower payout ratio leaves room to absorb earnings volatility",
+      "Company B — its higher yield means better income for investors",
+      "Both are equally sustainable",
+      "Company A — its higher stock price signals financial strength",
+    ],
+    correctIndex: 0,
+    explanation: "Company A: yield = 4%, payout ratio = 60%. Company B: yield = 6%, payout ratio = 96.4%. Company B is paying out nearly all of its earnings. One bad quarter could force a dividend cut — which would likely send the stock price lower as well. Company A's yield is lower but its dividend is well-covered. The higher yield of Company B is a warning, not a reward.",
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Track 2 — Reading the Market
 // ---------------------------------------------------------------------------
@@ -1934,6 +2010,101 @@ const readingTheMarket: Track = {
   ],
 };
 
+const ipoMechanics: Lesson = {
+  id: "ipo-mechanics",
+  trackId: "reading-the-market",
+  order: 7,
+  title: "IPO Mechanics",
+  concept: "How New Stocks Come to Market",
+  difficulty: "Medium",
+  fields: ["IB", "PE", "VC", "HF"],
+  teaching: {
+    intro: "Every public company was once private. Understanding how IPOs work helps you avoid the most common mistakes retail investors make when a hot new stock debuts — and recognize when the excitement is engineered.",
+    sections: [
+      {
+        heading: "What Happens in an IPO?",
+        body: "An Initial Public Offering is the first time a company sells shares to the public. The company raises cash by issuing new shares (primary offering), and existing insiders may also sell their shares (secondary offering). Investment banks underwrite the deal — they set the initial price and sell shares to institutional investors before the stock ever trades publicly.",
+        example: "If a company sells 10M new shares at $20 each, it raises $200M in fresh capital. If insiders simultaneously sell 5M existing shares, the company gets nothing from those — only the insiders do.",
+      },
+      {
+        heading: "The Lock-Up Period",
+        body: "After an IPO, insiders — founders, employees, and early investors — are typically locked up for 90 to 180 days and cannot sell their shares. When the lock-up expires, a large supply of shares hits the market. Stock prices often fall around lock-up expiry because insiders who couldn't sell before frequently do so immediately after. Watching the lock-up date is a key timing signal.",
+      },
+      {
+        heading: "First-Day Pops and the Real Price",
+        body: "Underwriters typically set the IPO price below what they believe fair value is to generate excitement and demand. First-day price jumps of 20–50% are common. But retail investors cannot buy at the IPO price — only institutions can. By the time you can buy on the open market on day one, you are paying the 'popped' price. The real test of an IPO's quality is where it trades 6–12 months later, after the excitement fades.",
+      },
+    ],
+    keyTakeaway: "IPOs are priced to benefit insiders and institutions first. Retail investors who buy on day one often pay a full or premium price — and face a lock-up expiry headwind within months.",
+  },
+  practice: [
+    {
+      question: "What is the primary purpose of an IPO for the company itself?",
+      options: [
+        "Allow founders to sell all their shares immediately",
+        "Raise capital by selling new shares to the public",
+        "Avoid paying taxes on previous profits",
+        "List on an exchange without raising money",
+      ],
+      correctIndex: 1,
+      explanation: "The primary purpose is to raise capital for the company by selling new shares. Founders may sell existing shares at the same time (secondary offering), but that money goes to them — not the company.",
+    },
+    {
+      question: "What typically happens to an IPO stock's price around the lock-up expiration?",
+      options: [
+        "Price rises on renewed investor excitement",
+        "Price often falls as a large supply of insider shares hits the market",
+        "Price is temporarily frozen by the exchange",
+        "Nothing — lock-ups only apply to C-suite executives",
+      ],
+      correctIndex: 1,
+      explanation: "Lock-up expiry creates a supply shock. Insiders who were forced to hold their shares for 90–180 days can now sell, and many do. This increased supply often pushes prices lower. Watching the lock-up date before buying an IPO is essential.",
+    },
+    {
+      question: "A company IPOs at $20/share. On the first trading day it closes at $34. A retail investor buys at $34. Relative to the IPO price, they paid:",
+      options: [
+        "The same as institutional investors",
+        "70% above the IPO price",
+        "70% below institutional cost",
+        "The optimal entry point — after price discovery",
+      ],
+      correctIndex: 1,
+      explanation: "($34 − $20) ÷ $20 = 70% above the IPO price. Institutions bought at $20. The retail investor is buying at the post-pop price, capturing none of the first-day gain while taking on all of the downside if it reverts.",
+    },
+    {
+      question: "Which signal most strongly suggests an IPO might be overpriced at its opening trade?",
+      options: [
+        "Heavy institutional demand before the offering",
+        "No insiders selling shares in the offering",
+        "A 90-day lock-up period",
+        "A large first-day pop immediately followed by heavy selling",
+      ],
+      correctIndex: 3,
+      explanation: "A large first-day pop followed by immediate selling (especially if volume is high) suggests that early buyers are flipping shares — taking profits quickly rather than holding. This 'hot money' behavior often precedes a multi-month decline as speculative demand exhausts itself.",
+    },
+  ],
+  apply: {
+    setup: "A consumer fintech company IPOs at $28/share. On day 1, it closes at $44 — a 57% pop. The business looks compelling: 65% revenue growth, 118% net revenue retention, path to profitability in 18 months. Insiders hold 71% of shares post-IPO. Lock-up expires in 90 days.",
+    data: [
+      { label: "IPO price", value: "$28" },
+      { label: "Day 1 close", value: "$44 (+57%)" },
+      { label: "Revenue growth", value: "65% YoY" },
+      { label: "Net revenue retention", value: "118%" },
+      { label: "Insider ownership post-IPO", value: "71%" },
+      { label: "Lock-up expiry", value: "90 days" },
+    ],
+    question: "What is the most disciplined approach for a retail investor who finds this business compelling?",
+    options: [
+      "Buy now — the fundamentals clearly justify paying above IPO price",
+      "Wait until after lock-up expiry to assess price with real supply dynamics",
+      "Short the stock ahead of lock-up expiry to profit from the sell-off",
+      "Set a limit order at the $28 IPO price and wait",
+    ],
+    correctIndex: 1,
+    explanation: "71% insider ownership with a 90-day lock-up means a massive supply shock is coming. Even with strong fundamentals, there is no real price discovery yet — you only know what institutions paid before the business had to prove itself publicly. Waiting for lock-up expiry lets you see how insiders actually behave when they can sell, gives you 90 days of public financial disclosures to analyze, and often provides a better entry price. The fundamentals being compelling doesn't change the mechanics — it just means the business may be worth buying at the right price after the lock-up.",
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Track 3 — Volatility & Risk
 // ---------------------------------------------------------------------------
@@ -2597,6 +2768,91 @@ const volatilityAndRisk: Track = {
       },
     },
   ],
+};
+
+const maxDrawdown: Lesson = {
+  id: "max-drawdown",
+  trackId: "volatility-risk",
+  order: 7,
+  title: "Max Drawdown & Recovery",
+  concept: "The Asymmetry of Losses",
+  difficulty: "Medium",
+  fields: ["HF", "AM", "PE", "IB", "VC"],
+  teaching: {
+    intro: "A portfolio that falls 50% requires a 100% gain just to break even. Understanding drawdown is what separates strategies that survive bad markets from those that force you to sell at exactly the wrong moment.",
+    sections: [
+      {
+        heading: "What Is Max Drawdown?",
+        body: "Maximum drawdown measures the largest peak-to-trough decline in a portfolio or stock over a given period. It captures the worst-case loss an investor would have experienced if they bought at the peak and held through the bottom.",
+        example: "A portfolio peaks at $100,000, falls to $60,000, then recovers. Max drawdown = ($100K − $60K) ÷ $100K = 40%. To recover from that 40% loss, the portfolio needs to gain 67% — not 40% — because the base is now smaller.",
+      },
+      {
+        heading: "The Asymmetry of Losses",
+        body: "Losses and the gains needed to recover from them are not symmetric. A 10% loss requires an 11% gain to recover. A 25% loss needs 33%. A 50% loss needs 100%. A 75% loss needs 300%. This asymmetry is why avoiding large losses is mathematically more important than maximizing gains. A strategy that gains 20% then loses 20% is not flat — it is down 4%.",
+      },
+      {
+        heading: "Why Drawdown Matters Beyond the Math",
+        body: "Large drawdowns cause panic selling at the worst possible time — near the bottom. They consume time: a 50% drawdown that takes 3 years to recover means 3 years of zero progress toward your goals. For leveraged strategies, drawdowns trigger margin calls. For investors near retirement, a large drawdown at the wrong time can be unrecoverable. A 15% annual return with a 55% max drawdown is not the same as 12% with a 15% drawdown.",
+      },
+    ],
+    keyTakeaway: "Never evaluate a strategy only by its returns — a high return with a massive drawdown will break most investors psychologically before they can benefit from the recovery.",
+  },
+  practice: [
+    {
+      question: "A portfolio peaks at $80,000 then falls to $52,000. What is the max drawdown?",
+      options: ["28%", "35%", "32.5%", "53.8%"],
+      correctIndex: 1,
+      explanation: "($80,000 − $52,000) ÷ $80,000 = $28,000 ÷ $80,000 = 35%. Max drawdown is always calculated from peak to trough as a percentage of the peak.",
+    },
+    {
+      question: "A stock falls 60% from its peak. What return is required to recover to the original peak?",
+      options: ["60%", "90%", "150%", "100%"],
+      correctIndex: 2,
+      explanation: "If the stock was $100 and falls 60% to $40, it must rise from $40 to $100 — a gain of $60 on a base of $40 = 150%. Loss and recovery percentages are not equal because they have different starting points.",
+    },
+    {
+      question: "Why does a 20% gain followed by a 20% loss result in a net loss, not a break-even?",
+      options: [
+        "Because taxes apply to the gain first",
+        "Because gains and losses are calculated on different base amounts",
+        "It doesn't — you break exactly even",
+        "Because trading commissions compound negatively",
+      ],
+      correctIndex: 1,
+      explanation: "Start with $100. Gain 20% → $120. Lose 20% of $120 → $96. The 20% loss applies to a larger base ($120) than the 20% gain did ($100). This is the mathematical foundation of why avoiding losses matters more than maximizing gains.",
+    },
+    {
+      question: "A fund has returned +25% per year on average but had a 65% max drawdown in one year. Why is this concerning for most investors?",
+      options: [
+        "It isn't — 25% annual returns are exceptional by any standard",
+        "Most investors would panic-sell near the bottom, realizing the loss rather than the recovery",
+        "A 65% drawdown always indicates excessive leverage",
+        "Both the panic-sell risk and likely leverage use are concerning",
+      ],
+      correctIndex: 3,
+      explanation: "A 65% drawdown is nearly impossible to achieve without significant leverage in a diversified portfolio. Beyond that, behavioral research consistently shows that most investors exit strategies during large drawdowns — meaning they capture the loss but miss the recovery, turning a paper loss into a permanent one.",
+    },
+  ],
+  apply: {
+    setup: "You are choosing between two portfolio strategies for a $200,000 retirement account. You plan to retire in 6 years. Strategy A has returned 18% per year on average with a max drawdown of 55%. Strategy B has returned 13% per year with a max drawdown of 18%.",
+    data: [
+      { label: "Strategy A — avg annual return", value: "18%" },
+      { label: "Strategy A — max drawdown", value: "55%" },
+      { label: "Strategy B — avg annual return", value: "13%" },
+      { label: "Strategy B — max drawdown", value: "18%" },
+      { label: "Investment amount", value: "$200,000" },
+      { label: "Time horizon", value: "6 years to retirement" },
+    ],
+    question: "Which strategy is more appropriate for this investor, and why?",
+    options: [
+      "Strategy A — higher returns compound dramatically over 6 years",
+      "Strategy B — a 55% drawdown near retirement could be unrecoverable in 6 years",
+      "Strategy A — a 55% drawdown is temporary and will always recover",
+      "Strategy B — but only if you believe markets will be volatile",
+    ],
+    correctIndex: 1,
+    explanation: "A 55% drawdown 2 years before retirement turns $200,000 into $90,000. Even if Strategy A recovers, it takes time you do not have. Strategy B at 13% annually grows $200K to roughly $414K over 6 years with a manageable 18% worst-case drawdown. Strategy A might grow more in a perfect scenario — but the risk of a catastrophic drawdown near the finish line is unacceptable. Proximity to your financial goal fundamentally changes which risk you can afford to take.",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -3267,6 +3523,100 @@ const marketIndicators: Track = {
       },
     },
   ],
+};
+
+const fedAndRates: Lesson = {
+  id: "fed-and-rates",
+  trackId: "market-indicators",
+  order: 7,
+  title: "The Fed & Interest Rates",
+  concept: "How Monetary Policy Moves Markets",
+  difficulty: "Medium",
+  fields: ["HF", "AM", "IB", "PE"],
+  teaching: {
+    intro: "The Federal Reserve sets the most important price in the economy — the short-term interest rate. Every investor needs to understand what the Fed does, how to read its signals, and why rate changes hit different stocks in completely different ways.",
+    sections: [
+      {
+        heading: "What Does the Fed Do?",
+        body: "The Federal Reserve is the US central bank. It controls the federal funds rate — the overnight lending rate between banks, which influences every other interest rate in the economy from mortgages to corporate bonds. The Fed has a dual mandate: maximum employment and price stability (low inflation). It raises rates to slow inflation; it cuts rates to stimulate growth.",
+        example: "When inflation hit 9% in 2022, the Fed raised rates from near zero to 5.25% over 18 months — the fastest hiking cycle in 40 years. Growth stocks that traded at 50–80× earnings were repriced dramatically lower as future cash flows became worth less in a high-rate world.",
+      },
+      {
+        heading: "How Rates Affect Different Stocks",
+        body: "Higher rates raise the discount rate used to value future cash flows — making all future earnings worth less today. Growth stocks (whose earnings are far in the future) are hit hardest. Value stocks (with earnings today) are less sensitive. Banks and financials actually benefit from higher rates because they earn more on loans than they pay on deposits. Real estate and utilities are hurt because they compete with bonds for income-seeking investors.",
+      },
+      {
+        heading: "Reading the Fed",
+        body: "The Fed meets 8 times per year (FOMC meetings) to set rates. Its communication matters as much as its decisions. Key signals: the dot plot shows each Fed member's projected rate path. Jackson Hole speeches set expectations months in advance. 'Higher for longer' language crushes growth multiples. 'Pivot' signals — any hint of cuts — can trigger sharp growth stock rallies. Learning to read Fed language is a core market skill.",
+      },
+    ],
+    keyTakeaway: "You don't need to predict the Fed — you need to understand how rate changes hit different types of stocks differently, and position your portfolio to reflect the current rate environment.",
+  },
+  practice: [
+    {
+      question: "The Fed raises rates from 4.5% to 5.25%. Which sector is most likely to benefit?",
+      options: [
+        "High-growth software companies",
+        "Consumer discretionary retailers",
+        "Regional banks",
+        "Real estate investment trusts (REITs)",
+      ],
+      correctIndex: 2,
+      explanation: "Regional banks earn more on loans (rates rise) while their deposit costs lag. This widens their net interest margin — direct earnings benefit. High-growth software is hurt (future earnings discounted more heavily). REITs compete with bonds and are also pressured. Consumer discretionary suffers as borrowing costs rise for consumers.",
+    },
+    {
+      question: "Why do high-growth technology stocks fall more than value stocks during rate hike cycles?",
+      options: [
+        "They carry more total debt on their balance sheets",
+        "Their earnings are concentrated far in the future and worth less when discounted at higher rates",
+        "They are inherently more volatile by definition",
+        "They are more exposed to changes in consumer spending",
+      ],
+      correctIndex: 1,
+      explanation: "Valuation is the present value of all future cash flows. When the discount rate rises, cash flows far in the future lose value more than near-term cash flows. A growth company earning $1 in year 10 loses more value from a rate hike than a value company earning $1 next year. This is pure math — not about debt or volatility.",
+    },
+    {
+      question: "What is the Federal Reserve's dual mandate?",
+      options: [
+        "Control inflation and set bank reserve requirements",
+        "Maximize employment and maintain price stability",
+        "Regulate bank lending practices and set mortgage rates",
+        "Manage the national debt and money supply",
+      ],
+      correctIndex: 1,
+      explanation: "The Fed's dual mandate is maximum employment and stable prices. These two goals sometimes conflict — cutting rates helps employment but risks inflation; raising rates fights inflation but slows hiring. Managing this tension is the core challenge of monetary policy.",
+    },
+    {
+      question: "The Fed signals it expects to cut rates three times over the next 12 months. Which asset class is most likely to rally the most?",
+      options: [
+        "Short-term Treasury bonds",
+        "High-growth technology stocks with high P/E ratios",
+        "Regional bank stocks",
+        "Commodity-linked funds",
+      ],
+      correctIndex: 1,
+      explanation: "Rate cuts directly increase the present value of future earnings — which disproportionately benefits high-P/E growth stocks whose value is weighted toward far-future cash flows. Short-term treasuries see modest price gains. Banks actually suffer as their net interest margin compresses. Commodities respond more to economic growth than rate levels directly.",
+    },
+  ],
+  apply: {
+    setup: "Inflation has fallen from 9% to 3.1%. The Fed has held rates at 5.25–5.5% for 11 months. The latest dot plot projects 2 rate cuts over the next 12 months. Your portfolio is 70% high-growth technology stocks (average P/E of 45×) and 30% regional bank stocks.",
+    data: [
+      { label: "Current Fed funds rate", value: "5.25–5.5%" },
+      { label: "Current inflation (CPI)", value: "3.1%" },
+      { label: "Projected rate cuts (dot plot)", value: "2 over 12 months" },
+      { label: "Portfolio: growth tech", value: "70% — avg P/E 45×" },
+      { label: "Portfolio: regional banks", value: "30%" },
+    ],
+    question: "How should you think about adjusting this portfolio given the rate outlook?",
+    options: [
+      "Hold as-is — the rate pivot will benefit both positions equally",
+      "Gradually trim regional bank exposure as rate cuts will compress their net interest margin",
+      "Reduce growth tech significantly — high rates still make 45× P/E dangerous",
+      "Aggressively increase growth tech now — rate cuts are bullish for the whole market",
+    ],
+    correctIndex: 1,
+    explanation: "Rate cuts are positive for your 70% growth tech allocation — lower discount rates increase the present value of future earnings, supporting high-multiple stocks. However, 2 rate cuts will compress net interest margins for regional banks, which have benefited from the high-rate environment. The appropriate response is to gradually reduce bank exposure as the rate environment shifts, while allowing the growth tech to benefit from the rate tailwind. This is textbook sector rotation in response to monetary policy — one of the most reliable macro-driven investment frameworks.",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -3955,10 +4305,10 @@ const advancedConcepts: Track = {
 // ---------------------------------------------------------------------------
 
 export const ALL_TRACKS: Track[] = [
-  financialMetrics101,
-  readingTheMarket,
-  volatilityAndRisk,
-  marketIndicators,
+  { ...financialMetrics101, lessons: [...financialMetrics101.lessons, dividendYield] },
+  { ...readingTheMarket, lessons: [...readingTheMarket.lessons, ipoMechanics] },
+  { ...volatilityAndRisk, lessons: [...volatilityAndRisk.lessons, maxDrawdown] },
+  { ...marketIndicators, lessons: [...marketIndicators.lessons, fedAndRates] },
   advancedConcepts,
 ];
 

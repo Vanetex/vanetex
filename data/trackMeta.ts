@@ -41,6 +41,7 @@ export const ALL_TRACK_META: TrackMeta[] = [
       { id: "return-on-equity", trackId: "financial-metrics-101", order: 9, title: "Return on Equity", concept: "Return on Equity (ROE)", difficulty: "Medium", fields: ["IB", "PE", "HF", "AM"] },
       { id: "peg-ratio", trackId: "financial-metrics-101", order: 10, title: "The PEG Ratio", concept: "Price/Earnings-to-Growth Ratio", difficulty: "Medium", fields: ["HF", "VC", "AM"] },
       { id: "ev-ebitda", trackId: "financial-metrics-101", order: 11, title: "EV/EBITDA", concept: "Enterprise Value & EBITDA", difficulty: "Hard", fields: ["IB", "PE"] },
+      { id: "dividend-yield", trackId: "financial-metrics-101", order: 12, title: "Dividend Yield & Payout Ratio", concept: "Dividend Income & Sustainability", difficulty: "Easy", fields: ["AM", "HF", "IB"] },
     ],
   },
   {
@@ -56,6 +57,7 @@ export const ALL_TRACK_META: TrackMeta[] = [
       { id: "sector-rotation", trackId: "reading-the-market", order: 4, title: "Sector Rotation", concept: "Economic Cycles & Capital Flows", difficulty: "Medium", fields: ["AM", "HF"] },
       { id: "macro-signals", trackId: "reading-the-market", order: 5, title: "Macro Signals", concept: "Interest Rates, Inflation & the Yield Curve", difficulty: "Medium", fields: ["HF", "AM", "IB"] },
       { id: "bull-bear-markets", trackId: "reading-the-market", order: 6, title: "Bull & Bear Markets", concept: "Market Cycles & Investor Behavior", difficulty: "Easy", fields: ["IB", "PE", "HF", "VC", "AM"] },
+      { id: "ipo-mechanics", trackId: "reading-the-market", order: 7, title: "IPO Mechanics", concept: "How New Stocks Come to Market", difficulty: "Medium", fields: ["IB", "PE", "VC", "HF"] },
     ],
   },
   {
@@ -71,6 +73,7 @@ export const ALL_TRACK_META: TrackMeta[] = [
       { id: "position-sizing", trackId: "volatility-risk", order: 4, title: "Position Sizing", concept: "Conviction-Based Allocation & Concentration Risk", difficulty: "Medium", fields: ["HF", "AM", "PE"] },
       { id: "diversification", trackId: "volatility-risk", order: 5, title: "Diversification", concept: "True Diversification vs Correlation Risk", difficulty: "Medium", fields: ["IB", "PE", "HF", "VC", "AM"] },
       { id: "market-cycles", trackId: "volatility-risk", order: 6, title: "Market Cycles", concept: "Economic Cycles, Leading Indicators & Recession Signals", difficulty: "Hard", fields: ["HF", "AM", "IB"] },
+      { id: "max-drawdown", trackId: "volatility-risk", order: 7, title: "Max Drawdown & Recovery", concept: "The Asymmetry of Losses", difficulty: "Medium", fields: ["HF", "AM", "PE", "IB", "VC"] },
     ],
   },
   {
@@ -86,6 +89,7 @@ export const ALL_TRACK_META: TrackMeta[] = [
       { id: "volume-analysis", trackId: "market-indicators", order: 4, title: "Volume Analysis", concept: "Trading Volume as a Confirmation Signal", difficulty: "Medium", fields: ["HF", "AM"] },
       { id: "moving-averages", trackId: "market-indicators", order: 5, title: "Moving Averages", concept: "Trend Identification & Support/Resistance", difficulty: "Easy", fields: ["HF", "AM"] },
       { id: "earnings-surprises", trackId: "market-indicators", order: 6, title: "Earnings Surprises", concept: "Earnings Season Dynamics & Market Expectations", difficulty: "Medium", fields: ["HF", "AM", "IB"] },
+      { id: "fed-and-rates", trackId: "market-indicators", order: 7, title: "The Fed & Interest Rates", concept: "How Monetary Policy Moves Markets", difficulty: "Medium", fields: ["HF", "AM", "IB", "PE"] },
     ],
   },
   {
