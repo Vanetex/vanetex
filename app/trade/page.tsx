@@ -12,6 +12,7 @@ import {
 import { listAwardedAchievements, awardAchievements } from "@/lib/supabase/achievements";
 import { computeEligibleAchievements } from "@/lib/achievements";
 import AchievementToast from "@/components/AchievementToast";
+import { searchTopStocks } from "@/data/topStocks";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -353,13 +354,23 @@ export default function TradePage() {
     loadData();
   }, [loadData]);
 
-  // Search stocks with debounce
+  // Search stocks — instant prefix match from curated list, then Finnhub for the rest
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!searchQuery.trim()) {
       setSearchResults([]);
       return;
     }
+
+    // Show curated results immediately (no delay)
+    const curated = searchTopStocks(searchQuery, 8).map((s) => ({
+      symbol: s.ticker,
+      name: s.name,
+    }));
+    setSearchResults(curated);
+    setHighlightedIndex(0);
+
+    // Then hit Finnhub to fill in any gaps not covered by the curated list
     searchTimeout.current = setTimeout(async () => {
       setSearching(true);
       try {
@@ -367,14 +378,16 @@ export default function TradePage() {
           `/api/stock/search?q=${encodeURIComponent(searchQuery)}`,
         );
         const data = await res.json() as { results: SearchResult[] };
-        setSearchResults(data.results ?? []);
-        setHighlightedIndex(0);
+        const finnhubResults = data.results ?? [];
+        const curatedTickers = new Set(curated.map((r) => r.symbol));
+        const extra = finnhubResults.filter((r) => !curatedTickers.has(r.symbol));
+        setSearchResults([...curated, ...extra].slice(0, 8));
       } catch {
-        setSearchResults([]);
+        // Keep curated results if Finnhub fails
       } finally {
         setSearching(false);
       }
-    }, 350);
+    }, 400);
   }, [searchQuery]);
 
   async function selectStock(symbol: string) {
