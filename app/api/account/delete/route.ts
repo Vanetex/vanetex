@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   await admin.from("paper_positions").delete().eq("user_id", user.id);
   await admin.from("paper_portfolios").delete().eq("user_id", user.id);
   await admin.from("lesson_progress").delete().eq("user_id", user.id);
-  await admin.from("awarded_achievements").delete().eq("user_id", user.id);
+  await admin.from("achievements").delete().eq("user_id", user.id);
   await admin.from("decisions").delete().eq("user_id", user.id);
   await admin.from("profiles").delete().eq("id", user.id);
 
