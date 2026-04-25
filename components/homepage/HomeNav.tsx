@@ -38,11 +38,14 @@ export default function HomeNav({ user }: { user: User | null }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {/* Hide anchor links on mobile — only show on sm+ */}
           {[["#demo", "Try demo"], ["#features", "Features"]].map(([href, label]) => (
-            <a key={href} href={href} style={{
-              color: "rgba(250,250,247,0.5)", fontSize: 13, fontWeight: 500,
-              textDecoration: "none", padding: "7px 14px", borderRadius: 99, transition: "color 200ms",
-            }}
+            <a key={href} href={href}
+              className="hidden sm:block"
+              style={{
+                color: "rgba(250,250,247,0.5)", fontSize: 13, fontWeight: 500,
+                textDecoration: "none", padding: "7px 14px", borderRadius: 99, transition: "color 200ms",
+              }}
               onMouseEnter={e => (e.currentTarget.style.color = "rgba(250,250,247,0.9)")}
               onMouseLeave={e => (e.currentTarget.style.color = "rgba(250,250,247,0.5)")}
             >{label}</a>
@@ -53,6 +56,7 @@ export default function HomeNav({ user }: { user: User | null }) {
               color: "#FAFAF7", fontSize: 13, fontWeight: 700,
               textDecoration: "none", padding: "8px 18px", borderRadius: 99,
               boxShadow: "0 4px 16px rgba(30,71,235,0.3), inset 0 1px 0 rgba(255,255,255,0.15)",
+              whiteSpace: "nowrap",
             }}>Today&apos;s challenge →</Link>
           ) : (
             <>
@@ -60,16 +64,19 @@ export default function HomeNav({ user }: { user: User | null }) {
                 color: "rgba(250,250,247,0.65)", fontSize: 13, fontWeight: 500,
                 textDecoration: "none", padding: "7px 14px", borderRadius: 99,
                 border: "1px solid rgba(255,255,255,0.12)", transition: "border-color 200ms, color 200ms",
+                whiteSpace: "nowrap",
               }}
                 onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.25)"; (e.currentTarget as HTMLAnchorElement).style.color = "rgba(250,250,247,0.95)"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.12)"; (e.currentTarget as HTMLAnchorElement).style.color = "rgba(250,250,247,0.65)"; }}
               >Sign in</Link>
-              <Link href="/auth/sign-up" style={{
-                background: "linear-gradient(135deg, #0B0C0F 0%, #1e47eb 160%)",
-                color: "#FAFAF7", fontSize: 13, fontWeight: 700,
-                textDecoration: "none", padding: "8px 18px", borderRadius: 99,
-                boxShadow: "0 4px 16px rgba(30,71,235,0.3), inset 0 1px 0 rgba(255,255,255,0.15)",
-              }}>Get started free</Link>
+              <Link href="/auth/sign-up"
+                style={{
+                  background: "linear-gradient(135deg, #0B0C0F 0%, #1e47eb 160%)",
+                  color: "#FAFAF7", fontSize: 13, fontWeight: 700,
+                  textDecoration: "none", padding: "8px 18px", borderRadius: 99,
+                  boxShadow: "0 4px 16px rgba(30,71,235,0.3), inset 0 1px 0 rgba(255,255,255,0.15)",
+                  whiteSpace: "nowrap",
+                }}>Get started free</Link>
             </>
           )}
         </div>
