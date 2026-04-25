@@ -639,6 +639,15 @@ export default function TradePage() {
                 </div>
               )}
 
+              {/* Allocation breakdown */}
+              {positions.length > 0 && (
+                <AllocationCard
+                  positions={positions}
+                  cash={portfolio?.cash ?? 0}
+                  totalValue={totalValue}
+                />
+              )}
+
               {/* Positions */}
               {positions.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-black/10 bg-white px-8 py-12 text-center">
@@ -1042,5 +1051,87 @@ export default function TradePage() {
         </div>
       )}
     </section>
+  );
+}
+
+// ── Allocation breakdown ───────────────────────────────────────────────────
+
+const ALLOC_COLORS = [
+  "#1F6FEB", "#16A34A", "#8B5CF6", "#D97706",
+  "#EC4899", "#0EA5E9", "#EF4444", "#F97316",
+  "#14B8A6", "#A855F7",
+];
+
+function AllocationCard({
+  positions,
+  cash,
+  totalValue,
+}: {
+  positions: PositionWithQuote[];
+  cash: number;
+  totalValue: number;
+}) {
+  if (totalValue <= 0) return null;
+
+  const slices = positions.map((p, i) => ({
+    label: p.ticker,
+    value: p.marketValue ?? p.avgCost * p.shares,
+    color: ALLOC_COLORS[i % ALLOC_COLORS.length],
+  }));
+
+  const cashPct = (cash / totalValue) * 100;
+
+  return (
+    <div className="rounded-2xl border border-black/5 bg-white p-5">
+      <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted">
+        Allocation
+      </p>
+
+      {/* Segmented bar */}
+      <div className="flex h-4 w-full overflow-hidden rounded-full bg-black/5">
+        {slices.map((s) => {
+          const pct = (s.value / totalValue) * 100;
+          return (
+            <div
+              key={s.label}
+              style={{ width: `${pct}%`, background: s.color }}
+              title={`${s.label} ${pct.toFixed(1)}%`}
+            />
+          );
+        })}
+        <div
+          style={{ width: `${cashPct}%`, background: "rgba(0,0,0,0.1)" }}
+          title={`Cash ${cashPct.toFixed(1)}%`}
+        />
+      </div>
+
+      {/* Legend */}
+      <div className="mt-4 space-y-2">
+        {slices.map((s) => {
+          const pct = (s.value / totalValue) * 100;
+          return (
+            <div key={s.label} className="flex items-center gap-3">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: s.color }}
+              />
+              <span className="flex-1 text-sm font-medium">{s.label}</span>
+              <span className="text-sm text-muted">{fmtCurrency(s.value)}</span>
+              <span className="w-12 text-right text-sm font-semibold">
+                {pct.toFixed(1)}%
+              </span>
+            </div>
+          );
+        })}
+        <div className="flex items-center gap-3">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-black/10" />
+          <span className="flex-1 text-sm font-medium text-muted">Cash</span>
+          <span className="text-sm text-muted">{fmtCurrency(cash)}</span>
+          <span className="w-12 text-right text-sm font-semibold text-muted">
+            {cashPct.toFixed(1)}%
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
