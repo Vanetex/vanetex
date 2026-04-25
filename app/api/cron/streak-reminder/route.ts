@@ -102,7 +102,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
           </tr>
           <tr>
             <td style="padding:0 36px 36px;">
-              <a href="https://vanetex.com/challenge"
+              <a href="https://vanetex.vercel.app/challenge"
                  style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:100px;">
                 Do today&rsquo;s challenge &rarr;
               </a>
@@ -112,7 +112,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
             <td style="padding:20px 36px;border-top:1px solid rgba(0,0,0,0.06);">
               <p style="margin:0;font-size:12px;color:#a0a0a0;">
                 You&rsquo;re receiving this because you have an active streak on Vanetex.
-                <br />To unsubscribe, update your preferences in <a href="https://vanetex.com/settings" style="color:#a0a0a0;">Settings</a>.
+                <br />To unsubscribe, update your preferences in <a href="https://vanetex.vercel.app/settings" style="color:#a0a0a0;">Settings</a>.
               </p>
             </td>
           </tr>
