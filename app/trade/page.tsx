@@ -26,6 +26,9 @@ type StockQuote = {
   changePct: number;
   dayHigh: number;
   dayLow: number;
+  open: number;
+  prevClose: number;
+  industry: string;
 };
 
 type SearchResult = { symbol: string; name: string };
@@ -278,6 +281,7 @@ export default function TradePage() {
   const [searching, setSearching] = useState(false);
   const [selectedStock, setSelectedStock] = useState<StockQuote | null>(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
+  const [candles, setCandles] = useState<number[]>([]);
   const [tradeType, setTradeType] = useState<"BUY" | "SELL">("BUY");
   const [sharesInput, setSharesInput] = useState("");
   const [executing, setExecuting] = useState(false);
@@ -399,11 +403,19 @@ export default function TradePage() {
     setSharesInput("");
     setLoadingQuote(true);
 
+    setCandles([]);
     try {
-      const res = await fetch(`/api/stock/quote?symbol=${symbol}`);
-      if (!res.ok) throw new Error("Could not load quote");
-      const q: StockQuote = await res.json();
+      const [quoteRes, candleRes] = await Promise.all([
+        fetch(`/api/stock/quote?symbol=${symbol}`),
+        fetch(`/api/stock/candles?symbol=${symbol}`),
+      ]);
+      if (!quoteRes.ok) throw new Error("Could not load quote");
+      const q: StockQuote = await quoteRes.json();
       setSelectedStock(q);
+      if (candleRes.ok) {
+        const cd = await candleRes.json() as { prices: number[] };
+        setCandles(cd.prices ?? []);
+      }
 
       // Auto-switch to SELL if user owns shares
       const owns = positions.find((p) => p.ticker === symbol);
@@ -837,29 +849,42 @@ export default function TradePage() {
               {/* Stock header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-semibold text-lg">{selectedStock.symbol}</p>
+                  <p className="font-semibold text-lg leading-tight">{selectedStock.symbol}</p>
                   <p className="text-sm text-muted">{selectedStock.name}</p>
+                  {selectedStock.industry && (
+                    <p className="mt-0.5 text-xs text-muted/70">{selectedStock.industry}</p>
+                  )}
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-semibold">
-                    {fmtCurrency(selectedStock.price)}
-                  </p>
-                  <p
-                    className={`text-sm font-medium ${
-                      selectedStock.change >= 0 ? "text-success" : "text-danger"
-                    }`}
-                  >
-                    {selectedStock.change >= 0 ? "+" : ""}
-                    {fmtCurrency(selectedStock.change)} (
-                    {fmtPct(selectedStock.changePct)})
+                  <p className="text-2xl font-semibold">{fmtCurrency(selectedStock.price)}</p>
+                  <p className={`text-sm font-medium ${selectedStock.change >= 0 ? "text-success" : "text-danger"}`}>
+                    {selectedStock.change >= 0 ? "+" : ""}{fmtCurrency(selectedStock.change)} ({fmtPct(selectedStock.changePct)})
                   </p>
                 </div>
               </div>
 
-              {/* Day range */}
-              <div className="flex gap-4 text-xs text-muted">
-                <span>Low: {fmtCurrency(selectedStock.dayLow)}</span>
-                <span>High: {fmtCurrency(selectedStock.dayHigh)}</span>
+              {/* 30-day sparkline */}
+              {candles.length > 1 && (
+                <Sparkline prices={candles} />
+              )}
+
+              {/* Key stats grid */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  ["Open", fmtCurrency(selectedStock.open)],
+                  ["Prev Close", fmtCurrency(selectedStock.prevClose)],
+                  ["Day High", fmtCurrency(selectedStock.dayHigh)],
+                  ["Day Low", fmtCurrency(selectedStock.dayLow)],
+                  ...(candles.length > 1 ? [
+                    ["30D High", fmtCurrency(Math.max(...candles))],
+                    ["30D Low", fmtCurrency(Math.min(...candles))],
+                  ] : []),
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-black/[0.03] px-3 py-2">
+                    <p className="text-[10px] text-muted uppercase tracking-wide">{label}</p>
+                    <p className="mt-0.5 text-sm font-medium">{value}</p>
+                  </div>
+                ))}
               </div>
 
               {/* Owned position info */}
@@ -1064,6 +1089,49 @@ export default function TradePage() {
         </div>
       )}
     </section>
+  );
+}
+
+// ── 30-day sparkline ──────────────────────────────────────────────────────
+
+function Sparkline({ prices }: { prices: number[] }) {
+  const W = 600, H = 80, PAD = 4;
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min || 1;
+  const up = prices[prices.length - 1] >= prices[0];
+  const color = up ? "#16A34A" : "#DC2626";
+
+  const pts = prices.map((p, i) => {
+    const x = PAD + (i / (prices.length - 1)) * (W - PAD * 2);
+    const y = PAD + ((max - p) / range) * (H - PAD * 2);
+    return `${x},${y}`;
+  });
+  const polyline = pts.join(" ");
+  const area = `${pts[0]} ${pts.slice(1).join(" ")} ${W - PAD},${H} ${PAD},${H}`;
+
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
+        30-Day Price
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 64 }} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={area} fill="url(#spark-fill)" />
+        <polyline points={polyline} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div className="flex justify-between text-[10px] text-muted mt-0.5">
+        <span>{prices.length} trading days</span>
+        <span className={up ? "text-success" : "text-danger"}>
+          {up ? "+" : ""}{(((prices[prices.length - 1] - prices[0]) / prices[0]) * 100).toFixed(1)}%
+        </span>
+      </div>
+    </div>
   );
 }
 
