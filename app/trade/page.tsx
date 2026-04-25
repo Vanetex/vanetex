@@ -641,11 +641,20 @@ export default function TradePage() {
 
               {/* Positions */}
               {positions.length === 0 ? (
-                <div className="rounded-2xl border border-black/5 bg-white p-6 text-center">
-                  <p className="text-muted">No positions yet.</p>
+                <div className="rounded-3xl border border-dashed border-black/10 bg-white px-8 py-12 text-center">
+                  <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-success/8">
+                    <svg className="h-5 w-5 text-success" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}>
+                      <polyline points="2,14 7,8 11,11 18,3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M2 17h16" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <p className="font-semibold">$10,000 ready to invest</p>
+                  <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
+                    Search for any stock and make your first paper trade. No real money — all the real learning.
+                  </p>
                   <button
                     onClick={() => setTab("trade")}
-                    className="mt-3 text-sm font-medium text-accent hover:underline"
+                    className="mt-5 rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
                   >
                     Make your first trade →
                   </button>
@@ -982,8 +991,15 @@ export default function TradePage() {
               ))}
             </div>
           ) : trades.length === 0 ? (
-            <div className="rounded-2xl border border-black/5 bg-white p-6 text-center">
-              <p className="text-muted">No trades yet.</p>
+            <div className="rounded-3xl border border-dashed border-black/10 bg-white px-8 py-12 text-center">
+              <p className="font-semibold">No trades yet</p>
+              <p className="mt-1 text-sm text-muted">Your full trade history will appear here once you make your first trade.</p>
+              <button
+                onClick={() => setTab("trade")}
+                className="mt-5 rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
+              >
+                Make your first trade →
+              </button>
             </div>
           ) : (
             trades.map((trade) => (

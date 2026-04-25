@@ -73,18 +73,38 @@ export default function JournalPage() {
       </div>
 
       {displayed.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-black/10 bg-white p-8 text-center">
-          <p className="text-sm text-muted">
-            {filter === "reflections"
-              ? "No reflections yet. Complete a challenge and add your reflection."
-              : "No decisions yet. Start your first challenge."}
-          </p>
-          <Link
-            href="/challenge"
-            className="mt-4 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
-          >
-            Start today&rsquo;s challenge
-          </Link>
+        <div className="rounded-3xl border border-dashed border-black/10 bg-white px-8 py-12 text-center">
+          {filter === "reflections" ? (
+            <>
+              <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/8">
+                <svg className="h-5 w-5 text-accent" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-5m-6-1l6-6m0 0l2 2m-2-2v4" />
+                </svg>
+              </div>
+              <p className="font-semibold">No reflections yet</p>
+              <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
+                After revealing an outcome, you&rsquo;ll be prompted to reflect on what you missed and what you&rsquo;d do differently.
+              </p>
+              <Link href="/challenge" className="mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper">
+                Take today&rsquo;s challenge →
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-black/[0.04]">
+                <svg className="h-5 w-5 text-muted" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="font-semibold">Your journal starts here</p>
+              <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
+                Every challenge you complete adds an entry — your decision, the AI&rsquo;s grade, the outcome, and your reflection.
+              </p>
+              <Link href="/challenge" className="mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper">
+                Take today&rsquo;s challenge →
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <ul className="space-y-3">

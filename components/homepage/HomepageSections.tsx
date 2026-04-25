@@ -166,7 +166,12 @@ function FinalCTA() {
 function Footer() {
   return (
     <footer style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "28px 24px", textAlign: "center" }}>
-      <p style={{ fontSize: 12, color: "rgba(250,250,247,0.25)" }}>Vanetex · Train your judgment with daily reps.</p>
+      <p style={{ fontSize: 12, color: "rgba(250,250,247,0.25)", marginBottom: 10 }}>Vanetex — Build Your Edge</p>
+      <div style={{ display: "flex", justifyContent: "center", gap: 20, flexWrap: "wrap" }}>
+        <Link href="/terms" style={{ fontSize: 11, color: "rgba(250,250,247,0.2)", textDecoration: "none" }}>Terms of Service</Link>
+        <Link href="/privacy" style={{ fontSize: 11, color: "rgba(250,250,247,0.2)", textDecoration: "none" }}>Privacy Policy</Link>
+        <a href="mailto:vanetexinvestingapp@gmail.com" style={{ fontSize: 11, color: "rgba(250,250,247,0.2)", textDecoration: "none" }}>vanetexinvestingapp@gmail.com</a>
+      </div>
     </footer>
   );
 }

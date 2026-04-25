@@ -17,7 +17,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/challenge";
+  const next = searchParams.get("next") ?? "/";
 
   if (code) {
     const supabase = await createClient();
@@ -26,9 +26,11 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}${next}`);
     }
     console.error("[/auth/callback] code exchange failed:", error.message);
+    return NextResponse.redirect(
+      `${origin}/auth/sign-in?error=${encodeURIComponent("Verification link expired or already used. Please sign in or request a new link.")}`,
+    );
   }
 
-  // No code or code exchange failed — hand off to the client-side confirm page.
-  // The hash fragment (if any) will carry through the redirect.
+  // No code — OAuth hash fragment flow, hand off to client-side confirm page.
   return NextResponse.redirect(`${origin}/auth/confirm`);
 }

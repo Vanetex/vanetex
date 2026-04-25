@@ -218,8 +218,6 @@ npm run dev
 
 ## Known deferred items (do not implement without being asked)
 
-- Apple OAuth — button exists, non-functional, needs Apple Developer account
 - `date_of_birth` for OAuth users — currently nullable
 - Stripe / payments — not started
-- More scenarios — only 8 exist, expansion planned
-- Push streak reminder migration: `supabase db push` (migration file exists at supabase/migrations/20260421000001_streak_reminder.sql)
+- Apple OAuth — not implemented, needs Apple Developer account if ever added

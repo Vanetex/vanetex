@@ -50,7 +50,7 @@ export default function SignUpPage() {
 
     setLoading(true);
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -58,7 +58,7 @@ export default function SignUpPage() {
           display_name: displayName.trim(),
           date_of_birth: dob,
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/`,
       },
     });
 
@@ -69,7 +69,7 @@ export default function SignUpPage() {
       return;
     }
 
-    router.push("/auth/verify");
+    window.location.href = `/auth/verify?email=${encodeURIComponent(email)}`;
   }
 
   async function handleOAuth(provider: "google") {

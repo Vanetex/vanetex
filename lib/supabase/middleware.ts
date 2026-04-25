@@ -51,6 +51,21 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // If user is signed in but email is not confirmed, block access to the app
+  // and send them to the verify screen.
+  if (
+    user &&
+    !user.email_confirmed_at &&
+    !pathname.startsWith("/auth/") &&
+    pathname !== "/" &&
+    pathname !== "/terms" &&
+    pathname !== "/privacy"
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/verify";
+    return NextResponse.redirect(url);
+  }
+
   // If user IS signed in and on an auth page (except sign-out), redirect home.
   if (
     user &&
@@ -58,7 +73,8 @@ export async function updateSession(request: NextRequest) {
     pathname !== "/auth/sign-out" &&
     pathname !== "/auth/callback" &&
     pathname !== "/auth/confirm" &&
-    pathname !== "/auth/update-password"
+    pathname !== "/auth/update-password" &&
+    pathname !== "/auth/verify"
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

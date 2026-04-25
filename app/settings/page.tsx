@@ -1,11 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CAREER_FIELDS, type CareerField } from "@/lib/types";
 
 export default function SettingsPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -25,6 +28,7 @@ export default function SettingsPage() {
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [paperMessage, setPaperMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -143,6 +147,30 @@ export default function SettingsPage() {
     await supabase.from("profiles").update({ career_field: field }).eq("id", user.id);
     setCareerField(field);
     setCareerSaving(false);
+  }
+
+  async function handleDeleteAccount() {
+    const input = window.prompt(
+      'Type DELETE to permanently remove your account, all decisions, progress, and paper trading history. This cannot be undone.',
+    );
+    if (input !== "DELETE") return;
+
+    setDeletingAccount(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/account/delete", { method: "POST" });
+      const data = (await res.json()) as { error?: string; success?: boolean };
+      if (!res.ok || !data.success) {
+        setError(data.error ?? "Could not delete account.");
+        setDeletingAccount(false);
+        return;
+      }
+      await supabase.auth.signOut();
+      router.push("/");
+    } catch {
+      setError("Network error while deleting account.");
+      setDeletingAccount(false);
+    }
   }
 
   async function handlePaperReset() {
@@ -304,6 +332,36 @@ export default function SettingsPage() {
           </div>
 
           <div className="surface-card rounded-3xl p-5">
+            <h2 className="text-base font-semibold">Legal</h2>
+            <p className="mt-1 text-xs text-muted">
+              Terms, privacy, and contact information.
+            </p>
+            <div className="mt-4 space-y-2">
+              <Link
+                href="/terms"
+                className="flex items-center justify-between rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-medium transition hover:border-black/15"
+              >
+                Terms of Service
+                <span className="text-muted">→</span>
+              </Link>
+              <Link
+                href="/privacy"
+                className="flex items-center justify-between rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-medium transition hover:border-black/15"
+              >
+                Privacy Policy
+                <span className="text-muted">→</span>
+              </Link>
+              <a
+                href="mailto:vanetexinvestingapp@gmail.com"
+                className="flex items-center justify-between rounded-xl border border-black/8 bg-white px-4 py-3 text-sm font-medium transition hover:border-black/15"
+              >
+                vanetexinvestingapp@gmail.com
+                <span className="text-muted">→</span>
+              </a>
+            </div>
+          </div>
+
+          <div className="surface-card rounded-3xl p-5">
             <h2 className="text-base font-semibold">Paper trading controls</h2>
             <p className="mt-1 text-xs text-muted">
               Reset paper portfolio cash to $10,000 and clear all paper trades.
@@ -322,6 +380,21 @@ export default function SettingsPage() {
               className="mt-4 rounded-full border border-danger/40 bg-danger/10 px-5 py-2.5 text-sm font-medium text-danger transition hover:bg-danger/15 disabled:opacity-45"
             >
               {resettingPaper ? "Resetting..." : "Reset paper account"}
+            </button>
+          </div>
+
+          <div className="surface-card rounded-3xl p-5">
+            <h2 className="text-base font-semibold">Delete account</h2>
+            <p className="mt-1 text-xs text-muted">
+              Permanently removes your account, all decisions, journal entries, progress, and paper trading history. This cannot be undone.
+            </p>
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+              className="mt-4 rounded-full border border-danger/40 bg-danger/10 px-5 py-2.5 text-sm font-medium text-danger transition hover:bg-danger/15 disabled:opacity-45"
+            >
+              {deletingAccount ? "Deleting account..." : "Delete my account"}
             </button>
           </div>
         </>

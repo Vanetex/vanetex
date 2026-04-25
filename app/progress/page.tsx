@@ -55,15 +55,23 @@ export default function ProgressPage() {
       <section>
         <h1 className="mb-1 text-xl font-semibold tracking-tight">Progress</h1>
         <p className="mb-6 text-sm text-muted">
-          Your skill score and accuracy show up here after a few challenges.
+          Your skill score, accuracy, and calibration build up here over time.
         </p>
-        <div className="rounded-2xl border border-dashed border-black/10 bg-white p-8 text-center">
-          <p className="text-sm text-muted">No decisions yet.</p>
+        <div className="rounded-3xl border border-dashed border-black/10 bg-white px-8 py-12 text-center">
+          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/8">
+            <svg className="h-5 w-5 text-accent" fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h3m0 0v3m0-3l-4 4-3-3-4 4" />
+            </svg>
+          </div>
+          <p className="font-semibold">Nothing to track yet</p>
+          <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
+            Complete a few challenges and your skill score, decision accuracy, and confidence calibration will appear here.
+          </p>
           <Link
             href="/challenge"
-            className="mt-4 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
+            className="mt-5 inline-block rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
           >
-            Start today&rsquo;s challenge
+            Take today&rsquo;s challenge →
           </Link>
         </div>
       </section>

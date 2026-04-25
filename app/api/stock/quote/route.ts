@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,11 @@ type QuoteEntry = {
 const cache = new Map<string, QuoteEntry>();
 
 export async function GET(request: NextRequest) {
+  const rl = checkRateLimit("stock:quote", clientIdFromRequest(request), 40, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } });
+  }
+
   const symbol = request.nextUrl.searchParams.get("symbol");
   if (!symbol) {
     return NextResponse.json({ error: "symbol is required" }, { status: 400 });

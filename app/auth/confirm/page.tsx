@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -16,7 +16,7 @@ function Spinner() {
   return (
     <div className="flex flex-col items-center pt-16 text-center">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-      <p className="mt-4 text-sm text-muted">Signing you in...</p>
+      <p className="mt-4 text-sm text-muted">Signing you in…</p>
     </div>
   );
 }
@@ -24,64 +24,70 @@ function Spinner() {
 function ConfirmContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status] = useState("Signing you in...");
 
   useEffect(() => {
     const supabase = createClient();
 
     async function handleAuth() {
-      // Strategy 1: PKCE code exchange
+      // PKCE code exchange (email confirmation link)
       const code = searchParams.get("code");
       if (code) {
-        console.log("[auth/confirm] Found code param, exchanging...");
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          console.error("[auth/confirm] Code exchange failed:", error.message);
-        } else if (data.session) {
-          console.log("[auth/confirm] Code exchange succeeded, redirecting...");
+        if (!error && data.session) {
           router.push("/");
           router.refresh();
           return;
         }
       }
 
-      // Strategy 2: Check hash fragment (implicit flow)
+      // OAuth hash fragment — wait briefly for Supabase client to process it
       const hash = window.location.hash;
       if (hash && hash.includes("access_token")) {
-        console.log("[auth/confirm] Found hash fragment, letting client process...");
-        // The Supabase client auto-detects hash fragments.
-        // Give it a moment then check session.
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((r) => setTimeout(r, 800));
       }
 
-      // Strategy 3: Check if session already exists
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+
       if (session) {
-        console.log("[auth/confirm] Session found, redirecting...");
+        // If the email is not confirmed this session came from a signUp that
+        // bypassed confirmation (Supabase PKCE auto-redirect). Sign out and
+        // send the user to the verify screen so they must confirm first.
+        if (!session.user.email_confirmed_at) {
+          const email = session.user.email ?? "";
+          await supabase.auth.signOut();
+          window.location.href = `/auth/verify${email ? `?email=${encodeURIComponent(email)}` : ""}`;
+          return;
+        }
+
         router.push("/");
         router.refresh();
         return;
       }
 
-      if (sessionError) {
-        console.error("[auth/confirm] getSession error:", sessionError.message);
-      }
-
-      // Last resort: listen for auth state change for a few seconds
-      console.log("[auth/confirm] No session yet, listening for auth state change...");
+      // Listen for auth state change (OAuth sign-in)
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === "SIGNED_IN" && session) {
-          console.log("[auth/confirm] SIGNED_IN event received");
+          if (!session.user.email_confirmed_at) {
+            const email = session.user.email ?? "";
+            supabase.auth.signOut().then(() => {
+              window.location.href = `/auth/verify${email ? `?email=${encodeURIComponent(email)}` : ""}`;
+            });
+            return;
+          }
           router.push("/");
           router.refresh();
         }
       });
 
-      // Timeout fallback — redirect to sign-in silently
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         subscription.unsubscribe();
         router.push("/auth/sign-in");
-      }, 6000);
+      }, 5000);
+
+      return () => {
+        clearTimeout(timeout);
+        subscription.unsubscribe();
+      };
     }
 
     handleAuth();

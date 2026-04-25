@@ -1874,6 +1874,396 @@ export const SCENARIOS: Scenario[] = [
         "Agricultural input companies are deeply cyclical. Near trough earnings with a known destocking end-date and a new product catalyst is a HOLD with upside optionality — not a definitive BUY until the cycle turns confirmed.",
     },
   },
+  // ── sc-073 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-073",
+    ticker: "PEAK",
+    company: "Summit Outdoor Retail",
+    sector: "Specialty Retail (Sporting Goods)",
+    description:
+      "National outdoor sporting goods chain. Pandemic demand pulled forward 3 years of sales; the industry spent 2023 digesting inventory bloat.",
+    price: 31.0,
+    revenueGrowthPct: 4,
+    peRatio: 11,
+    profitMarginPct: 7,
+    headlines: [
+      "Inventory days normalize to pre-COVID levels for first time in 3 years",
+      "Comparable store sales +3.2% — first positive quarter after five negative ones",
+    ],
+    signal: "Promotional activity (discounting) ending; full-price selling rate returning",
+    outcome: {
+      returnPct: 17,
+      summary:
+        "Margin recovery kicked in faster than expected as discounting ended. Same-store sales sustained positive trend. Multiple expanded from 11x to 14x as the turnaround was confirmed.",
+      idealAction: "BUY",
+      idealRationale:
+        "Inventory clearance complete + comp sales turning positive + promotional headwinds ending is the classic retail inflection setup. Buying at trough margins with evidence of recovery is the opportunity.",
+    },
+  },
+  // ── sc-074 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-074",
+    ticker: "LFIN",
+    company: "Sentinel Life Holdings",
+    sector: "Life Insurance",
+    description:
+      "Life insurance holding company with $48B in assets. Bond portfolio heavily weighted toward investment-grade corporate bonds.",
+    price: 58.0,
+    revenueGrowthPct: 6,
+    peRatio: 8,
+    profitMarginPct: 12,
+    headlines: [
+      "New money investment yield: 5.8% — highest in 15 years as bonds reprice higher",
+      "Book value per share grew 9% year-over-year as bond portfolio recovers",
+    ],
+    signal: "Trading at 0.72x book value — historically cheap for the quality of this liability book",
+    outcome: {
+      returnPct: 21,
+      summary:
+        "Rising yields continued to improve investment income. Book value recovery was faster than modeled. Multiple re-rated as the rate tailwind became undeniable. Stock up 21%.",
+      idealAction: "BUY",
+      idealRationale:
+        "Life insurers are bond businesses in disguise. When rates rise, their new money earns more — and if they're trading below book value, you're buying those bonds at a discount. Both conditions were met here.",
+    },
+  },
+  // ── sc-075 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-075",
+    ticker: "TELX",
+    company: "Broadline Communications",
+    sector: "Legacy Telecom",
+    description:
+      "National wireless and wireline carrier. An 8.4% dividend yield is drawing income-oriented investors despite persistent subscriber losses.",
+    price: 16.8,
+    revenueGrowthPct: -2,
+    peRatio: 9,
+    profitMarginPct: 14,
+    headlines: [
+      "Dividend maintained at $1.41/share — management 'committed to the return'",
+      "Net wireless subscriber losses: -380,000 — fourth consecutive quarter of losses",
+    ],
+    signal: "Dividend payout ratio exceeds free cash flow; debt-to-EBITDA at 4.1x",
+    outcome: {
+      returnPct: -28,
+      summary:
+        "Dividend cut 40% as free cash flow couldn't sustain it at high debt levels. Subscriber losses accelerated. The high yield was a warning, not a reward. Stock fell 28%.",
+      idealAction: "PASS",
+      idealRationale:
+        "When a dividend payout exceeds free cash flow and debt is 4x EBITDA, the yield is warning you that it's unsustainable — not paying you to hold. An 8% yield on a shrinking business is math, not income.",
+    },
+  },
+  // ── sc-076 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-076",
+    ticker: "RBOT",
+    company: "Nexera Robotics",
+    sector: "Industrial Automation",
+    description:
+      "Manufacturer of robotic assembly systems for automotive and electronics plants. Reshoring narrative has driven significant investor interest.",
+    price: 94.0,
+    revenueGrowthPct: 16,
+    peRatio: 34,
+    profitMarginPct: 14,
+    headlines: [
+      "Order backlog up 41% year-over-year — US manufacturing reshoring fueling demand",
+      "Gross margins expanding: 14% → 17% as software licensing grows as a share of revenue",
+    ],
+    signal: "Forward P/E of 34x already prices in 3+ years of strong execution at current growth rates",
+    outcome: {
+      returnPct: 6,
+      summary:
+        "Revenue beat estimates but P/E compression offset the gain. Quality business, right thesis — but the valuation had fully priced the good news. Stock up a modest 6%.",
+      idealAction: "HOLD",
+      idealRationale:
+        "The reshoring thesis is real and the business is executing well — but at 34x forward earnings, the market already knows. A great company at a full price returns roughly its earnings growth rate. HOLD, don't add aggressively.",
+    },
+  },
+  // ── sc-077 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-077",
+    ticker: "TRVL",
+    company: "Horizons Travel Group",
+    sector: "Online Travel Agency",
+    description:
+      "Global hotel and flight booking platform. Leisure travel has fully recovered; corporate travel is still catching up.",
+    price: 112.0,
+    revenueGrowthPct: 28,
+    peRatio: 22,
+    profitMarginPct: 18,
+    headlines: [
+      "International bookings at 114% of 2019 levels — leisure travel fully recovered",
+      "Corporate travel at 74% of pre-COVID — 'significant runway remaining,' says CEO",
+    ],
+    signal: "Operating margins recovering toward pre-COVID peak of 23% — leverage kicking in",
+    outcome: {
+      returnPct: 26,
+      summary:
+        "Corporate travel recovery continued to 81% of pre-COVID. Margins beat on operating leverage. International sustained. Stock up 26% as multiple catalysts played out.",
+      idealAction: "BUY",
+      idealRationale:
+        "Full leisure recovery plus corporate still 26% below peak plus operating leverage is multiple sources of upside in one stock. When the path to recovery is clear and the market hasn't fully priced it, act.",
+    },
+  },
+  // ── sc-078 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-078",
+    ticker: "SNKF",
+    company: "Creston Brands",
+    sector: "Branded Consumer Staples (Food)",
+    description:
+      "Snack food and condiments portfolio. Four consecutive years of 7–9% price increases have kept revenue growing — but volumes are now falling.",
+    price: 44.0,
+    revenueGrowthPct: 3,
+    peRatio: 20,
+    profitMarginPct: 13,
+    headlines: [
+      "Volume down 4.1% as consumers trade down to private label alternatives",
+      "Management announces 'affordability initiative' — pricing paused for two quarters",
+    ],
+    signal: "Private label gained 2.8 share points in core snack categories last year",
+    outcome: {
+      returnPct: 4,
+      summary:
+        "Volume stabilized at a lower level as pricing paused. Margins held. Private label share gains plateaued but didn't reverse. Muddled through with a modest 4% return.",
+      idealAction: "HOLD",
+      idealRationale:
+        "Pricing-power brands that over-raise prices face a volume-margin trade-off with no clear winner. The brand moat is real — but you need to see whether volumes recover before adding. Too safe to sell, too uncertain to buy.",
+    },
+  },
+  // ── sc-079 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-079",
+    ticker: "NBNK",
+    company: "Flare Financial",
+    sector: "Neobank / Fintech Lending",
+    description:
+      "Mobile-first digital bank expanding from checking accounts into personal loans. Loan book tripled in 18 months.",
+    price: 18.5,
+    revenueGrowthPct: 42,
+    peRatio: 0,
+    profitMarginPct: -18,
+    headlines: [
+      "Loan originations up 3x year-over-year — credit product gaining rapid adoption",
+      "Net charge-off rate: 9.2% vs 6.5% model assumption disclosed at IPO",
+    ],
+    signal: "Loan loss reserves increased 80% quarter-over-quarter; management calls it 'temporary normalization'",
+    outcome: {
+      returnPct: -44,
+      summary:
+        "Charge-off rate climbed to 12.4% over the next two quarters. Credit product paused. Funding costs rose as institutional investors pulled back. Stock fell 44%.",
+      idealAction: "PASS",
+      idealRationale:
+        "When a lender's actual loss rate is 40% above their disclosed model assumption after just 18 months, the model is wrong — not the losses. New lenders with no credit cycle experience underestimate default rates consistently.",
+    },
+  },
+  // ── sc-080 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-080",
+    ticker: "AMGR",
+    company: "Vantage Asset Management",
+    sector: "Active Equity Asset Manager",
+    description:
+      "Publicly traded traditional active stock-picking firm. Manages $180B in AUM across 40+ mutual funds.",
+    price: 28.0,
+    revenueGrowthPct: -8,
+    peRatio: 10,
+    profitMarginPct: 22,
+    headlines: [
+      "AUM net outflows: $12.4B this quarter — eleventh consecutive quarter of outflows",
+      "Expense ratio 1.1% — three times the average comparable passive ETF",
+    ],
+    signal: "73% of funds underperform their benchmark over 10 years; no performance fee revenue",
+    outcome: {
+      returnPct: -18,
+      summary:
+        "Outflows accelerated as passive adoption continued structurally. Fee compression forced headcount cuts. Multiple contracted further as the earnings base eroded. Stock fell 18%.",
+      idealAction: "PASS",
+      idealRationale:
+        "An active manager with 11 straight quarters of AUM outflows and persistent 10-year underperformance is in secular decline, not a cyclical trough. Low P/E reflects earnings that will keep shrinking — that's not value.",
+    },
+  },
+  // ── sc-081 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-081",
+    ticker: "OFRC",
+    company: "Pinnacle Office Properties",
+    sector: "Office REIT",
+    description:
+      "Owner of Class A office towers in major US cities. Pre-pandemic occupancy was 95%. Remote and hybrid work has permanently changed demand.",
+    price: 9.4,
+    revenueGrowthPct: -12,
+    peRatio: 0,
+    profitMarginPct: 8,
+    headlines: [
+      "Occupancy: 71% — new leases averaging 22% smaller footprint than expiring ones",
+      "$1.6B of debt maturing in 18 months — refinancing at rates 280bps higher than current",
+    ],
+    signal: "Dividend suspended; three tenants representing 19% of leases renewing next year",
+    outcome: {
+      returnPct: -35,
+      summary:
+        "Refinancing completed at punitive terms, diluting equity. Occupancy slipped to 67%. Lease renewals came in smaller than expected. Stock fell another 35% from an already depressed level.",
+      idealAction: "PASS",
+      idealRationale:
+        "Structural demand destruction (remote work), a near-term debt refinancing cliff, and concentrated lease roll risk is a three-way squeeze. The dividend is already gone — the equity is still absorbing the impact.",
+    },
+  },
+  // ── sc-082 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-082",
+    ticker: "BCST",
+    company: "Meridian Media Group",
+    sector: "Legacy Media (Cable to Streaming Transition)",
+    description:
+      "Major cable and broadcast company that launched a streaming platform two years ago. Burning cash on streaming while linear TV declines.",
+    price: 22.0,
+    revenueGrowthPct: 1,
+    peRatio: 11,
+    profitMarginPct: 11,
+    headlines: [
+      "Streaming subscribers +19% — losses narrowing from -$480M to -$290M this year",
+      "Linear cable subscribers -9% year-over-year — rate of decline unchanged from prior year",
+    ],
+    signal: "Streaming breakeven projected in 2–3 years; linear cash flow is funding the transition",
+    outcome: {
+      returnPct: 7,
+      summary:
+        "Linear decline tracked expectations. Streaming losses narrowed faster than feared. Market gave partial credit. Modest 7% return with high uncertainty throughout.",
+      idealAction: "HOLD",
+      idealRationale:
+        "The transition math is uncertain but improving. Linear cash flow buys time. At 11x earnings the downside is limited, but streaming economics need another year of data before this becomes a BUY. Too uncertain to add, too cheap to sell.",
+    },
+  },
+  // ── sc-083 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-083",
+    ticker: "DLVR",
+    company: "Ridgeline Logistics",
+    sector: "Last-Mile Delivery",
+    description:
+      "Parcel and e-commerce last-mile delivery network. Over-hired during the pandemic boom; spent 18 months restructuring the cost base.",
+    price: 36.0,
+    revenueGrowthPct: 7,
+    peRatio: 16,
+    profitMarginPct: 8,
+    headlines: [
+      "Cost per package falls 14% after restructuring — fleet right-sized to volume",
+      "E-commerce volumes return to growth trend after two years of post-COVID normalization",
+    ],
+    signal: "Route density software reduced empty miles 11%; fuel hedges locked in through next year",
+    outcome: {
+      returnPct: 22,
+      summary:
+        "Margin expansion beat expectations as the restructuring savings hit simultaneously with volume recovery. Multiple expanded from 16x to 19x. Stock up 22%.",
+      idealAction: "BUY",
+      idealRationale:
+        "A logistics company that just completed a painful cost restructuring at the start of a volume recovery gets a double tailwind: more revenue AND lower unit costs at the same time. That's how logistics companies earn their best returns.",
+    },
+  },
+  // ── sc-084 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-084",
+    ticker: "RXPT",
+    company: "Crestview Pharma",
+    sector: "Specialty Pharma (Patent Cliff)",
+    description:
+      "Specialty pharmaceutical company. One blockbuster drug generates 78% of revenue. That patent expires in 22 months.",
+    price: 41.0,
+    revenueGrowthPct: 6,
+    peRatio: 7,
+    profitMarginPct: 28,
+    headlines: [
+      "FDA grants 6-month pediatric exclusivity extension — patent cliff delayed to Q2 next year",
+      "Pipeline: two Phase 2 candidates, no Phase 3 programs, no NDA filings expected for 3+ years",
+    ],
+    signal: "Three generic manufacturers have filed ANDAs; first-to-file generic gets 180-day exclusivity",
+    outcome: {
+      returnPct: -52,
+      summary:
+        "Generics entered as scheduled. Flagship drug revenue fell 70% in 12 months. Pipeline was too early-stage to offset. Stock fell 52%.",
+      idealAction: "PASS",
+      idealRationale:
+        "A P/E of 7x that disappears when 78% of revenue exits is not a bargain — it's a scheduled event priced in. Patent expirations are calendared, not risks. The extension bought 6 months, not a solution.",
+    },
+  },
+  // ── sc-085 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-085",
+    ticker: "APRT",
+    company: "Meridian Airport Partners",
+    sector: "Infrastructure (Airport Concessions)",
+    description:
+      "Private operator of four regional airports under 30-year concession agreements. Aeronautical fees are contractually indexed to CPI.",
+    price: 48.0,
+    revenueGrowthPct: 11,
+    peRatio: 24,
+    profitMarginPct: 26,
+    headlines: [
+      "Passenger volumes +11% — summer travel demand exceeds pre-COVID capacity at two hubs",
+      "Aeronautical fees auto-escalated 4.8% under CPI clause in concession agreements",
+    ],
+    signal: "Land bank adjacent to two airports approved for logistics and warehouse development",
+    outcome: {
+      returnPct: 16,
+      summary:
+        "Inflation pass-through protected margins automatically. Passenger growth sustained. Development land optionality began to be valued by investors. Stock up 16%.",
+      idealAction: "BUY",
+      idealRationale:
+        "Inflation-indexed revenue, 30-year concessions you can't compete against, and growing passenger volumes is the infrastructure model working exactly as intended. 24x is fair for an asset with this kind of certainty.",
+    },
+  },
+  // ── sc-086 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-086",
+    ticker: "GMBL",
+    company: "Ironforge Studios",
+    sector: "Mobile Gaming",
+    description:
+      "Publisher of a top-grossing mobile RPG now four years into its lifecycle. The next title is still 12+ months from launch.",
+    price: 19.0,
+    revenueGrowthPct: -16,
+    peRatio: 14,
+    profitMarginPct: 19,
+    headlines: [
+      "Daily active users down 24% year-over-year — player retention declining 'naturally'",
+      "New game in development — earliest launch window is Q4 next year",
+    ],
+    signal: "Average revenue per user still high, but top-spender churn accelerating; live events masking the trend",
+    outcome: {
+      returnPct: -30,
+      summary:
+        "DAU and ARPU declined together as the player base aged out. The new game was delayed by six months. Market re-rated on lifecycle decline rather than giving credit for an unreleased title.",
+      idealAction: "PASS",
+      idealRationale:
+        "A live-service game with DAU down 24% is in terminal decline. Revenue is coming from a shrinking pool of high spenders, not from growth. The next game can only be valued when it ships — not 18 months before.",
+    },
+  },
+  // ── sc-087 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-087",
+    ticker: "CSEC",
+    company: "Vaultron Security",
+    sector: "Cybersecurity SaaS",
+    description:
+      "Provides endpoint detection and identity security. Actively displacing legacy antivirus vendors in mid-market and enterprise accounts.",
+    price: 62.0,
+    revenueGrowthPct: 34,
+    peRatio: 0,
+    profitMarginPct: -4,
+    headlines: [
+      "Net revenue retention: 124% — existing customers expanding to additional modules",
+      "Wins largest contract in company history: 85,000 seats at a Fortune 50 manufacturer",
+    ],
+    signal: "Rule of 40 score: 30 and improving; FCF positive for the first time this quarter",
+    outcome: {
+      returnPct: 38,
+      summary:
+        "NRR held above 120% for four consecutive quarters. The Fortune 50 win triggered a competitive displacement cycle at peers. FCF crossed positive and stayed there. Stock up 38%.",
+      idealAction: "BUY",
+      idealRationale:
+        "124% net retention in enterprise security means customers are solving a mission-critical problem and expanding — not just renewing. A -4% margin at 34% growth is controlled investment, not a problem. FCF turning positive removes the last bear argument.",
+    },
+  },
 ];
 
 /** Deterministic daily scenario picker — same day = same scenario. */

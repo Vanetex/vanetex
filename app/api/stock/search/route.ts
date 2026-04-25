@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,11 @@ type FinnhubSearchResult = {
 };
 
 export async function GET(request: NextRequest) {
+  const rl = checkRateLimit("stock:search", clientIdFromRequest(request), 30, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } });
+  }
+
   const q = request.nextUrl.searchParams.get("q");
   if (!q || q.trim().length < 1) {
     return NextResponse.json({ results: [] });

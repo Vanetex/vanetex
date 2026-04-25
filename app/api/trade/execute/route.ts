@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -62,6 +63,11 @@ type ExecuteBody = {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  const rl = checkRateLimit("trade:execute", clientIdFromRequest(request), 60, 60 * 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

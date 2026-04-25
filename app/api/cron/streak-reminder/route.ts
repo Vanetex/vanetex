@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sent: 0, message: "No users to remind today" });
   }
 
-  const FROM = process.env.RESEND_FROM ?? "AI Investing Trainer <reminders@vanetex.com>";
+  const FROM = process.env.RESEND_FROM ?? "Vanetex <reminders@vanetex.com>";
   const results = await Promise.allSettled(
     (targets as ReminderTarget[]).map((t) =>
       resend.emails.send({
@@ -75,7 +75,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
         <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid rgba(0,0,0,0.06);">
           <tr>
             <td style="padding:32px 36px 0;">
-              <p style="margin:0;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8c8c8c;">AI Investing Trainer</p>
+              <p style="margin:0;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8c8c8c;">Vanetex</p>
             </td>
           </tr>
           <tr>
@@ -112,7 +112,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
           <tr>
             <td style="padding:20px 36px;border-top:1px solid rgba(0,0,0,0.06);">
               <p style="margin:0;font-size:12px;color:#a0a0a0;">
-                You&rsquo;re receiving this because you have an active streak on AI Investing Trainer.
+                You&rsquo;re receiving this because you have an active streak on Vanetex.
                 <br />To unsubscribe, update your preferences in <a href="https://vanetex.com/settings" style="color:#a0a0a0;">Settings</a>.
               </p>
             </td>
