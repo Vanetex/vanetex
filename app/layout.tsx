@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import ShellWrapper from "@/components/ShellWrapper";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vanetex.com";
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen">
         <ShellWrapper>{children}</ShellWrapper>
+        <Analytics />
       </body>
     </html>
   );
