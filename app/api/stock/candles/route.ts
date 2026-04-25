@@ -27,23 +27,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ prices: hit.prices });
   }
 
-  const to = Math.floor(Date.now() / 1000);
-  const from = to - 60 * 60 * 24 * 45; // 45 days back to ensure ~30 trading days
+  // Use a fixed "to" of yesterday to avoid weekend/holiday empty responses
+  const now = Math.floor(Date.now() / 1000);
+  const to = now - 60 * 60 * 24; // yesterday
+  const from = now - 60 * 60 * 24 * 60; // 60 days back for ~30 trading days
 
   try {
     const res = await fetch(
       `${FINNHUB_BASE}/stock/candle?symbol=${encodeURIComponent(key)}&resolution=D&from=${from}&to=${to}&token=${apiKey}`,
+      { cache: "no-store" },
     );
-    if (!res.ok) throw new Error("Finnhub candle request failed");
 
-    const data = await res.json() as { s: string; c?: number[] };
+    const raw = await res.json() as { s: string; c?: number[]; error?: string };
 
-    if (data.s !== "ok" || !data.c?.length) {
+    if (raw.error) {
+      console.error(`[stock/candles] Finnhub error for ${key}:`, raw.error);
       return NextResponse.json({ prices: [] });
     }
 
-    // Return last 30 close prices
-    const prices = data.c.slice(-30);
+    if (raw.s !== "ok" || !raw.c?.length) {
+      console.warn(`[stock/candles] No data for ${key}: s=${raw.s}`);
+      return NextResponse.json({ prices: [] });
+    }
+
+    const prices = raw.c.slice(-30);
     cache.set(key, { prices, ts: Date.now() });
     return NextResponse.json({ prices });
   } catch (err) {
