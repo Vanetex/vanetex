@@ -5,8 +5,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 type ReminderTarget = {
   user_id: string;
   email: string;
@@ -38,6 +36,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sent: 0, message: "No users to remind today" });
   }
 
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const FROM = process.env.RESEND_FROM ?? "Vanetex <reminders@vanetex.com>";
   const results = await Promise.allSettled(
     (targets as ReminderTarget[]).map((t) =>
