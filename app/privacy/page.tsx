@@ -58,7 +58,7 @@ export default function PrivacyPage() {
             <ul style={{ paddingLeft: 20, marginTop: 8 }}>
               <li style={{ marginBottom: 6 }}>Operate and provide the Service, including storing your decisions, progress, and portfolio</li>
               <li style={{ marginBottom: 6 }}>Calculate and display your skill score, accuracy, leaderboard ranking, and achievements</li>
-              <li style={{ marginBottom: 6 }}>Send streak reminder emails if you have an active streak and haven't completed today's challenge</li>
+              <li style={{ marginBottom: 6 }}>Send streak reminder emails if you have an active streak and haven&apos;t completed today&apos;s challenge</li>
               <li style={{ marginBottom: 6 }}>Respond to support requests</li>
               <li style={{ marginBottom: 6 }}>Improve and develop the Service</li>
             </ul>
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
             <p>We share limited data with the following services to operate Vanetex:</p>
 
             <Subsection title="Supabase">
-              Our database and authentication provider. Your account information, decisions, progress, and paper trading data are stored in Supabase's infrastructure. Supabase is SOC 2 compliant.{" "}
+              Our database and authentication provider. Your account information, decisions, progress, and paper trading data are stored in Supabase&apos;s infrastructure. Supabase is SOC 2 compliant.{" "}
               <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#1e47eb" }}>Supabase Privacy Policy</a>
             </Subsection>
 
@@ -89,7 +89,7 @@ export default function PrivacyPage() {
             </Subsection>
 
             <Subsection title="Google">
-              If you choose to sign in with Google, Google shares your name and email address with us. Your use of Google Sign-In is subject to Google's privacy policy.{" "}
+              If you choose to sign in with Google, Google shares your name and email address with us. Your use of Google Sign-In is subject to Google&apos;s privacy policy.{" "}
               <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#1e47eb" }}>Google Privacy Policy</a>
             </Subsection>
 
@@ -133,7 +133,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="9. Changes to This Policy">
-            <p>We may update this Privacy Policy from time to time. If we make material changes, we will update the "Last updated" date at the top of this page and notify you by email where appropriate. Your continued use of the Service after changes are posted constitutes acceptance of the revised policy.</p>
+            <p>We may update this Privacy Policy from time to time. If we make material changes, we will update the &ldquo;Last updated&rdquo; date at the top of this page and notify you by email where appropriate. Your continued use of the Service after changes are posted constitutes acceptance of the revised policy.</p>
           </Section>
 
           <Section title="10. Contact">

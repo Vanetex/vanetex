@@ -32,7 +32,7 @@ export default function TermsPage() {
 
         <div style={{ color: "rgba(250,250,247,0.75)", lineHeight: 1.75, fontSize: 15 }}>
           <Section title="1. Agreement to Terms">
-            <p>By accessing or using Vanetex ("the Service," "we," "us," or "our"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+            <p>By accessing or using Vanetex (&ldquo;the Service,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
             <p>These terms apply to all visitors, users, and anyone who accesses the Service.</p>
           </Section>
 
@@ -70,7 +70,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="6. Content You Submit">
-            <p>The Service allows you to submit written reasoning, journal entries, and reflections ("User Content"). You retain ownership of your User Content.</p>
+            <p>The Service allows you to submit written reasoning, journal entries, and reflections (&ldquo;User Content&rdquo;). You retain ownership of your User Content.</p>
             <p>By submitting User Content, you grant Vanetex a limited, non-exclusive license to store and process that content solely for the purpose of providing and improving the Service. We do not sell your User Content.</p>
             <p>You are responsible for ensuring your User Content does not violate any third-party rights or applicable laws.</p>
           </Section>
@@ -93,7 +93,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="9. Disclaimers">
-            <p>The Service is provided on an "as is" and "as available" basis without warranties of any kind, either express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement.</p>
+            <p>The Service is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis without warranties of any kind, either express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement.</p>
             <p>We do not warrant that the Service will be uninterrupted, error-free, or free of viruses or other harmful components. We do not warrant the accuracy, completeness, or usefulness of any information provided through the Service.</p>
           </Section>
 
@@ -108,7 +108,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="12. Changes to These Terms">
-            <p>We reserve the right to modify these Terms at any time. If we make material changes, we will notify you by updating the "Last updated" date at the top of this page and, where appropriate, by sending an email to the address associated with your account.</p>
+            <p>We reserve the right to modify these Terms at any time. If we make material changes, we will notify you by updating the &ldquo;Last updated&rdquo; date at the top of this page and, where appropriate, by sending an email to the address associated with your account.</p>
             <p>Your continued use of the Service after changes are posted constitutes acceptance of the revised Terms.</p>
           </Section>
 
