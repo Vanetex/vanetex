@@ -1,3 +1,5 @@
+const { withSentryConfig } = require("@sentry/nextjs");
+
 const isDev = process.env.NODE_ENV !== "production";
 
 const contentSecurityPolicy = [
@@ -6,7 +8,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co",
+  "connect-src 'self' https://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -59,4 +61,9 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  silent: true,
+  disableLogger: true,
+  hideSourceMaps: true,
+  widenClientFileUpload: true,
+});
