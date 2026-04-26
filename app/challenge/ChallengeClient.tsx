@@ -224,35 +224,179 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
 
       {newAchievements.length > 0 && <AchievementToast newIds={newAchievements} />}
 
-      {stage === "done" && (
-        <div className="surface-card fade-in mt-6 flex flex-col items-center gap-3 rounded-3xl p-6 text-center">
-          <div className="text-lg font-semibold">Nice work. 🎯</div>
-          {streak > 0 && (
-            <div className="flex items-center gap-1.5 rounded-full border border-warn/30 bg-warn/10 px-3 py-1 text-sm font-medium text-warn">
-              <span>🔥</span>
-              <span>{streak} day streak</span>
-            </div>
-          )}
-          <p className="max-w-md text-sm text-muted">
-            Come back tomorrow for a new scenario. Judgment compounds with reps.
-          </p>
-          <div className="mt-2 flex gap-3">
-            <Link
-              href="/progress"
-              className="cta-primary rounded-full px-5 py-2 text-sm font-medium text-paper"
-            >
-              See progress
-            </Link>
-            <Link
-              href="/journal"
-              className="rounded-full border border-black/10 px-5 py-2 text-sm font-medium hover:border-black/30"
-            >
-              Read journal
-            </Link>
-          </div>
-        </div>
+      {stage === "done" && action && (
+        <ShareCard
+          scenario={scenario}
+          action={action}
+          evaluation={evaluation}
+          streak={streak}
+        />
       )}
     </section>
+  );
+}
+
+function ShareCard({
+  scenario,
+  action,
+  evaluation,
+  streak,
+}: {
+  scenario: Scenario;
+  action: Action;
+  evaluation: Evaluation | null;
+  streak: number;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const score = evaluation?.decisionScore ?? null;
+  const verdict = verdictFor(action, scenario.outcome.returnPct);
+  const correct = verdict === "CORRECT";
+  const neutral = verdict === "NEUTRAL";
+
+  const scoreLabel =
+    score === null ? null
+    : score >= 70 ? "Sharp"
+    : score >= 45 ? "Solid"
+    : "Keep practicing";
+
+  const actionColor =
+    action === "BUY" ? "#16A34A"
+    : action === "PASS" ? "#DC2626"
+    : "#D97706";
+
+  const verdictEmoji = correct ? "✅" : neutral ? "➡️" : "❌";
+
+  const shareText = [
+    `🎯 Vanetex Daily Challenge`,
+    ``,
+    `${scenario.company} · $${scenario.ticker}`,
+    `My call: ${action} ${verdictEmoji}`,
+    score !== null ? `Score: ${score}/100${scoreLabel ? ` — ${scoreLabel}` : ""}` : "",
+    streak > 0 ? `🔥 ${streak}-day streak` : "",
+    ``,
+    `vanetex.vercel.app`,
+  ].filter(Boolean).join("\n");
+
+  async function handleShare() {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ text: shareText });
+        return;
+      } catch {
+        // user cancelled or not supported — fall through to clipboard
+      }
+    }
+    await navigator.clipboard.writeText(shareText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="fade-in mt-6 space-y-3">
+      {/* Share card — designed to look good as a screenshot */}
+      <div
+        style={{
+          background: "linear-gradient(145deg, #0d0f18 0%, #07080b 100%)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: 24,
+          padding: "28px 28px 24px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        {/* Glow */}
+        <div aria-hidden style={{
+          position: "absolute", top: -40, right: -40,
+          width: 160, height: 160, borderRadius: "50%",
+          background: `radial-gradient(circle, ${actionColor}22, transparent 70%)`,
+          pointerEvents: "none",
+        }} />
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: 8,
+              background: "linear-gradient(135deg, #1F6FEB, #0d3ba8)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                <polyline points="1,10 5,5 8,8 13,2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <span style={{ color: "rgba(250,250,247,0.5)", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Vanetex</span>
+          </div>
+          {streak > 0 && (
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#D97706" }}>🔥 {streak}-day streak</span>
+          )}
+        </div>
+
+        {/* Company + ticker */}
+        <div style={{ marginBottom: 18 }}>
+          <p style={{ fontSize: 18, fontWeight: 700, color: "#FAFAF7", letterSpacing: "-0.02em", marginBottom: 2 }}>
+            {scenario.company}
+          </p>
+          <p style={{ fontSize: 13, color: "rgba(250,250,247,0.4)", fontFamily: "monospace" }}>${scenario.ticker}</p>
+        </div>
+
+        {/* Call + outcome */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: score !== null ? 18 : 0 }}>
+          <div style={{
+            background: `${actionColor}18`,
+            border: `1px solid ${actionColor}40`,
+            borderRadius: 10, padding: "8px 16px",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: actionColor, letterSpacing: "0.04em" }}>{action}</span>
+          </div>
+          <span style={{ fontSize: 18 }}>{verdictEmoji}</span>
+          <span style={{ fontSize: 13, color: correct ? "#16A34A" : neutral ? "rgba(250,250,247,0.4)" : "#DC2626", fontWeight: 600 }}>
+            {correct ? "Correct call" : neutral ? "Neutral" : "Incorrect call"}
+          </span>
+        </div>
+
+        {/* Score bar */}
+        {score !== null && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: "rgba(250,250,247,0.4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>Score</span>
+              <span style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 800, color: score >= 70 ? "#16A34A" : score >= 45 ? "#D97706" : "#DC2626" }}>
+                {score}<span style={{ fontSize: 12, color: "rgba(250,250,247,0.3)" }}>/100</span>
+              </span>
+            </div>
+            <div style={{ height: 6, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: 99, width: `${score}%`,
+                background: score >= 70 ? "#16A34A" : score >= 45 ? "#D97706" : "#DC2626",
+                transition: "width 600ms ease",
+              }} />
+            </div>
+            {scoreLabel && (
+              <p style={{ fontSize: 12, color: "rgba(250,250,247,0.35)", marginTop: 6, textAlign: "right" }}>{scoreLabel}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Share button */}
+      <button
+        onClick={handleShare}
+        className="w-full rounded-2xl border border-black/10 bg-white py-3 text-sm font-semibold transition hover:border-black/20 hover:bg-black/[0.02]"
+      >
+        {copied ? "Copied to clipboard ✓" : "Share result"}
+      </button>
+
+      {/* Nav links */}
+      <div className="flex gap-3">
+        <Link href="/progress" className="cta-primary flex-1 rounded-full py-2.5 text-center text-sm font-medium text-paper">
+          See progress
+        </Link>
+        <Link href="/journal" className="flex-1 rounded-full border border-black/10 py-2.5 text-center text-sm font-medium hover:border-black/30">
+          Journal
+        </Link>
+      </div>
+    </div>
   );
 }
 
