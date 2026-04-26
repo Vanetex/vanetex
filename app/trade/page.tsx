@@ -1125,7 +1125,7 @@ function PriceAlerts({ positions }: { positions: PositionWithQuote[] }) {
               <span className={`text-lg font-bold ${textColor}`}>{icon}</span>
               <div>
                 <p className={`text-sm font-semibold ${textColor}`}>
-                  {p.ticker} is {up ? "up" : "down"} {Math.abs(pct).toFixed(1)}% today
+                  {p.ticker} is {up ? "up" : "down"} {Math.abs(pct).toFixed(2)}% to {fmtCurrency(p.currentPrice!)}
                 </p>
                 <p className="text-xs text-muted">{label} · {p.companyName}</p>
               </div>
