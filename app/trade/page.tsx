@@ -38,6 +38,7 @@ type PositionWithQuote = Position & {
   marketValue: number | null;
   gainLoss: number | null;
   gainLossPct: number | null;
+  dayChangePct: number | null;
 };
 
 type Tab = "portfolio" | "trade" | "history";
@@ -332,8 +333,8 @@ export default function TradePage() {
               currentPrice: q.price,
               marketValue,
               gainLoss: marketValue - costBasis,
-              gainLossPct:
-                ((marketValue - costBasis) / costBasis) * 100,
+              gainLossPct: ((marketValue - costBasis) / costBasis) * 100,
+              dayChangePct: q.changePct,
             };
           } catch {
             return {
@@ -342,6 +343,7 @@ export default function TradePage() {
               marketValue: null,
               gainLoss: null,
               gainLossPct: null,
+              dayChangePct: null,
             };
           }
         }),
@@ -663,6 +665,9 @@ export default function TradePage() {
                   </div>
                 </div>
               )}
+
+              {/* Price alerts */}
+              <PriceAlerts positions={positions} />
 
               {/* Allocation breakdown */}
               {positions.length > 0 && (
@@ -1089,6 +1094,49 @@ export default function TradePage() {
         </div>
       )}
     </section>
+  );
+}
+
+// ── Price alerts ───────────────────────────────────────────────────────────
+
+const ALERT_THRESHOLDS = [20, 10, 5];
+
+function PriceAlerts({ positions }: { positions: PositionWithQuote[] }) {
+  const alerts = positions
+    .filter((p) => p.dayChangePct !== null && Math.abs(p.dayChangePct) >= 5)
+    .sort((a, b) => Math.abs(b.dayChangePct!) - Math.abs(a.dayChangePct!));
+
+  if (!alerts.length) return null;
+
+  return (
+    <div className="space-y-2">
+      {alerts.map((p) => {
+        const pct = p.dayChangePct!;
+        const up = pct >= 0;
+        const threshold = ALERT_THRESHOLDS.find((t) => Math.abs(pct) >= t) ?? 5;
+        const bg = up ? "bg-success/8 border-success/20" : "bg-danger/8 border-danger/20";
+        const textColor = up ? "text-success" : "text-danger";
+        const icon = up ? "↑" : "↓";
+        const label = threshold >= 20 ? "Major move" : threshold >= 10 ? "Significant move" : "Notable move";
+
+        return (
+          <div key={p.ticker} className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${bg}`}>
+            <div className="flex items-center gap-3">
+              <span className={`text-lg font-bold ${textColor}`}>{icon}</span>
+              <div>
+                <p className={`text-sm font-semibold ${textColor}`}>
+                  {p.ticker} is {up ? "up" : "down"} {Math.abs(pct).toFixed(1)}% today
+                </p>
+                <p className="text-xs text-muted">{label} · {p.companyName}</p>
+              </div>
+            </div>
+            <span className={`text-xs font-bold ${textColor}`}>
+              {up ? "+" : ""}{pct.toFixed(1)}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
