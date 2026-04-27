@@ -113,8 +113,10 @@ body {
 
 .app-shell {
   background:
+    radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px),
     linear-gradient(180deg, rgba(23, 28, 40, 0.58), rgba(15, 18, 28, 0.62)),
     radial-gradient(circle at 20% -10%, rgba(31, 111, 235, 0.22), transparent 34%);
+  background-size: 28px 28px, 100% 100%, 100% 100%;
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     0 35px 80px rgba(5, 11, 24, 0.45),
@@ -179,9 +181,3 @@ body {
   animation-play-state: paused;
 }
 
-/* ── Dot grid on app shell background ───────────────────────────────────── */
-
-.app-shell {
-  background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
-}

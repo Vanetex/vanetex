@@ -57,8 +57,10 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
       <PrefetchAll />
       <Nav />
       <div className="md:pl-72">
-        <Ticker />
-        <main className="px-4 pb-10 pt-3 sm:px-6 md:px-8 md:pt-6">
+        <div className="mx-4 mt-4 overflow-hidden rounded-2xl sm:mx-6 md:mx-8">
+          <Ticker />
+        </div>
+        <main className="px-4 pb-10 pt-3 sm:px-6 md:px-8 md:pt-4">
           <div className="app-shell mx-auto max-w-5xl rounded-[28px] p-3 sm:p-4">
             <div className="surface-card min-h-[calc(100vh-7rem)] rounded-3xl px-5 pt-6 sm:px-6" style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom, 0px))" }}>
               <div className="mx-auto max-w-2xl">{children}</div>

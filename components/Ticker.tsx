@@ -40,9 +40,9 @@ export default function Ticker() {
   return (
     <div
       style={{
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        background: "rgba(8,11,20,0.6)",
-        height: 34,
+        background: "rgba(8,11,20,0.88)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        height: 36,
         display: "flex",
         alignItems: "center",
         overflow: "hidden",
@@ -56,10 +56,10 @@ export default function Ticker() {
           display: "flex",
           alignItems: "center",
           gap: 5,
-          padding: "0 12px",
-          borderRight: "1px solid rgba(255,255,255,0.07)",
+          padding: "0 14px",
+          borderRight: "1px solid rgba(255,255,255,0.08)",
           height: "100%",
-          background: "rgba(8,11,20,0.9)",
+          background: "rgba(8,11,20,0.95)",
           zIndex: 2,
         }}
       >
@@ -88,21 +88,21 @@ export default function Ticker() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
-                  padding: "0 18px",
-                  borderRight: "1px solid rgba(255,255,255,0.05)",
+                  gap: 7,
+                  padding: "0 20px",
+                  borderRight: "1px solid rgba(255,255,255,0.06)",
                   whiteSpace: "nowrap",
                   flexShrink: 0,
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 800, color: "rgba(250,250,247,0.7)", letterSpacing: "0.06em" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#FAFAF7", letterSpacing: "0.05em" }}>
                   {item.symbol}
                 </span>
-                <span style={{ fontSize: 11, fontFamily: "monospace", color: "rgba(250,250,247,0.55)" }}>
+                <span style={{ fontSize: 11, fontFamily: "monospace", color: "rgba(250,250,247,0.45)", letterSpacing: "0.02em" }}>
                   ${fmt(item.price)}
                 </span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: up ? "#16A34A" : "#DC2626" }}>
-                  {up ? "▲" : "▼"} {Math.abs(item.changePct).toFixed(2)}%
+                <span style={{ fontSize: 10, fontWeight: 700, color: up ? "#4ade80" : "#f87171", letterSpacing: "0.03em" }}>
+                  {up ? "+" : ""}{item.changePct.toFixed(2)}%
                 </span>
               </div>
             );
@@ -111,8 +111,8 @@ export default function Ticker() {
       </div>
 
       {/* Fade edges */}
-      <div aria-hidden style={{ position: "absolute", left: 85, top: 0, bottom: 0, width: 24, background: "linear-gradient(to right, rgba(8,11,20,0.6), transparent)", pointerEvents: "none", zIndex: 1 }} />
-      <div aria-hidden style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 24, background: "linear-gradient(to left, rgba(8,11,20,0.6), transparent)", pointerEvents: "none", zIndex: 1 }} />
+      <div aria-hidden style={{ position: "absolute", left: 95, top: 0, bottom: 0, width: 32, background: "linear-gradient(to right, rgba(8,11,20,0.95), transparent)", pointerEvents: "none", zIndex: 1 }} />
+      <div aria-hidden style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 32, background: "linear-gradient(to left, rgba(8,11,20,0.88), transparent)", pointerEvents: "none", zIndex: 1 }} />
     </div>
   );
 }
