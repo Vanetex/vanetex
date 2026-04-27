@@ -180,6 +180,7 @@ body {
 .ticker-track {
   animation: ticker-scroll 40s linear infinite;
   width: max-content;
+  will-change: transform;
 }
 
 .ticker-track:hover {

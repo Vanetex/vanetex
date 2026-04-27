@@ -131,25 +131,13 @@ function DesktopSidebar({
           overflow: "hidden",
         }}
       >
-        {/* Scan line */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute", left: 0, right: 0, height: 120,
-            background: "linear-gradient(180deg, transparent, rgba(31,111,235,0.04), transparent)",
-            animation: "nav-scan 6s linear infinite",
-            pointerEvents: "none", zIndex: 0,
-          }}
-        />
 
         {/* Inner panel */}
         <div
           style={{
             height: "100%",
             borderRadius: 24,
-            background: "rgba(8,11,20,0.82)",
-            backdropFilter: "blur(28px)",
-            WebkitBackdropFilter: "blur(28px)",
+            background: "rgba(8,11,20,0.97)",
             border: "1px solid rgba(255,255,255,0.07)",
             display: "flex",
             flexDirection: "column",
@@ -428,9 +416,7 @@ function MobileBottomBar({ pathname }: { pathname: string }) {
       <div
         style={{
           display: "flex", gap: 2, pointerEvents: "all",
-          background: "rgba(8,11,20,0.88)",
-          backdropFilter: "blur(28px)",
-          WebkitBackdropFilter: "blur(28px)",
+          background: "rgba(8,11,20,0.97)",
           border: "1px solid rgba(255,255,255,0.1)",
           borderRadius: 30, padding: 5,
           boxShadow: "0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07)",
