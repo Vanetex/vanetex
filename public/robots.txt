@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /terms
+Allow: /privacy
+
+# Block authenticated app pages — these require login and have no SEO value
+Disallow: /challenge
+Disallow: /journal
+Disallow: /progress
+Disallow: /tracks
+Disallow: /trade
+Disallow: /settings
+Disallow: /leaderboard
+Disallow: /onboarding
+Disallow: /auth/
+
+Sitemap: https://vanetex.vercel.app/sitemap.xml
