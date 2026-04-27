@@ -29,6 +29,9 @@ export default function SettingsPage() {
   const [paperMessage, setPaperMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [referralCount, setReferralCount] = useState(0);
+  const [referralCopied, setReferralCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -50,7 +53,7 @@ export default function SettingsPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name, career_field")
+        .select("display_name, career_field, referral_code, referral_count")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -59,6 +62,9 @@ export default function SettingsPage() {
       if (cf) setCareerField(cf as CareerField);
       setDisplayName(name);
       setNewDisplayName(name);
+      const p = profile as { referral_code?: string | null; referral_count?: number | null } | null;
+      setReferralCode(p?.referral_code ?? null);
+      setReferralCount(p?.referral_count ?? 0);
       setLoading(false);
     }
 
@@ -330,6 +336,35 @@ export default function SettingsPage() {
               </p>
             )}
           </div>
+
+          {referralCode && (
+            <div className="surface-card rounded-3xl p-5">
+              <h2 className="text-base font-semibold">Invite friends</h2>
+              <p className="mt-1 text-xs text-muted">
+                Share your link. Every person who signs up through it is counted here.
+              </p>
+              <div className="mt-4 flex items-center gap-2">
+                <div className="flex-1 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 font-mono text-sm text-ink">
+                  vanetex.vercel.app?ref={referralCode}
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`https://vanetex.vercel.app?ref=${referralCode}`);
+                    setReferralCopied(true);
+                    setTimeout(() => setReferralCopied(false), 2000);
+                  }}
+                  className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-medium transition hover:border-black/20"
+                >
+                  {referralCopied ? "Copied ✓" : "Copy"}
+                </button>
+              </div>
+              {referralCount > 0 && (
+                <p className="mt-3 text-xs text-success font-medium">
+                  🎉 {referralCount} {referralCount === 1 ? "person" : "people"} joined through your link
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="surface-card rounded-3xl p-5">
             <h2 className="text-base font-semibold">Legal</h2>
