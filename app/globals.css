@@ -9,6 +9,7 @@
 html {
   background-color: #090b11;
   min-height: 100%;
+  overscroll-behavior: none;
 }
 
 html, body {
@@ -16,6 +17,7 @@ html, body {
   color: #0B0C0F;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
 body {
