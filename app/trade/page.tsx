@@ -465,8 +465,9 @@ export default function TradePage() {
         setSharesInput("");
         await loadData();
         // Check trading achievements after data refresh
-        const [freshTrades, awarded] = await Promise.all([
+        const [freshTrades, freshPositions, awarded] = await Promise.all([
           listTrades(),
+          listPositions(),
           listAwardedAchievements(),
         ]);
         const spyReturn = chartData
@@ -478,6 +479,8 @@ export default function TradePage() {
           : undefined;
         const eligible = computeEligibleAchievements({
           hasTrades: freshTrades.length > 0,
+          tradeCount: freshTrades.length,
+          positionCount: freshPositions.length,
           portfolioReturnPct: chartData?.totalReturn,
           spyReturnPct: spyReturn,
         });

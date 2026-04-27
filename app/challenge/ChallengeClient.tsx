@@ -42,8 +42,13 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
     let cancelled = false;
 
     async function checkExisting() {
-      const existing = await getDecisionForScenario(scenario.id);
+      const [existing, allDecisions] = await Promise.all([
+        getDecisionForScenario(scenario.id),
+        listDecisions(),
+      ]);
       if (cancelled) return;
+
+      setStreak(computeStreak(allDecisions));
 
       if (!existing) {
         setStage("deciding");
@@ -159,6 +164,8 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
         </Link>
       </div>
 
+      {streak > 0 && stage !== "loading" && <StreakBanner streak={streak} />}
+
       {stage === "loading" && (
         <div className="animate-pulse space-y-3">
           <div className="h-40 rounded-3xl bg-black/5" />
@@ -233,6 +240,83 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
         />
       )}
     </section>
+  );
+}
+
+function StreakBanner({ streak }: { streak: number }) {
+  const milestones = [3, 7, 30];
+  const nextMilestone = milestones.find((m) => m > streak) ?? null;
+  const prevMilestone = [...milestones].reverse().find((m) => m <= streak) ?? 0;
+  const progress = nextMilestone
+    ? ((streak - prevMilestone) / (nextMilestone - prevMilestone)) * 100
+    : 100;
+  const milestoneNames: Record<number, string> = { 3: "On a Roll", 7: "Week Warrior", 30: "Monthly Grind" };
+
+  return (
+    <div
+      className="fade-in mb-5 overflow-hidden rounded-2xl"
+      style={{
+        background: "linear-gradient(135deg, #78350f 0%, #92400e 40%, #b45309 100%)",
+        border: "1px solid rgba(251,191,36,0.22)",
+        boxShadow: "0 8px 28px rgba(180,83,9,0.4), 0 0 0 1px rgba(251,191,36,0.08)",
+        position: "relative",
+      }}
+    >
+      <div aria-hidden style={{
+        position: "absolute", top: -30, left: -20,
+        width: 140, height: 140, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(251,191,36,0.15), transparent 70%)",
+        pointerEvents: "none",
+      }} />
+
+      <div style={{ padding: "16px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="streak-fire" style={{ fontSize: 30, lineHeight: 1 }}>🔥</span>
+            <div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontSize: 30, fontWeight: 900, color: "#fff", lineHeight: 1, letterSpacing: "-0.03em" }}>
+                  {streak}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>
+                  day streak
+                </span>
+              </div>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+                {nextMilestone
+                  ? `${nextMilestone - streak} more day${nextMilestone - streak !== 1 ? "s" : ""} to ${milestoneNames[nextMilestone]}`
+                  : "Legend — 30-day streak achieved 🏆"}
+              </p>
+            </div>
+          </div>
+          <div style={{
+            background: "rgba(0,0,0,0.2)",
+            borderRadius: 10, padding: "6px 12px", textAlign: "center",
+          }}>
+            <p style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              {nextMilestone ? "next" : "max"}
+            </p>
+            <p style={{ fontSize: 15, fontWeight: 800, color: nextMilestone ? "#fbbf24" : "#fff" }}>
+              {nextMilestone ?? "∞"}
+            </p>
+          </div>
+        </div>
+
+        {nextMilestone && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ height: 5, borderRadius: 99, background: "rgba(0,0,0,0.3)", overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: 99,
+                width: `${progress}%`,
+                background: "linear-gradient(90deg, #fbbf24, #f59e0b)",
+                boxShadow: "0 0 10px rgba(251,191,36,0.55)",
+                transition: "width 700ms cubic-bezier(0.22,1,0.36,1)",
+              }} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

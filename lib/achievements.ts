@@ -32,6 +32,10 @@ export const ALL_ACHIEVEMENTS: Achievement[] = [
   { id: "first-trade",     title: "First Trade",       description: "Make your first paper trade",               icon: "📈", category: "trading" },
   { id: "in-the-black",    title: "In the Black",      description: "Grow your paper portfolio by 5%+",          icon: "💰", category: "trading" },
   { id: "market-beater",   title: "Market Beater",     description: "Outperform SPY with your portfolio",        icon: "🚀", category: "trading" },
+  { id: "active-trader",   title: "Active Trader",     description: "Execute 10+ paper trades",                  icon: "⚡", category: "trading" },
+  { id: "diversified",     title: "Diversified",       description: "Hold 5+ different positions at once",       icon: "🗂️", category: "trading" },
+  { id: "crushing-it",     title: "Crushing It",       description: "Grow your paper portfolio by 20%+",         icon: "💎", category: "trading" },
+  { id: "alpha-generator", title: "Alpha Generator",   description: "Beat the market by 15%+ in your portfolio", icon: "🏆", category: "trading" },
 ];
 
 export interface AchievementContext {
@@ -39,6 +43,8 @@ export interface AchievementContext {
   lessonProgress?: LessonProgress[];
   streak?: number;
   hasTrades?: boolean;
+  tradeCount?: number;
+  positionCount?: number;
   portfolioReturnPct?: number;
   spyReturnPct?: number;
 }
@@ -49,6 +55,8 @@ export function computeEligibleAchievements(ctx: AchievementContext): string[] {
     lessonProgress = [],
     streak,
     hasTrades,
+    tradeCount,
+    positionCount,
     portfolioReturnPct,
     spyReturnPct,
   } = ctx;
@@ -101,7 +109,8 @@ export function computeEligibleAchievements(ctx: AchievementContext): string[] {
 
   // Trading milestones
   if (hasTrades) eligible.push("first-trade");
-  if (portfolioReturnPct !== undefined && portfolioReturnPct >= 5) eligible.push("in-the-black");
+  if (portfolioReturnPct !== undefined && portfolioReturnPct >= 5)  eligible.push("in-the-black");
+  if (portfolioReturnPct !== undefined && portfolioReturnPct >= 20) eligible.push("crushing-it");
   if (
     portfolioReturnPct !== undefined &&
     spyReturnPct !== undefined &&
@@ -109,6 +118,15 @@ export function computeEligibleAchievements(ctx: AchievementContext): string[] {
   ) {
     eligible.push("market-beater");
   }
+  if (
+    portfolioReturnPct !== undefined &&
+    spyReturnPct !== undefined &&
+    portfolioReturnPct - spyReturnPct >= 15
+  ) {
+    eligible.push("alpha-generator");
+  }
+  if (tradeCount !== undefined && tradeCount >= 10) eligible.push("active-trader");
+  if (positionCount !== undefined && positionCount >= 5) eligible.push("diversified");
 
   return eligible;
 }

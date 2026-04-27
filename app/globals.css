@@ -130,6 +130,19 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
+/* ── Streak fire animation ───────────────────────────────────────────────── */
+
+@keyframes streak-fire {
+  0%, 100% { transform: scale(1) rotate(-4deg); }
+  50%       { transform: scale(1.22) rotate(4deg); }
+}
+
+.streak-fire {
+  display: inline-block;
+  transform-origin: bottom center;
+  animation: streak-fire 1.6s ease-in-out infinite;
+}
+
 /* ── Nav animations ─────────────────────────────────────────────────────── */
 
 @keyframes nav-pulse {
