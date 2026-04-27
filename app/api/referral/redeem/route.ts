@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const rl = checkRateLimit("referral:redeem", clientIdFromRequest(request), 5, 24 * 60 * 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
@@ -42,11 +48,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid referral code." }, { status: 404 });
   }
 
-  // Link referral and increment referrer's count
-  await Promise.all([
-    admin.from("profiles").update({ referred_by: referrer.id }).eq("id", user.id),
-    admin.from("profiles").update({ referral_count: (self as { referral_count?: number } | null)?.referral_count ?? 0 + 1 }).eq("id", referrer.id),
-  ]);
+  // Link referral atomically — use rpc for the count increment to avoid race conditions
+  await admin.from("profiles").update({ referred_by: referrer.id }).eq("id", user.id);
+  await admin.rpc("increment_referral_count", { target_user_id: referrer.id });
 
   return NextResponse.json({ success: true });
 }

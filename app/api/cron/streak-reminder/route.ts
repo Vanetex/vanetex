@@ -13,10 +13,10 @@ type ReminderTarget = {
 };
 
 export async function GET(request: NextRequest) {
-  // Secured by Vercel Cron authorization header + optional manual secret
-  const authHeader = request.headers.get("authorization");
+  // Always require CRON_SECRET — no fallback to open access
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  const authHeader = request.headers.get("authorization");
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
