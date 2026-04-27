@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Nav from "@/components/Nav";
+import Ticker from "@/components/Ticker";
 import { readCache, writeCache } from "@/lib/pageCache";
 import { listDecisions } from "@/lib/supabase/decisions";
 import { listAwardedAchievements } from "@/lib/supabase/achievements";
@@ -56,7 +57,8 @@ export default function ShellWrapper({ children }: { children: React.ReactNode }
       <PrefetchAll />
       <Nav />
       <div className="md:pl-72">
-        <main className="px-4 pb-10 pt-4 sm:px-6 md:px-8 md:pt-8">
+        <Ticker />
+        <main className="px-4 pb-10 pt-3 sm:px-6 md:px-8 md:pt-6">
           <div className="app-shell mx-auto max-w-5xl rounded-[28px] p-3 sm:p-4">
             <div className="surface-card min-h-[calc(100vh-7rem)] rounded-3xl px-5 pt-6 sm:px-6" style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom, 0px))" }}>
               <div className="mx-auto max-w-2xl">{children}</div>

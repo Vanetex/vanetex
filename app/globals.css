@@ -162,3 +162,26 @@ body {
     transform: translateX(140%);
   }
 }
+
+/* ── Ticker ──────────────────────────────────────────────────────────────── */
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-track {
+  animation: ticker-scroll 40s linear infinite;
+  width: max-content;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+/* ── Dot grid on app shell background ───────────────────────────────────── */
+
+.app-shell {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
