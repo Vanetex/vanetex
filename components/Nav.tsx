@@ -13,7 +13,7 @@ const links = [
   { href: "/tracks",      label: "Learn",       accent: "#8B5CF6", Icon: IconLearn       },
   { href: "/trade",       label: "Trade",       accent: "#16A34A", Icon: IconTrade       },
   { href: "/journal",     label: "Journal",     accent: "#D97706", Icon: IconJournal     },
-  { href: "/progress",    label: "Progress",    accent: "#0EA5E9", Icon: IconProgress    },
+  { href: "/profile",     label: "Profile",     accent: "#0EA5E9", Icon: IconProgress    },
   { href: "/leaderboard", label: "Leaderboard", accent: "#EC4899", Icon: IconLeaderboard },
 ];
 

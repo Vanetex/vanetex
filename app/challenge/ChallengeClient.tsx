@@ -389,7 +389,7 @@ function ShareCard({
 
       {/* Nav links */}
       <div className="flex gap-3">
-        <Link href="/progress" className="cta-primary flex-1 rounded-full py-2.5 text-center text-sm font-medium text-paper">
+        <Link href="/profile" className="cta-primary flex-1 rounded-full py-2.5 text-center text-sm font-medium text-paper">
           See progress
         </Link>
         <Link href="/journal" className="flex-1 rounded-full border border-black/10 py-2.5 text-center text-sm font-medium hover:border-black/30">

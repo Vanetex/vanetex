@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * The landing page (/) is public; everything else behind these prefixes
  * redirects to /auth/sign-in if no session exists.
  */
-const PROTECTED_PREFIXES = ["/challenge", "/journal", "/progress", "/history", "/tracks", "/trade", "/settings", "/onboarding", "/leaderboard"];
+const PROTECTED_PREFIXES = ["/challenge", "/journal", "/progress", "/profile", "/history", "/tracks", "/trade", "/settings", "/onboarding", "/leaderboard"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
