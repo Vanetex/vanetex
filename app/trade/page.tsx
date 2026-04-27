@@ -282,7 +282,6 @@ export default function TradePage() {
   const [searching, setSearching] = useState(false);
   const [selectedStock, setSelectedStock] = useState<StockQuote | null>(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
-  const [candles, setCandles] = useState<number[]>([]);
   const [tradeType, setTradeType] = useState<"BUY" | "SELL">("BUY");
   const [sharesInput, setSharesInput] = useState("");
   const [executing, setExecuting] = useState(false);
@@ -405,19 +404,11 @@ export default function TradePage() {
     setSharesInput("");
     setLoadingQuote(true);
 
-    setCandles([]);
     try {
-      const [quoteRes, candleRes] = await Promise.all([
-        fetch(`/api/stock/quote?symbol=${symbol}`),
-        fetch(`/api/stock/candles?symbol=${symbol}`),
-      ]);
+      const quoteRes = await fetch(`/api/stock/quote?symbol=${symbol}`);
       if (!quoteRes.ok) throw new Error("Could not load quote");
       const q: StockQuote = await quoteRes.json();
       setSelectedStock(q);
-      if (candleRes.ok) {
-        const cd = await candleRes.json() as { prices: number[] };
-        setCandles(cd.prices ?? []);
-      }
 
       // Auto-switch to SELL if user owns shares
       const owns = positions.find((p) => p.ticker === symbol);
@@ -868,10 +859,8 @@ export default function TradePage() {
                 </div>
               </div>
 
-              {/* 30-day sparkline */}
-              {candles.length > 1 && (
-                <Sparkline prices={candles} />
-              )}
+              {/* Sparkline with timeframe picker */}
+              <Sparkline symbol={selectedStock.symbol} />
 
               {/* Key stats grid */}
               <div className="grid grid-cols-3 gap-2">
@@ -880,10 +869,6 @@ export default function TradePage() {
                   ["Prev Close", fmtCurrency(selectedStock.prevClose)],
                   ["Day High", fmtCurrency(selectedStock.dayHigh)],
                   ["Day Low", fmtCurrency(selectedStock.dayLow)],
-                  ...(candles.length > 1 ? [
-                    ["30D High", fmtCurrency(Math.max(...candles))],
-                    ["30D Low", fmtCurrency(Math.min(...candles))],
-                  ] : []),
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl bg-black/[0.03] px-3 py-2">
                     <p className="text-[10px] text-muted uppercase tracking-wide">{label}</p>
@@ -1142,43 +1127,84 @@ function PriceAlerts({ positions }: { positions: PositionWithQuote[] }) {
 
 // ── 30-day sparkline ──────────────────────────────────────────────────────
 
-function Sparkline({ prices }: { prices: number[] }) {
-  const W = 600, H = 80, PAD = 4;
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const range = max - min || 1;
-  const up = prices[prices.length - 1] >= prices[0];
-  const color = up ? "#16A34A" : "#DC2626";
+type Timeframe = "1D" | "1W" | "30D" | "1Y";
+const TIMEFRAMES: Timeframe[] = ["1D", "1W", "30D", "1Y"];
 
-  const pts = prices.map((p, i) => {
-    const x = PAD + (i / (prices.length - 1)) * (W - PAD * 2);
-    const y = PAD + ((max - p) / range) * (H - PAD * 2);
-    return `${x},${y}`;
-  });
-  const polyline = pts.join(" ");
-  const area = `${pts[0]} ${pts.slice(1).join(" ")} ${W - PAD},${H} ${PAD},${H}`;
+function Sparkline({ symbol }: { symbol: string }) {
+  const [tf, setTf] = useState<Timeframe>("30D");
+  const [prices, setPrices] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    setPrices([]);
+    fetch(`/api/stock/candles?symbol=${symbol}&range=${tf}`)
+      .then((r) => r.json())
+      .then((d: { prices: number[] }) => { setPrices(d.prices ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [symbol, tf]);
+
+  const W = 600, H = 80, PAD = 4;
+
+  const renderChart = () => {
+    if (loading) return <div className="h-16 w-full animate-pulse rounded-lg bg-black/5" />;
+    if (prices.length < 2) return <div className="flex h-16 items-center justify-center text-xs text-muted">No data available</div>;
+
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min || 1;
+    const up = prices[prices.length - 1] >= prices[0];
+    const color = up ? "#16A34A" : "#DC2626";
+    const pts = prices.map((p, i) => {
+      const x = PAD + (i / (prices.length - 1)) * (W - PAD * 2);
+      const y = PAD + ((max - p) / range) * (H - PAD * 2);
+      return `${x},${y}`;
+    });
+    const polyline = pts.join(" ");
+    const area = `${pts[0]} ${pts.slice(1).join(" ")} ${W - PAD},${H} ${PAD},${H}`;
+    const changePct = (((prices[prices.length - 1] - prices[0]) / prices[0]) * 100).toFixed(2);
+
+    return (
+      <>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 64 }} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polygon points={area} fill="url(#spark-fill)" />
+          <polyline points={polyline} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div className="mt-0.5 flex justify-between text-[10px] text-muted">
+          <span>{fmtCurrency(min)} – {fmtCurrency(max)}</span>
+          <span className={up ? "text-success font-medium" : "text-danger font-medium"}>
+            {up ? "+" : ""}{changePct}%
+          </span>
+        </div>
+      </>
+    );
+  };
 
   return (
     <div>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
-        30-Day Price
-      </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 64 }} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.15" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon points={area} fill="url(#spark-fill)" />
-        <polyline points={polyline} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <div className="flex justify-between text-[10px] text-muted mt-0.5">
-        <span>{prices.length} trading days</span>
-        <span className={up ? "text-success" : "text-danger"}>
-          {up ? "+" : ""}{(((prices[prices.length - 1] - prices[0]) / prices[0]) * 100).toFixed(1)}%
-        </span>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted">Price</p>
+        <div className="flex gap-1">
+          {TIMEFRAMES.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTf(t)}
+              className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition ${
+                tf === t ? "bg-ink text-paper" : "text-muted hover:text-ink"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
+      {renderChart()}
     </div>
   );
 }

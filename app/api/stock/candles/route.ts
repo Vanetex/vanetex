@@ -17,7 +17,16 @@ export async function GET(request: NextRequest) {
   const symbol = request.nextUrl.searchParams.get("symbol");
   if (!symbol) return NextResponse.json({ error: "symbol is required" }, { status: 400 });
 
-  const key = symbol.toUpperCase();
+  const rangeParam = request.nextUrl.searchParams.get("range") ?? "30D";
+  const RANGE_MAP: Record<string, { interval: string; range: string }> = {
+    "1D":  { interval: "5m",  range: "1d"  },
+    "1W":  { interval: "1d",  range: "5d"  },
+    "30D": { interval: "1d",  range: "2mo" },
+    "1Y":  { interval: "1wk", range: "1y"  },
+  };
+  const { interval, range } = RANGE_MAP[rangeParam] ?? RANGE_MAP["30D"];
+
+  const key = `${symbol.toUpperCase()}:${rangeParam}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
     return NextResponse.json({ prices: hit.prices });
@@ -25,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(key)}?interval=1d&range=2mo`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol.toUpperCase())}?interval=${interval}&range=${range}`,
       {
         headers: { "User-Agent": "Mozilla/5.0" },
         cache: "no-store",
