@@ -6,6 +6,11 @@
   color-scheme: light;
 }
 
+html {
+  background-color: #07080b;
+  min-height: 100%;
+}
+
 html, body {
   background: #07080b;
   color: #0B0C0F;
