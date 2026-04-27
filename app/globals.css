@@ -8,12 +8,15 @@
 
 html {
   background-color: #090b11;
+  background-image:
+    radial-gradient(circle at 12% -10%, rgba(31, 111, 235, 0.35), transparent 40%),
+    radial-gradient(circle at 88% -6%, rgba(86, 140, 239, 0.16), transparent 34%),
+    linear-gradient(180deg, #090b11 0%, #0a0d13 38%, #0b1119 100%);
   min-height: 100%;
   overscroll-behavior: none;
 }
 
 html, body {
-  background: #090b11;
   color: #0B0C0F;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -21,10 +24,7 @@ html, body {
 }
 
 body {
-  background-image:
-    radial-gradient(circle at 12% -10%, rgba(31, 111, 235, 0.35), transparent 40%),
-    radial-gradient(circle at 88% -6%, rgba(86, 140, 239, 0.16), transparent 34%),
-    linear-gradient(180deg, #090b11 0%, #0a0d13 38%, #0b1119 100%);
+  background: transparent;
 }
 
 /* Subtle transitions for the core flow steps */
