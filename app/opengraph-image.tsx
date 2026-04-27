@@ -48,13 +48,14 @@ export default function OGImage() {
             boxShadow: "0 8px 32px rgba(30,71,235,0.5)",
           }}
         >
-          <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-            <polyline
-              points="3,26 12,14 20,20 33,6"
+          <svg width="36" height="36" viewBox="0 0 22 22" fill="none">
+            <path
+              d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2"
               stroke="white"
-              strokeWidth="4"
+              strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
+              fill="none"
             />
           </svg>
         </div>

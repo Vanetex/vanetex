@@ -30,8 +30,8 @@ export default function HomeNav({ user }: { user: User | null }) {
             display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: "0 4px 12px rgba(30,71,235,0.35)",
           }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <polyline points="1,10 5,5 8,8 13,2" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
+              <path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
           </div>
           <span style={{ color: "#FAFAF7", fontWeight: 700, fontSize: 15, letterSpacing: "-0.02em" }}>Vanetex</span>

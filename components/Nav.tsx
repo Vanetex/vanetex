@@ -98,8 +98,8 @@ function LogoMark() {
         boxShadow: "0 4px 14px rgba(31,111,235,0.45)",
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <polyline points="1,10 5,5 8,8 13,2" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
+        <path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
       </svg>
     </div>
   );

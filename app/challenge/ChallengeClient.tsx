@@ -321,8 +321,8 @@ function ShareCard({
               background: "linear-gradient(135deg, #1F6FEB, #0d3ba8)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                <polyline points="1,10 5,5 8,8 13,2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
+                <path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </svg>
             </div>
             <span style={{ color: "rgba(250,250,247,0.5)", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>Vanetex</span>
