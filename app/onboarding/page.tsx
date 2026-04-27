@@ -45,6 +45,15 @@ export default function OnboardingPage() {
   const [tutAction, setTutAction] = useState<TutAction | null>(null);
   const [tutEvalShown, setTutEvalShown] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
+  useState(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle()
+        .then(({ data }) => setDisplayName((data as { display_name?: string | null } | null)?.display_name ?? null));
+    });
+  });
 
   async function complete() {
     setCompleting(true);
@@ -77,7 +86,7 @@ export default function OnboardingPage() {
         ))}
       </div>
 
-      {step === 1 && <StepWelcome onNext={() => setStep(2)} />}
+      {step === 1 && <StepWelcome displayName={displayName} onNext={() => setStep(2)} />}
 
       {step === 2 && (
         <StepCareer
@@ -105,56 +114,54 @@ export default function OnboardingPage() {
 // Step 1 — Welcome
 // ---------------------------------------------------------------------------
 
-function StepWelcome({ onNext }: { onNext: () => void }) {
+function StepWelcome({ displayName, onNext }: { displayName: string | null; onNext: () => void }) {
+  const firstName = displayName?.split(" ")[0] ?? null;
+
   return (
     <div className="fade-in">
-      <div className="mb-5 text-center">
-        <div className="mb-4 text-5xl">📈</div>
+      {/* Logo mark */}
+      <div className="mb-6 flex justify-center">
+        <div style={{
+          width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+          background: "linear-gradient(135deg, #1F6FEB, #0d3ba8)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 8px 24px rgba(31,111,235,0.4)",
+        }}>
+          <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
+            <path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2"
+              stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Headline */}
+      <div className="mb-8 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome to Vanetex
+          {firstName ? `Welcome, ${firstName}.` : "Welcome to Vanetex."}
         </h1>
-        <p className="mx-auto mt-3 max-w-sm text-sm text-muted">
-          You&apos;re about to train like a professional investor — one real
-          company scenario a day.
+        <p className="mt-2 text-sm font-medium text-accent">Build Your Edge</p>
+        <p className="mx-auto mt-3 max-w-xs text-sm text-muted">
+          One scenario a day. Make your call. See what the AI says. See what actually happened.
         </p>
       </div>
 
-      <div className="space-y-3">
+      {/* Three short feature lines */}
+      <div className="mb-8 space-y-3">
         {[
-          {
-            icon: "📊",
-            title: "Read a company snapshot",
-            body: "See real metrics — revenue growth, P/E ratio, profit margin, plus news headlines.",
-          },
-          {
-            icon: "🧠",
-            title: "Write your investment thesis",
-            body: "Choose Buy, Hold, or Pass. Explain your reasoning in 2–4 sentences.",
-          },
-          {
-            icon: "⚡",
-            title: "AI analyst grades you",
-            body: "Get a 0–100 reasoning score with specific feedback on what you missed.",
-          },
-          {
-            icon: "🔮",
-            title: "See what actually happened",
-            body: "The outcome is revealed — did the stock go up or down? Were you right?",
-          },
+          { icon: "📊", text: "Read real company metrics and headlines" },
+          { icon: "⚡", text: "AI grades your reasoning 0–100 with specific feedback" },
+          { icon: "🎯", text: "Reveal the outcome — were you right?" },
         ].map((item) => (
-          <div key={item.title} className="surface-soft flex gap-4 rounded-2xl p-4">
-            <span className="shrink-0 text-xl">{item.icon}</span>
-            <div>
-              <p className="text-sm font-medium">{item.title}</p>
-              <p className="mt-0.5 text-xs text-muted">{item.body}</p>
-            </div>
+          <div key={item.text} className="flex items-center gap-3 rounded-2xl border border-black/6 bg-white px-4 py-3">
+            <span className="shrink-0 text-lg">{item.icon}</span>
+            <p className="text-sm text-ink/80">{item.text}</p>
           </div>
         ))}
       </div>
 
       <button
         onClick={onNext}
-        className="cta-primary mt-7 w-full rounded-full py-3.5 text-sm font-medium text-paper"
+        className="cta-primary w-full rounded-full py-3.5 text-sm font-medium text-paper"
       >
         Let&apos;s go →
       </button>
