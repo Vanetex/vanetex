@@ -128,7 +128,13 @@ export default function LeaderboardPage() {
       )}
 
       {tab === "friends" && (
-        <FriendsTab friends={friends} loading={loadingFriends} onUpdate={() => fetchFriends().then(setFriends)} />
+        <FriendsTab
+          friends={friends}
+          loading={loadingFriends}
+          onUpdate={() => fetchFriends().then(setFriends)}
+          challenge={challenge}
+          trading={trading}
+        />
       )}
     </section>
   );
@@ -136,7 +142,13 @@ export default function LeaderboardPage() {
 
 // ─── Friends tab ──────────────────────────────────────────────────────────────
 
-function FriendsTab({ friends, loading, onUpdate }: { friends: FriendData; loading: boolean; onUpdate: () => void }) {
+function FriendsTab({ friends, loading, onUpdate, challenge, trading }: {
+  friends: FriendData;
+  loading: boolean;
+  onUpdate: () => void;
+  challenge: ChallengeRow[];
+  trading: TradingRow[];
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -282,6 +294,90 @@ function FriendsTab({ friends, loading, onUpdate }: { friends: FriendData; loadi
           </ul>
         )}
       </div>
+
+      {/* Friends leaderboard */}
+      {friends.accepted.length > 0 && (
+        <FriendsLeaderboard
+          friends={friends.accepted}
+          challenge={challenge}
+          trading={trading}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Friends leaderboard ──────────────────────────────────────────────────────
+
+function FriendsLeaderboard({ friends, challenge, trading }: {
+  friends: FriendEntry[];
+  challenge: ChallengeRow[];
+  trading: TradingRow[];
+}) {
+  const friendNames = new Set(friends.map((f) => f.displayName));
+
+  // Filter to friends + current user, then re-rank
+  const friendChallenge = challenge
+    .filter((r) => r.is_current_user || friendNames.has(r.display_name))
+    .sort((a, b) => b.avg_score - a.avg_score)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+
+  const friendTrading = trading
+    .filter((r) => r.is_current_user || friendNames.has(r.display_name))
+    .sort((a, b) => b.portfolio_value - a.portfolio_value)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+
+  return (
+    <div className="space-y-6 border-t border-black/5 pt-6">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted">Rankings among friends</p>
+
+      <Board title="Challenge" subtitle="Avg reasoning score">
+        {friendChallenge.length === 0 ? (
+          <Empty text="None of your friends have completed a challenge yet." />
+        ) : (
+          <ul className="divide-y divide-black/5">
+            {friendChallenge.map((row) => (
+              <li key={row.rank} className={`flex items-center gap-3 px-4 py-3 ${row.is_current_user ? "bg-accent/5" : ""}`}>
+                <RankBadge rank={row.rank} />
+                <div className="min-w-0 flex-1">
+                  <span className={`text-sm font-medium ${row.is_current_user ? "text-accent" : "text-ink"}`}>
+                    {row.display_name}
+                    {row.is_current_user && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-accent/70">you</span>}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-4 text-right text-xs">
+                  <Metric label="Score" value={`${row.avg_score}`} highlight />
+                  <Metric label="Decisions" value={`${row.total_decisions}`} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Board>
+
+      <Board title="Trading" subtitle="Paper portfolio value">
+        {friendTrading.length === 0 ? (
+          <Empty text="None of your friends have made a trade yet." />
+        ) : (
+          <ul className="divide-y divide-black/5">
+            {friendTrading.map((row) => (
+              <li key={row.rank} className={`flex items-center gap-3 px-4 py-3 ${row.is_current_user ? "bg-accent/5" : ""}`}>
+                <RankBadge rank={row.rank} />
+                <div className="min-w-0 flex-1">
+                  <span className={`text-sm font-medium ${row.is_current_user ? "text-accent" : "text-ink"}`}>
+                    {row.display_name}
+                    {row.is_current_user && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-accent/70">you</span>}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-4 text-right text-xs">
+                  <Metric label="Value" value={`$${row.portfolio_value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`} highlight />
+                  <Metric label="Return" value={`${row.return_pct >= 0 ? "+" : ""}${row.return_pct}%`} positive={row.return_pct > 0} negative={row.return_pct < 0} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Board>
     </div>
   );
 }
