@@ -78,14 +78,29 @@ body {
 /* ── Page content shell (main content wrapper) ───────────────────────── */
 .page-shell {
   background: linear-gradient(160deg, rgba(31,50,120,0.22) 0%, rgba(8,14,38,0.28) 100%);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid rgba(100,150,255,0.14);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(140,175,255,0.2);
   box-shadow:
-    0 8px 32px rgba(3,7,18,0.2),
-    inset 0 1px 0 rgba(255,255,255,0.1);
+    0 8px 32px rgba(3,7,18,0.25),
+    inset 0 1.5px 0 rgba(255,255,255,0.18),
+    inset 0 -1px 0 rgba(0,0,0,0.12);
   color: var(--paper);
+  position: relative;
 }
+
+/* Glass sheen — catches light at the top like real frosted glass */
+.page-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(175deg, rgba(255,255,255,0.07) 0%, transparent 45%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page-shell > * { position: relative; z-index: 1; }
 
 /* White cards become dark glass inside the shell */
 .page-shell [class*="bg-white"]     { background-color: rgba(255,255,255,0.07) !important; }
