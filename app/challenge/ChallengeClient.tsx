@@ -8,6 +8,8 @@ import FeedbackPanel from "@/components/FeedbackPanel";
 import OutcomePanel from "@/components/OutcomePanel";
 import ReflectionPrompt from "@/components/ReflectionPrompt";
 import { verdictFor, computeStreak } from "@/lib/scoring";
+import { computeXP, getLevelInfo, computeSessionXP } from "@/lib/xp";
+import type { XPBreakdownItem } from "@/lib/xp";
 import { listDecisions,
   saveDecision,
   attachEvaluation,
@@ -38,6 +40,8 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
   const [streak, setStreak] = useState(0);
   const [totalDecisions, setTotalDecisions] = useState(0);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
+  const [sessionXP, setSessionXP] = useState<{ total: number; breakdown: XPBreakdownItem[] } | null>(null);
+  const [totalXP, setTotalXP] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +88,13 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
     listDecisions().then(async (all) => {
       const s = computeStreak(all);
       setStreak(s);
+
+      // XP
+      const xp = computeXP(all, []);
+      setTotalXP(xp);
+      const latest = all[0]; // most recent decision (listDecisions returns desc)
+      if (latest) setSessionXP(computeSessionXP(latest, s));
+
       const eligible = computeEligibleAchievements({ decisions: all, streak: s });
       const awarded = await listAwardedAchievements();
       const awardedSet = new Set(awarded.map((a) => a.id));
@@ -166,7 +177,7 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
         </Link>
       </div>
 
-      {streak > 0 && stage !== "loading" && <StreakBanner streak={streak} />}
+      {streak > 0 && stage !== "loading" && <StreakBanner streak={streak} totalXP={totalXP} />}
 
       {stage === "loading" && (
         <div className="animate-pulse space-y-3">
@@ -236,6 +247,7 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
       )}
 
       {newAchievements.length > 0 && <AchievementToast newIds={newAchievements} />}
+      {stage === "done" && sessionXP && <XPToast sessionXP={sessionXP} totalXP={totalXP} />}
 
       {stage === "done" && action && (
         <ShareCard
@@ -299,7 +311,78 @@ function EarlyInsight({
   );
 }
 
-function StreakBanner({ streak }: { streak: number }) {
+function XPToast({
+  sessionXP,
+  totalXP,
+}: {
+  sessionXP: { total: number; breakdown: XPBreakdownItem[] };
+  totalXP: number;
+}) {
+  const [visible, setVisible] = useState(true);
+  const levelInfo = getLevelInfo(totalXP);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      className="fade-in fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl p-4 shadow-2xl"
+      style={{
+        background: "linear-gradient(135deg, #0d1117 0%, #161b22 100%)",
+        border: "1px solid rgba(255,255,255,0.12)",
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚡</span>
+          <span className="font-semibold text-white">+{sessionXP.total} XP earned</span>
+        </div>
+        <button
+          onClick={() => setVisible(false)}
+          className="text-xs text-white/40 hover:text-white/70"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="mt-2 space-y-1">
+        {sessionXP.breakdown.map((b, i) => (
+          <div key={i} className="flex items-center justify-between text-xs">
+            <span className="text-white/50">{b.label}</span>
+            <span className="font-mono font-medium text-white/80">+{b.xp}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Level progress */}
+      <div className="mt-3 border-t border-white/10 pt-3">
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="font-semibold text-white/70">{levelInfo.current.title}</span>
+          {levelInfo.next && (
+            <span className="text-white/40">{levelInfo.xpIntoLevel.toLocaleString()} / {levelInfo.xpForNextLevel!.toLocaleString()} XP</span>
+          )}
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div
+            style={{
+              width: `${levelInfo.progressPct}%`,
+              background: "linear-gradient(90deg, #1F6FEB, #60A5FA)",
+              height: "100%",
+              borderRadius: 99,
+            }}
+          />
+        </div>
+        {levelInfo.next && (
+          <p className="mt-1 text-[10px] text-white/30">
+            {(levelInfo.xpForNextLevel! - levelInfo.xpIntoLevel).toLocaleString()} XP to {levelInfo.next.title}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StreakBanner({ streak, totalXP }: { streak: number; totalXP: number }) {
+  const levelInfo = getLevelInfo(totalXP);
   const milestones = [3, 7, 30];
   const nextMilestone = milestones.find((m) => m > streak) ?? null;
   const prevMilestone = [...milestones].reverse().find((m) => m <= streak) ?? 0;
@@ -345,16 +428,28 @@ function StreakBanner({ streak }: { streak: number }) {
               </p>
             </div>
           </div>
-          <div style={{
-            background: "rgba(0,0,0,0.2)",
-            borderRadius: 10, padding: "6px 12px", textAlign: "center",
-          }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            {/* Level badge */}
+            <div style={{
+              background: "rgba(0,0,0,0.25)", borderRadius: 8,
+              padding: "4px 10px", display: "flex", alignItems: "center", gap: 5,
+            }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                {levelInfo.current.title}
+              </span>
+            </div>
+            {/* Streak milestone */}
+            <div style={{
+              background: "rgba(0,0,0,0.2)",
+              borderRadius: 10, padding: "6px 12px", textAlign: "center",
+            }}>
             <p style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
               {nextMilestone ? "next" : "max"}
             </p>
             <p style={{ fontSize: 15, fontWeight: 800, color: nextMilestone ? "#fbbf24" : "#fff" }}>
               {nextMilestone ?? "∞"}
             </p>
+            </div>
           </div>
         </div>
 

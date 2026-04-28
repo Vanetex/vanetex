@@ -4,13 +4,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { computeProgress } from "@/lib/scoring";
 import { ALL_ACHIEVEMENTS } from "@/lib/achievements";
+import { computeXP, getLevelInfo } from "@/lib/xp";
 import { listDecisions } from "@/lib/supabase/decisions";
 import { listAwardedAchievements } from "@/lib/supabase/achievements";
+import { listLessonProgress } from "@/lib/supabase/lessonProgress";
 import { readCache, writeCache } from "@/lib/pageCache";
-import type { DecisionRecord, ProgressSnapshot } from "@/lib/types";
+import type { DecisionRecord, LessonProgress, ProgressSnapshot } from "@/lib/types";
 
 const DECISIONS_KEY = "decisions";
 const ACHIEVEMENTS_KEY = "achievements";
+const LESSONS_KEY = "lessonProgress";
 
 export default function ProfilePage() {
   const [records, setRecords] = useState<DecisionRecord[]>(
@@ -19,17 +22,22 @@ export default function ProfilePage() {
   const [awarded, setAwarded] = useState<{ id: string; awarded_at: string }[]>(
     () => readCache<{ id: string; awarded_at: string }[]>(ACHIEVEMENTS_KEY) ?? [],
   );
+  const [lessonProgress, setLessonProgress] = useState<LessonProgress[]>(
+    () => readCache<LessonProgress[]>(LESSONS_KEY) ?? [],
+  );
   const [loading, setLoading] = useState(
     () => !readCache<DecisionRecord[]>(DECISIONS_KEY),
   );
 
   useEffect(() => {
     if (readCache<DecisionRecord[]>(DECISIONS_KEY)) return;
-    Promise.all([listDecisions(), listAwardedAchievements()]).then(([recs, ach]) => {
+    Promise.all([listDecisions(), listAwardedAchievements(), listLessonProgress()]).then(([recs, ach, lessons]) => {
       writeCache(DECISIONS_KEY, recs);
       writeCache(ACHIEVEMENTS_KEY, ach);
+      writeCache(LESSONS_KEY, lessons);
       setRecords(recs);
       setAwarded(ach);
+      setLessonProgress(lessons);
       setLoading(false);
     });
   }, []);
@@ -39,6 +47,7 @@ export default function ProfilePage() {
       <section className="animate-pulse">
         <div className="mb-1 h-7 w-32 rounded-lg bg-black/8" />
         <div className="mb-6 mt-2 h-4 w-64 rounded bg-black/5" />
+        <div className="mb-5 h-28 rounded-2xl bg-black/5" />
         <div className="grid gap-3 sm:grid-cols-2">
           {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-2xl bg-black/5" />)}
         </div>
@@ -49,6 +58,8 @@ export default function ProfilePage() {
   }
 
   const snap = computeProgress(records);
+  const totalXP = computeXP(records, lessonProgress);
+  const levelInfo = getLevelInfo(totalXP);
 
   if (snap.totalDecisions === 0) {
     return (
@@ -90,6 +101,9 @@ export default function ProfilePage() {
       <p className="mb-6 text-sm text-muted">
         Rolling averages across your last few decisions.
       </p>
+
+      {/* XP / Level card */}
+      <XPCard levelInfo={levelInfo} className="mb-5" />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <BigStat label="Skill score" value={snap.skillScore} suffix="" level={snap.level} trend={snap.trend} />
@@ -171,6 +185,92 @@ export default function ProfilePage() {
         </div>
       </div>
     </section>
+  );
+}
+
+function XPCard({
+  levelInfo,
+  className = "",
+}: {
+  levelInfo: ReturnType<typeof getLevelInfo>;
+  className?: string;
+}) {
+  const { current, next, xpIntoLevel, xpForNextLevel, progressPct, totalXP } = levelInfo;
+  const isMax = !next;
+
+  const levelColor =
+    current.level >= 9 ? "#D97706"
+    : current.level >= 6 ? "#8B5CF6"
+    : current.level >= 3 ? "#1F6FEB"
+    : "#6B7280";
+
+  const barColor =
+    current.level >= 9 ? "linear-gradient(90deg, #D97706, #F59E0B)"
+    : current.level >= 6 ? "linear-gradient(90deg, #7C3AED, #8B5CF6)"
+    : current.level >= 3 ? "linear-gradient(90deg, #1F6FEB, #60A5FA)"
+    : "linear-gradient(90deg, #6B7280, #9CA3AF)";
+
+  return (
+    <div className={`rounded-2xl border border-black/5 bg-white p-5 ${className}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            style={{ background: levelColor, opacity: 0.12, borderRadius: 10 }}
+            className="absolute h-10 w-10"
+            aria-hidden
+          />
+          <div
+            style={{ background: `${levelColor}18`, border: `1px solid ${levelColor}30`, borderRadius: 10 }}
+            className="flex h-10 w-10 items-center justify-center"
+          >
+            <span className="font-mono text-sm font-bold" style={{ color: levelColor }}>
+              L{current.level}
+            </span>
+          </div>
+          <div>
+            <p className="font-semibold leading-tight" style={{ color: levelColor }}>
+              {current.title}
+            </p>
+            <p className="text-xs text-muted">
+              {totalXP.toLocaleString()} XP total
+            </p>
+          </div>
+        </div>
+        {next && (
+          <div className="text-right">
+            <p className="text-xs text-muted">Next: <span className="font-medium text-ink">{next.title}</span></p>
+            <p className="text-xs text-muted">{xpIntoLevel.toLocaleString()} / {xpForNextLevel!.toLocaleString()} XP</p>
+          </div>
+        )}
+        {isMax && (
+          <span className="rounded-full bg-warn/10 px-2.5 py-1 text-xs font-semibold text-warn">
+            Max level 🏆
+          </span>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/6">
+        <div
+          style={{
+            width: `${progressPct}%`,
+            background: barColor,
+            height: "100%",
+            borderRadius: 99,
+            transition: "width 800ms cubic-bezier(0.22,1,0.36,1)",
+            boxShadow: `0 0 8px ${levelColor}55`,
+          }}
+        />
+      </div>
+
+      {/* XP source breakdown */}
+      <div className="mt-3 flex gap-4 text-[11px] text-muted">
+        <span>⚡ Challenges</span>
+        <span>📖 Lessons</span>
+        <span>✍️ Reflections</span>
+        <span>🎯 Correct calls</span>
+      </div>
+    </div>
   );
 }
 
