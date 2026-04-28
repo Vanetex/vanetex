@@ -70,7 +70,7 @@ export default function DecisionInput({ onSubmit, submitting }: Props) {
           max={10}
           value={confidence}
           onChange={(e) => setConfidence(parseInt(e.target.value, 10))}
-          className="mt-2 w-full accent-ink"
+          className="mt-2 w-full accent-white"
         />
         <div className="mt-1 flex justify-between text-[10px] uppercase tracking-wider text-muted">
           <span>Low</span>
