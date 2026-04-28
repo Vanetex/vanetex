@@ -1,36 +1,73 @@
 import type { Action, DecisionRecord, ProgressSnapshot } from "./types";
 
-/**
- * Count the current daily streak: consecutive calendar days (ending today or
- * yesterday) where the user completed the full challenge loop (reflection saved).
- */
-export function computeStreak(records: DecisionRecord[]): number {
-  const completedDays = new Set(
+// A day counts toward the streak when the user reached the outcome reveal.
+// Reflection is optional (earns XP) but not required for the streak.
+function completedDaySet(records: DecisionRecord[]): Set<string> {
+  return new Set(
     records
-      .filter((r) => r.reflection)
+      .filter((r) => r.outcomeVerdict != null)
       .map((r) => {
         const d = new Date(r.timestamp);
         return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       }),
   );
+}
 
-  const today = new Date();
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+/**
+ * Count the current daily streak: consecutive calendar days (ending today or
+ * yesterday) where the user completed the challenge loop (outcome revealed).
+ */
+export function computeStreak(records: DecisionRecord[]): number {
+  const done = completedDaySet(records);
+  const cursor = new Date();
+  if (!done.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
   let streak = 0;
-  const cursor = new Date(today);
-
-  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-
-  // If today isn't done yet, the active streak is measured from yesterday
-  if (!completedDays.has(key(cursor))) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  while (completedDays.has(key(cursor))) {
+  while (done.has(dayKey(cursor))) {
     streak++;
     cursor.setDate(cursor.getDate() - 1);
   }
-
   return streak;
+}
+
+/**
+ * Like computeStreak, but allows one shield to bridge a single missed day.
+ * Returns the streak and whether the shield was consumed.
+ */
+export function computeStreakWithShield(
+  records: DecisionRecord[],
+  hasShield: boolean,
+): { streak: number; shieldConsumed: boolean } {
+  const done = completedDaySet(records);
+  const cursor = new Date();
+  if (!done.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+
+  let streak = 0;
+  let shieldConsumed = false;
+  let shieldAvailable = hasShield;
+
+  while (true) {
+    if (done.has(dayKey(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    } else if (shieldAvailable) {
+      // Try to bridge this gap — only valid if the day before also has a record
+      const dayBefore = new Date(cursor);
+      dayBefore.setDate(dayBefore.getDate() - 1);
+      if (done.has(dayKey(dayBefore))) {
+        shieldConsumed = true;
+        shieldAvailable = false;
+        cursor.setDate(cursor.getDate() - 1); // skip the gap
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  return { streak, shieldConsumed };
 }
 
 /**

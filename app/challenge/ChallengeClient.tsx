@@ -7,7 +7,7 @@ import DecisionInput from "@/components/DecisionInput";
 import FeedbackPanel from "@/components/FeedbackPanel";
 import OutcomePanel from "@/components/OutcomePanel";
 import ReflectionPrompt from "@/components/ReflectionPrompt";
-import { verdictFor, computeStreak } from "@/lib/scoring";
+import { verdictFor, computeStreak, computeStreakWithShield } from "@/lib/scoring";
 import { computeXP, getLevelInfo, computeSessionXP } from "@/lib/xp";
 import type { XPBreakdownItem } from "@/lib/xp";
 import { listDecisions,
@@ -40,6 +40,9 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
   const [reflectionSaved, setReflectionSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
+  const [shield, setShield] = useState(0);
+  const [shieldJustConsumed, setShieldJustConsumed] = useState(false);
+  const [shieldJustEarned, setShieldJustEarned] = useState(false);
   const [totalDecisions, setTotalDecisions] = useState(0);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
   const [sessionXP, setSessionXP] = useState<{ total: number; breakdown: XPBreakdownItem[] } | null>(null);
@@ -49,14 +52,25 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
     let cancelled = false;
 
     async function checkExisting() {
-      const [existing, allDecisions] = await Promise.all([
+      const [existing, allDecisions, shieldRes] = await Promise.all([
         getDecisionForScenario(scenario.id),
         listDecisions(),
+        fetch("/api/streak/shield").then((r) => r.json()).catch(() => ({ shield: 0 })),
       ]);
       if (cancelled) return;
 
-      setStreak(computeStreak(allDecisions));
+      const currentShield = shieldRes.shield ?? 0;
+      setShield(currentShield);
+
+      const { streak: s, shieldConsumed } = computeStreakWithShield(allDecisions, currentShield > 0);
+      setStreak(s);
       setTotalDecisions(allDecisions.length);
+
+      if (shieldConsumed) {
+        setShieldJustConsumed(true);
+        setShield(0);
+        fetch("/api/streak/shield", { method: "DELETE" }).catch(() => {});
+      }
 
       if (!existing) {
         setStage("deciding");
@@ -94,8 +108,22 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
       // XP
       const xp = computeXP(all, []);
       setTotalXP(xp);
-      const latest = all[0]; // most recent decision (listDecisions returns desc)
+      const latest = all[0];
       if (latest) setSessionXP(computeSessionXP(latest, s));
+
+      // Shield eligibility: CORRECT + reasoning >= 85 + not already holding one
+      if (
+        latest?.outcomeVerdict === "CORRECT" &&
+        (latest.evaluation?.reasoningScore ?? 0) >= 85 &&
+        shield === 0
+      ) {
+        const res = await fetch("/api/streak/shield", { method: "POST" });
+        const data = await res.json() as { awarded?: boolean };
+        if (data.awarded) {
+          setShield(1);
+          setShieldJustEarned(true);
+        }
+      }
 
       const eligible = computeEligibleAchievements({ decisions: all, streak: s });
       const awarded = await listAwardedAchievements();
@@ -183,7 +211,9 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
         </Link>
       </div>
 
-      {streak > 0 && stage !== "loading" && <StreakBanner streak={streak} totalXP={totalXP} />}
+      {streak > 0 && stage !== "loading" && (
+        <StreakBanner streak={streak} totalXP={totalXP} shield={shield} justConsumed={shieldJustConsumed} justEarned={shieldJustEarned} />
+      )}
 
       {stage === "loading" && (
         <div className="animate-pulse space-y-3">
@@ -390,7 +420,12 @@ function XPToast({
   );
 }
 
-function StreakBanner({ streak, totalXP }: { streak: number; totalXP: number }) {
+function StreakBanner({
+  streak, totalXP, shield, justConsumed, justEarned,
+}: {
+  streak: number; totalXP: number; shield: number;
+  justConsumed: boolean; justEarned: boolean;
+}) {
   const levelInfo = getLevelInfo(totalXP);
   const milestones = [3, 7, 30];
   const nextMilestone = milestones.find((m) => m > streak) ?? null;
@@ -438,14 +473,36 @@ function StreakBanner({ streak, totalXP }: { streak: number; totalXP: number }) 
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-            {/* Level badge */}
-            <div style={{
-              background: "rgba(0,0,0,0.25)", borderRadius: 8,
-              padding: "4px 10px", display: "flex", alignItems: "center", gap: 5,
-            }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {levelInfo.current.title}
-              </span>
+            {/* Level badge + shield */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {shield > 0 && (
+                <div style={{
+                  background: justEarned ? "rgba(251,191,36,0.25)" : "rgba(0,0,0,0.25)",
+                  border: justEarned ? "1px solid rgba(251,191,36,0.5)" : "none",
+                  borderRadius: 8, padding: "4px 8px",
+                  display: "flex", alignItems: "center", gap: 4,
+                }}>
+                  <span style={{ fontSize: 12 }}>🛡️</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", fontWeight: 700 }}>
+                    {justEarned ? "Earned!" : "Shield"}
+                  </span>
+                </div>
+              )}
+              {justConsumed && (
+                <div style={{ background: "rgba(0,0,0,0.25)", borderRadius: 8, padding: "4px 8px" }}>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>
+                    🛡️ Shield used
+                  </span>
+                </div>
+              )}
+              <div style={{
+                background: "rgba(0,0,0,0.25)", borderRadius: 8,
+                padding: "4px 10px", display: "flex", alignItems: "center", gap: 5,
+              }}>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  {levelInfo.current.title}
+                </span>
+              </div>
             </div>
             {/* Streak milestone */}
             <div style={{
