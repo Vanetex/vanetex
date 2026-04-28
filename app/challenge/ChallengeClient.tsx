@@ -166,6 +166,10 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
     setStage("done");
   }
 
+  function skipReflection() {
+    setStage("done");
+  }
+
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
@@ -243,7 +247,7 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
       )}
 
       {stage === "outcome" && (
-        <ReflectionPrompt onSave={saveReflectionHandler} saved={reflectionSaved} />
+        <ReflectionPrompt onSave={saveReflectionHandler} onSkip={skipReflection} saved={reflectionSaved} />
       )}
 
       {newAchievements.length > 0 && <AchievementToast newIds={newAchievements} />}
@@ -483,6 +487,16 @@ function ShareCard({
   streak: number;
 }) {
   const [copied, setCopied] = useState(false);
+  const [correctPct, setCorrectPct] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/scenario-stats?scenarioId=${scenario.id}`)
+      .then((r) => r.json())
+      .then((d: { total: number; correctPct?: number }) => {
+        if (d.total >= 10 && d.correctPct !== undefined) setCorrectPct(d.correctPct);
+      })
+      .catch(() => {});
+  }, [scenario.id]);
 
   const score = evaluation?.decisionScore ?? null;
   const verdict = verdictFor(action, scenario.outcome.returnPct);
@@ -502,10 +516,27 @@ function ShareCard({
 
   const verdictEmoji = correct ? "✅" : neutral ? "➡️" : "❌";
 
+  // Narrative hook line — the shareable ego/story moment
+  let narrativeLine = "";
+  if (correct && correctPct !== null) {
+    if (correctPct <= 25) {
+      narrativeLine = `Only ${correctPct}% of players got this right. I did.`;
+    } else if (correctPct <= 45) {
+      narrativeLine = `Most players got this wrong. I didn't.`;
+    } else if (action === "PASS") {
+      narrativeLine = `Everyone was buying. I passed. Correct.`;
+    } else {
+      narrativeLine = `I got this right. Did you?`;
+    }
+  } else if (correct && action === "PASS") {
+    narrativeLine = `The crowd bought. I passed. I was right.`;
+  }
+
   const shareText = [
     `🎯 Vanetex Daily Challenge`,
     ``,
-    `${scenario.company} · $${scenario.ticker}`,
+    narrativeLine || `${scenario.company} · $${scenario.ticker}`,
+    narrativeLine ? `${scenario.company} · $${scenario.ticker}` : "",
     `My call: ${action} ${verdictEmoji}`,
     score !== null ? `Score: ${score}/100${scoreLabel ? ` — ${scoreLabel}` : ""}` : "",
     streak > 0 ? `🔥 ${streak}-day streak` : "",
@@ -566,6 +597,13 @@ function ShareCard({
             <span style={{ fontSize: 12, fontWeight: 600, color: "#D97706" }}>🔥 {streak}-day streak</span>
           )}
         </div>
+
+        {/* Narrative hook */}
+        {narrativeLine && (
+          <p style={{ fontSize: 14, fontWeight: 700, color: "#FAFAF7", marginBottom: 14, letterSpacing: "-0.01em" }}>
+            {narrativeLine}
+          </p>
+        )}
 
         {/* Company + ticker */}
         <div style={{ marginBottom: 18 }}>

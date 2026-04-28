@@ -5,6 +5,7 @@ import Link from "next/link";
 import { computeProgress } from "@/lib/scoring";
 import { ALL_ACHIEVEMENTS } from "@/lib/achievements";
 import { computeXP, getLevelInfo } from "@/lib/xp";
+import { computePersona } from "@/lib/personas";
 import { listDecisions } from "@/lib/supabase/decisions";
 import { listAwardedAchievements } from "@/lib/supabase/achievements";
 import { listLessonProgress } from "@/lib/supabase/lessonProgress";
@@ -60,6 +61,7 @@ export default function ProfilePage() {
   const snap = computeProgress(records);
   const totalXP = computeXP(records, lessonProgress);
   const levelInfo = getLevelInfo(totalXP);
+  const persona = computePersona(records);
 
   if (snap.totalDecisions === 0) {
     return (
@@ -103,7 +105,10 @@ export default function ProfilePage() {
       </p>
 
       {/* XP / Level card */}
-      <XPCard levelInfo={levelInfo} className="mb-5" />
+      <XPCard levelInfo={levelInfo} className="mb-3" />
+
+      {/* Investor persona */}
+      {persona && <PersonaCard persona={persona} decisionCount={records.length} className="mb-5" />}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <BigStat label="Skill score" value={snap.skillScore} suffix="" level={snap.level} trend={snap.trend} />
@@ -185,6 +190,37 @@ export default function ProfilePage() {
         </div>
       </div>
     </section>
+  );
+}
+
+function PersonaCard({
+  persona,
+  decisionCount,
+  className = "",
+}: {
+  persona: ReturnType<typeof computePersona>;
+  decisionCount: number;
+  className?: string;
+}) {
+  if (!persona) return null;
+  return (
+    <div className={`rounded-2xl border border-black/5 bg-white p-5 ${className}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/8 text-2xl">
+            {persona.icon}
+          </div>
+          <div>
+            <p className="font-semibold leading-tight">{persona.label}</p>
+            <p className="text-xs text-muted">{persona.description}</p>
+          </div>
+        </div>
+        <span className="text-[10px] font-medium text-muted">
+          Based on {decisionCount} decisions
+        </span>
+      </div>
+      <p className="mt-3 text-sm text-ink/75 leading-relaxed">{persona.insight}</p>
+    </div>
   );
 }
 
