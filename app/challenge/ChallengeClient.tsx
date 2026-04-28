@@ -36,6 +36,7 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
   const [reflectionSaved, setReflectionSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
+  const [totalDecisions, setTotalDecisions] = useState(0);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
       if (cancelled) return;
 
       setStreak(computeStreak(allDecisions));
+      setTotalDecisions(allDecisions.length);
 
       if (!existing) {
         setStage("deciding");
@@ -204,6 +206,10 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
       {(stage === "feedback" || stage === "outcome" || stage === "done") &&
         evaluation && <FeedbackPanel evaluation={evaluation} />}
 
+      {stage === "feedback" && totalDecisions < 3 && evaluation && (
+        <EarlyInsight confidence={confidence} reasoningScore={evaluation.reasoningScore} decisionNumber={totalDecisions + 1} />
+      )}
+
       {stage === "feedback" && (
         <div className="mt-4 text-center">
           <button
@@ -240,6 +246,56 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
         />
       )}
     </section>
+  );
+}
+
+function EarlyInsight({
+  confidence,
+  reasoningScore,
+  decisionNumber,
+}: {
+  confidence: number;
+  reasoningScore: number;
+  decisionNumber: number;
+}) {
+  const gap = confidence * 10 - reasoningScore;
+
+  let headline: string;
+  let body: string;
+
+  if (gap >= 30) {
+    headline = "Your confidence outran your reasoning";
+    body = `You rated yourself ${confidence}/10 — but the AI scored your analysis ${reasoningScore}/100. That gap is the #1 thing this app trains you to close.`;
+  } else if (gap <= -20) {
+    headline = "You're better than you think";
+    body = `You came in at ${confidence}/10 confidence, but your reasoning scored ${reasoningScore}/100. Trust your analysis more.`;
+  } else if (reasoningScore >= 70) {
+    headline = "Strong first read";
+    body = `Reasoning score: ${reasoningScore}/100. You're already thinking like an analyst — now watch what happens when you see the outcome.`;
+  } else {
+    headline = "This is your baseline";
+    body = `Decision #${decisionNumber}. Confidence: ${confidence}/10. Reasoning: ${reasoningScore}/100. Every rep here sharpens the gap between how sure you feel and how strong your case actually is.`;
+  }
+
+  return (
+    <div
+      className="fade-in mt-4 rounded-2xl p-4"
+      style={{
+        background: "linear-gradient(135deg, rgba(31,111,235,0.07) 0%, rgba(31,111,235,0.03) 100%)",
+        border: "1px solid rgba(31,111,235,0.18)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 text-lg">🎯</span>
+        <div>
+          <p className="text-sm font-semibold text-ink">{headline}</p>
+          <p className="mt-1 text-sm text-ink/70">{body}</p>
+          <p className="mt-2 text-xs text-accent/80 font-medium">
+            Most beginners are overconfident at first. This app tracks that gap over time.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
