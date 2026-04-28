@@ -21,6 +21,7 @@ import { listAwardedAchievements, awardAchievements } from "@/lib/supabase/achie
 import { computeEligibleAchievements } from "@/lib/achievements";
 import AchievementToast from "@/components/AchievementToast";
 import PushPrompt from "@/components/PushPrompt";
+import InstallBanner from "@/components/InstallBanner";
 import type {
   Action,
   Evaluation,
@@ -263,6 +264,8 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
           streak={streak}
         />
       )}
+
+      {stage === "done" && <InstallBanner />}
     </section>
   );
 }
