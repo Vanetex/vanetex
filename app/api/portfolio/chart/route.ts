@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -42,7 +43,9 @@ const fetchDailyCandles = unstable_cache(
   { revalidate: 3600 }, // 1 hour — candles for past days never change
 );
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rl = checkRateLimit("portfolio:chart", clientIdFromRequest(request), 10, 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: "Too many requests." }, { status: 429 });
   const supabase = await createClient();
   const {
     data: { user },
