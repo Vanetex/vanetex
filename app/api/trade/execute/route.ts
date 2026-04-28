@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
       .from("paper_trades")
       .select("id")
       .eq("idempotency_key", idempotencyKey)
+      .eq("user_id", user.id)
       .maybeSingle();
 
     if (dup) {

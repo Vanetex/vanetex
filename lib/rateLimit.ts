@@ -45,7 +45,15 @@ export function checkRateLimit(
 
 export function clientIdFromRequest(req: Request): string {
   const headers = new Headers((req as unknown as { headers: Headers }).headers ?? {});
+  // x-real-ip is set by Vercel's edge and cannot be spoofed by the client
+  const realIp = headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  // Fall back to the rightmost entry in x-forwarded-for (appended by the
+  // trusted proxy), not the leftmost (which the client can spoof)
   const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return headers.get("x-real-ip")?.trim() ?? "local";
+  if (forwarded) {
+    const ips = forwarded.split(",").map((s) => s.trim()).filter(Boolean);
+    return ips[ips.length - 1] ?? "local";
+  }
+  return "local";
 }

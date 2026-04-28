@@ -21,10 +21,12 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
 
   // Search profiles by display_name (admin bypasses RLS)
+  // Escape ILIKE wildcards so user input can't pattern-inject
+  const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
   const { data: profiles } = await admin
     .from("profiles")
     .select("id, display_name")
-    .ilike("display_name", `%${q}%`)
+    .ilike("display_name", `%${safeQ}%`)
     .neq("id", user.id)
     .limit(8);
 

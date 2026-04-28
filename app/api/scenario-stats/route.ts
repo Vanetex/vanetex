@@ -1,9 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const rl = checkRateLimit("scenario-stats", clientIdFromRequest(request), 60, 60_000);
+  if (!rl.allowed) return NextResponse.json({ total: 0 }, { status: 429 });
+
   const { searchParams } = new URL(request.url);
   const scenarioId = searchParams.get("scenarioId");
   if (!scenarioId) {

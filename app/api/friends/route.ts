@@ -6,7 +6,10 @@ import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 export const runtime = "nodejs";
 
 // GET — list all friendships (accepted, incoming pending, outgoing pending)
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rl = checkRateLimit("friends:list", clientIdFromRequest(request), 30, 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
@@ -56,7 +59,8 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
 
   const body = await request.json() as { addresseeId?: string };
-  if (!body.addresseeId || body.addresseeId === user.id) {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!body.addresseeId || !UUID_RE.test(body.addresseeId) || body.addresseeId === user.id) {
     return NextResponse.json({ error: "Invalid addressee." }, { status: 400 });
   }
 

@@ -59,8 +59,20 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ sent, failed, total: targets.length });
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 function buildEmail({ display_name, streak_days }: ReminderTarget): string {
   const plural = streak_days !== 1 ? "days" : "day";
+  const safeName = escapeHtml(display_name);
+  const safeDays = Number(streak_days); // always a number — no escaping needed
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vanetex.vercel.app";
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -80,7 +92,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
           <tr>
             <td style="padding:20px 36px 0;">
               <h1 style="margin:0;font-size:22px;font-weight:700;color:#1a1a1a;line-height:1.3;">
-                ${display_name}, your ${streak_days}-${plural} streak is at risk
+                ${safeName}, your ${safeDays}-${plural} streak is at risk
               </h1>
               <p style="margin:12px 0 0;font-size:15px;color:#5a5a5a;line-height:1.6;">
                 You haven&rsquo;t completed today&rsquo;s challenge yet. Take 2 minutes to keep your momentum going.
@@ -93,7 +105,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
                 <tr>
                   <td>
                     <p style="margin:0;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#6340f0;">Your streak</p>
-                    <p style="margin:4px 0 0;font-size:28px;font-weight:700;color:#1a1a1a;">${streak_days} ${plural}</p>
+                    <p style="margin:4px 0 0;font-size:28px;font-weight:700;color:#1a1a1a;">${safeDays} ${plural}</p>
                     <p style="margin:4px 0 0;font-size:13px;color:#5a5a5a;">One decision a day builds real investment judgment.</p>
                   </td>
                 </tr>
@@ -102,7 +114,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
           </tr>
           <tr>
             <td style="padding:0 36px 36px;">
-              <a href="https://vanetex.vercel.app/challenge"
+              <a href="${siteUrl}/challenge"
                  style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:100px;">
                 Do today&rsquo;s challenge &rarr;
               </a>
@@ -112,7 +124,7 @@ function buildEmail({ display_name, streak_days }: ReminderTarget): string {
             <td style="padding:20px 36px;border-top:1px solid rgba(0,0,0,0.06);">
               <p style="margin:0;font-size:12px;color:#a0a0a0;">
                 You&rsquo;re receiving this because you have an active streak on Vanetex.
-                <br />To unsubscribe, update your preferences in <a href="https://vanetex.vercel.app/settings" style="color:#a0a0a0;">Settings</a>.
+                <br />To unsubscribe, update your preferences in <a href="${siteUrl}/settings" style="color:#a0a0a0;">Settings</a>.
               </p>
             </td>
           </tr>

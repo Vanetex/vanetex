@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json() as { code?: string };
   const code = body.code?.trim().toUpperCase();
-  if (!code) return NextResponse.json({ error: "No code provided." }, { status: 400 });
+  if (!code || code.length > 50) return NextResponse.json({ error: "Invalid code." }, { status: 400 });
 
   const admin = createAdminClient();
 
