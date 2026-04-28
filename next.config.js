@@ -63,7 +63,9 @@ const nextConfig = {
 
 module.exports = withSentryConfig(nextConfig, {
   silent: true,
-  disableLogger: true,
   hideSourceMaps: true,
   widenClientFileUpload: true,
+  bundleSizeOptimizations: {
+    excludeDebugStatements: true,
+  },
 });
