@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CAREER_FIELDS, type CareerField } from "@/lib/types";
+import { THEMES, applyTheme, type ThemeId } from "@/lib/themes";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -32,6 +33,14 @@ export default function SettingsPage() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [referralCount, setReferralCount] = useState(0);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [activeTheme, setActiveTheme] = useState<ThemeId>("default");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("vanetex-theme") as ThemeId | null;
+      if (saved) setActiveTheme(saved);
+    } catch { /* */ }
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -365,6 +374,54 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+
+          {/* Theme picker */}
+          <div className="surface-card rounded-3xl p-5">
+            <h2 className="text-base font-semibold">Appearance</h2>
+            <p className="mt-1 text-xs text-muted">Choose an interface theme.</p>
+            <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {THEMES.map((theme) => {
+                const isActive = activeTheme === theme.id;
+                const isLocked = !theme.free;
+                return (
+                  <button
+                    key={theme.id}
+                    onClick={() => {
+                      if (isLocked) return;
+                      applyTheme(theme.id);
+                      setActiveTheme(theme.id);
+                    }}
+                    className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
+                      isActive
+                        ? "border-accent/50 bg-accent/5"
+                        : isLocked
+                          ? "border-black/8 bg-white opacity-60 cursor-not-allowed"
+                          : "border-black/8 bg-white hover:border-black/20"
+                    }`}
+                  >
+                    {/* Swatch */}
+                    <div
+                      className="h-10 w-10 rounded-xl"
+                      style={{ background: `radial-gradient(circle at 30% 30%, ${theme.accentHex}, ${theme.bg})` }}
+                    />
+                    <span className="text-[11px] font-medium leading-tight">{theme.name}</span>
+
+                    {/* Free / Premium badge */}
+                    {isLocked ? (
+                      <span className="absolute right-1.5 top-1.5 rounded-full bg-warn/15 px-1.5 py-0.5 text-[9px] font-bold text-warn">
+                        PRO
+                      </span>
+                    ) : isActive ? (
+                      <span className="absolute right-1.5 top-1.5 text-[11px]">✓</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-[11px] text-muted">
+              PRO themes unlock with a subscription — coming soon.
+            </p>
+          </div>
 
           <div className="surface-card rounded-3xl p-5">
             <h2 className="text-base font-semibold">Legal</h2>

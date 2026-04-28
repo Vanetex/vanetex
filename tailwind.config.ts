@@ -10,7 +10,7 @@ const config: Config = {
       colors: {
         ink: "#0B0C0F",
         paper: "#FAFAF7",
-        accent: "#1F6FEB",
+        accent: "rgb(var(--color-accent-rgb) / <alpha-value>)",
         success: "#16A34A",
         warn: "#D97706",
         danger: "#DC2626",

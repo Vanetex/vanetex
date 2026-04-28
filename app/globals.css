@@ -4,14 +4,19 @@
 
 :root {
   color-scheme: light;
+  /* Theme defaults — overridden by inline script before first paint */
+  --color-accent-rgb: 31 111 235;
+  --color-bg: #090b11;
+  --color-bg-mid: #0a0d13;
+  --color-bg-deep: #0b1119;
 }
 
 html {
-  background-color: #090b11;
+  background-color: var(--color-bg);
   background-image:
-    radial-gradient(circle at 12% -10%, rgba(31, 111, 235, 0.35), transparent 40%),
-    radial-gradient(circle at 88% -6%, rgba(86, 140, 239, 0.16), transparent 34%),
-    linear-gradient(180deg, #090b11 0%, #0a0d13 38%, #0b1119 100%);
+    radial-gradient(circle at 12% -10%, rgba(var(--color-accent-rgb), 0.35), transparent 40%),
+    radial-gradient(circle at 88% -6%, rgba(var(--color-accent-rgb), 0.16), transparent 34%),
+    linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-mid) 38%, var(--color-bg-deep) 100%);
   min-height: 100%;
   overscroll-behavior: none;
 }
@@ -40,7 +45,7 @@ body {
 .progress-bar {
   position: relative;
   overflow: hidden;
-  background: rgba(31, 111, 235, 0.08);
+  background: rgba(var(--color-accent-rgb), 0.08);
   border-radius: 999px;
 }
 .progress-bar::after {
@@ -50,7 +55,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(31, 111, 235, 0.35),
+    rgba(var(--color-accent-rgb), 0.35),
     transparent
   );
   animation: sweep 1.4s linear infinite;
@@ -79,7 +84,7 @@ body {
 }
 
 .surface-card:hover {
-  border-color: rgba(31, 111, 235, 0.28);
+  border-color: rgba(var(--color-accent-rgb), 0.28);
   box-shadow:
     0 1px 1px rgba(11, 12, 15, 0.05),
     0 26px 62px rgba(3, 7, 16, 0.34);
@@ -91,7 +96,7 @@ body {
 }
 
 .cta-primary {
-  background: linear-gradient(135deg, #0B0C0F 0%, #1F6FEB 155%);
+  background: linear-gradient(135deg, #0B0C0F 0%, rgb(var(--color-accent-rgb)) 155%);
   box-shadow:
     0 14px 34px rgba(8, 15, 30, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
@@ -114,15 +119,15 @@ body {
 }
 
 .field-focus:focus {
-  border-color: rgba(31, 111, 235, 0.6);
-  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.14);
+  border-color: rgba(var(--color-accent-rgb), 0.6);
+  box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), 0.14);
 }
 
 .app-shell {
   background:
     radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px),
     linear-gradient(180deg, rgba(23, 28, 40, 0.58), rgba(15, 18, 28, 0.62)),
-    radial-gradient(circle at 20% -10%, rgba(31, 111, 235, 0.22), transparent 34%);
+    radial-gradient(circle at 20% -10%, rgba(var(--color-accent-rgb), 0.22), transparent 34%);
   background-size: 28px 28px, 100% 100%, 100% 100%;
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
@@ -201,4 +206,3 @@ body {
 .ticker-track:hover {
   animation-play-state: paused;
 }
-
