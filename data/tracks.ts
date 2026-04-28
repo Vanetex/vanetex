@@ -4304,12 +4304,473 @@ const advancedConcepts: Track = {
 // All tracks — add new tracks here as they're built
 // ---------------------------------------------------------------------------
 
+const workingCapital: Lesson = {
+  id: "working-capital",
+  trackId: "financial-metrics-101",
+  order: 13,
+  title: "Working Capital & Cash Cycles",
+  concept: "Working Capital & Cash Conversion Cycle",
+  difficulty: "Medium",
+  fields: ["IB", "PE", "HF"],
+  teaching: {
+    intro: "Two companies can have identical profits but completely different cash dynamics. One devours cash as it grows; the other generates cash automatically. Working capital explains why — and it changes everything about how you value a business.",
+    sections: [
+      {
+        heading: "What is working capital?",
+        body: "Working capital is the difference between current assets (cash, inventory, receivables) and current liabilities (payables, short-term obligations). A positive number means the business needs cash to operate day-to-day. A negative number means the business collects cash before it has to pay for anything — a rare and valuable trait.\n\nWorking Capital = Current Assets − Current Liabilities",
+        example: "A manufacturer buys raw materials → pays suppliers in 30 days → converts to inventory over 45 days → sells to customers on 60-day payment terms. That's 75 days of cash tied up in the cycle before a dollar comes back. A SaaS company collects annual subscriptions upfront and pays suppliers 30 days later — negative working capital.",
+      },
+      {
+        heading: "The cash conversion cycle",
+        body: "The Cash Conversion Cycle (CCC) measures how many days a business's cash is tied up in operations:\n\nCCC = Days Sales Outstanding (DSO) + Days Inventory Outstanding (DIO) − Days Payable Outstanding (DPO)\n\nA shorter or negative CCC means the business is a cash machine. A long CCC means growth consumes cash — which limits how fast you can expand without raising money.",
+      },
+      {
+        heading: "Why it matters for investors",
+        body: "Businesses with negative working capital (Amazon, McDonald's franchises, subscription software) grow without needing proportional capital. Businesses with large positive working capital (manufacturers, retailers, distributors) require constant cash infusions to fund growth — making them more capital-intensive and riskier.\n\nWhen evaluating a growing company, always ask: does growth generate or consume cash? A retailer opening stores needs inventory for each one. A software company adding users has near-zero incremental cost.",
+      },
+    ],
+    keyTakeaway: "Working capital reveals whether a business generates or consumes cash as it grows — the single most important operational characteristic for long-term value creation.",
+  },
+  practice: [
+    {
+      question: "A retailer has $2.8B in current assets and $1.9B in current liabilities. Its working capital is:",
+      options: ["$4.7B — the sum of assets and liabilities", "$0.9B positive — it needs that cash cushion to operate", "-$0.9B negative — a strong sign", "$1.47B — a ratio, not a dollar figure"],
+      correctIndex: 1,
+      explanation: "Working capital = current assets − current liabilities = $2.8B − $1.9B = $0.9B. Positive working capital in retail is normal — the business needs cash on hand to fund inventory before collecting from customers.",
+    },
+    {
+      question: "A SaaS company collects annual subscription payments upfront and pays its cloud hosting bill 45 days later. Its working capital is most likely:",
+      options: ["Strongly positive — it has lots of cash", "Negative — it receives cash before it owes anything, a sign of strength", "Zero — SaaS businesses have no physical inventory", "Unpredictable — depends on the number of subscribers"],
+      correctIndex: 1,
+      explanation: "Collecting cash upfront and paying suppliers later creates negative working capital — a powerful structural advantage. It means growth is self-funding: more customers means more cash in the door before any additional cost is incurred.",
+    },
+    {
+      question: "Company A has a Cash Conversion Cycle of 8 days. Company B has a CCC of 72 days. Both are growing at 30%. Which statement is most accurate?",
+      options: [
+        "Company B is better managed — it gives customers more time to pay",
+        "Company A's growth consumes less cash and requires less external financing",
+        "CCC doesn't affect a company's financing needs",
+        "A higher CCC always indicates higher revenue quality",
+      ],
+      correctIndex: 1,
+      explanation: "An 8-day CCC means cash cycles back almost immediately. Company A can fund rapid growth mostly internally. Company B with a 72-day cycle has 9× more cash tied up per dollar of revenue — at 30% growth, that difference compounds into a major financing gap.",
+    },
+    {
+      question: "A restaurant franchise model (like McDonald's) where corporate collects royalties from franchisees is likely to have:",
+      options: [
+        "Large positive working capital — restaurants need significant inventory",
+        "Negative working capital — royalties are collected before significant cash goes out",
+        "Average working capital — comparable to typical consumer businesses",
+        "No working capital — it's a pure IP business",
+      ],
+      correctIndex: 1,
+      explanation: "Asset-light franchise models collect royalties (cash in) with minimal inventory or receivables burden. The result is negative or near-zero working capital — they generate cash as they scale rather than consuming it. This is a defining feature of high-quality franchise economics.",
+    },
+  ],
+  apply: {
+    setup: "You are evaluating two companies in the same industry. Both are growing revenue at 25% annually. Company A is a cloud software business with negative working capital. Company B is a hardware distributor with a 65-day cash conversion cycle.",
+    data: [
+      { label: "Revenue (both)", value: "$400M" },
+      { label: "Revenue growth", value: "+25% YoY" },
+      { label: "Company A CCC", value: "-14 days (negative)" },
+      { label: "Company B CCC", value: "+65 days" },
+      { label: "External financing (Company A)", value: "None raised in 3 years" },
+      { label: "External financing (Company B)", value: "Raised $80M in debt last year" },
+    ],
+    question: "At the same 25% growth rate, how does working capital explain the financing difference between Company A and Company B?",
+    options: [
+      "It doesn't — financing decisions are made by the board regardless of operations",
+      "Company A's negative CCC means growth generates cash; Company B's long CCC means growth consumes cash, requiring external funding",
+      "Company B is better because it uses leverage efficiently to grow",
+      "Company A must be slower growing in reality — no fast-growing company avoids external funding",
+    ],
+    correctIndex: 1,
+    explanation: "Company A collects customer cash before paying suppliers — as it grows 25%, that cash flow surplus scales. Company B has to fund 65 days of inventory and receivables for every new dollar of revenue — at 25% growth on a $400M base, that's ~$65M of incremental working capital needed annually. That's your $80M raise.",
+  },
+};
+
+const managementSignals: Lesson = {
+  id: "management-signals",
+  trackId: "reading-the-market",
+  order: 8,
+  title: "Reading Management",
+  concept: "Capital Allocation & Management Quality Signals",
+  difficulty: "Medium",
+  fields: ["HF", "PE", "AM"],
+  teaching: {
+    intro: "Two companies with identical financials can have radically different outcomes based on one variable: the quality of the people running them. Learning to assess management quality is one of the highest-leverage skills in investing — and most people skip it.",
+    sections: [
+      {
+        heading: "Capital allocation is the job",
+        body: "Every dollar a company earns has to go somewhere: reinvest in the business, acquire companies, pay dividends, buy back stock, or sit in cash. The decision of where that dollar goes — repeated thousands of times over years — determines whether shareholders build wealth or destroy it.\n\nThe best CEOs think like investors. They ask: what is the highest-return use of this capital right now? The worst CEOs think like empire builders. They ask: how do I grow this company larger?",
+        example: "A CEO who buys back stock at 8× earnings when the business is trading cheaply is returning capital intelligently. A CEO who acquires a competitor at 18× earnings just to enter a new market may be destroying it. Both actions look like 'using cash' — but the outcomes differ enormously.",
+      },
+      {
+        heading: "Signals that matter",
+        body: "Insider buying is one of the most reliable signals in markets — executives buy their own stock with their own money for one reason: they believe it is undervalued. Insider selling, by contrast, can mean anything (diversification, taxes, lifestyle) and is less informative.\n\nExecutive compensation structure matters: are they paid on revenue growth, EBITDA, or long-term shareholder return? Revenue-based incentives reward empire-building. Return-based incentives align with shareholders.\n\nEarnings call language is a signal: confident, precise language about specific metrics is very different from vague buzzwords ('synergies,' 'execution excellence,' 'operational leverage') with no numbers attached.",
+      },
+      {
+        heading: "Red flags to watch",
+        body: "Acquisitive CEOs who overpay serially. Repeated guidance cuts with optimistic language. High executive turnover — especially CFOs and COOs. Compensation disconnected from shareholder returns. Stock-based compensation that is very large relative to net income (dilutes shareholders while showing profits on paper).\n\nThe most dangerous CEO is one who is good at selling the story but poor at executing it. Track their specific promises across quarters and compare to results.",
+      },
+    ],
+    keyTakeaway: "Management quality shows up in capital allocation decisions over time — watch where the cash goes, how compensation is structured, and whether promises made on earnings calls are kept.",
+  },
+  practice: [
+    {
+      question: "A CEO buys $4M of his company's stock on the open market three weeks after a 15% sell-off. The company has no current buyback program. What's the most reasonable interpretation?",
+      options: [
+        "It's a publicity stunt — CEOs often make small purchases for optics",
+        "A meaningful signal of conviction — executives rarely buy with personal cash unless they believe the stock is undervalued",
+        "It guarantees the stock will go up",
+        "It's concerning — why is he buying stock instead of investing in the business?",
+      ],
+      correctIndex: 1,
+      explanation: "Insider buying with personal capital is one of the cleanest signals in markets — there is no reason to do it except genuine belief the stock is cheap. It doesn't guarantee anything, but it's the CEO putting skin in the game, not a press release.",
+    },
+    {
+      question: "A company's CEO receives 70% of his compensation in stock tied to 3-year total shareholder return (TSR) vs peers. This structure suggests:",
+      options: [
+        "He is incentivised to grow revenue at all costs",
+        "His interests are aligned with shareholders — he gets rich only if they do",
+        "He will avoid risk to protect his compensation",
+        "TSR-based pay leads to short-term thinking",
+      ],
+      correctIndex: 1,
+      explanation: "TSR-linked compensation only pays out if the stock outperforms — which happens when the business creates value for shareholders. Revenue or EBITDA targets can be hit while destroying shareholder value (e.g., overpaying for acquisitions). TSR alignment is the gold standard.",
+    },
+    {
+      question: "A CEO says on an earnings call: 'We remain confident in our path to operational excellence and continue to execute against our strategic framework.' No specific metrics or guidance is updated. This is:",
+      options: [
+        "Reassuring — confident language signals internal stability",
+        "A red flag — vague language with no measurable commitments often signals the CEO is avoiding specifics",
+        "Normal — CEOs are legally restricted from giving forward guidance",
+        "Bullish — strategic frameworks create long-term value",
+      ],
+      correctIndex: 1,
+      explanation: "Good CEOs talk in specifics: 'Customer acquisition costs fell 18%, NRR is 121%, we expect margins to expand 200bps next year.' When language becomes abstract and buzzword-heavy with no quantification, it often means the speaker doesn't have numbers they want to share.",
+    },
+    {
+      question: "Company A has $500M in net income but $420M in stock-based compensation (SBC). Company B has $500M in net income and $40M in SBC. Why does SBC matter for evaluating management quality?",
+      options: [
+        "It doesn't — SBC is a non-cash item and doesn't affect the business",
+        "High SBC dilutes existing shareholders — Company A's 'profits' are largely transferred to employees, not shareholders",
+        "High SBC means Company A is better at retaining talent",
+        "SBC is only relevant for tech companies",
+      ],
+      correctIndex: 1,
+      explanation: "Stock-based compensation is a real cost — it transfers value from shareholders to employees by issuing new shares. Company A with $420M SBC against $500M net income is effectively earning very little for shareholders despite looking profitable on paper. This is a management quality signal: is the company creating value for shareholders or redistributing it to insiders?",
+    },
+  ],
+  apply: {
+    setup: "You are comparing two software companies. Both report $200M in net income. Company A's CEO has made 6 acquisitions in 4 years at an average of 14× revenue. Company B's CEO has done zero acquisitions, runs two buyback programs, and owns 8% of the company personally.",
+    data: [
+      { label: "Net income (both)", value: "$200M" },
+      { label: "Company A return on invested capital", value: "6% (below cost of capital)" },
+      { label: "Company B return on invested capital", value: "22%" },
+      { label: "Company A CEO personal shareholding", value: "<0.1%" },
+      { label: "Company B CEO personal shareholding", value: "8%" },
+      { label: "Company A goodwill on balance sheet", value: "$2.4B" },
+      { label: "Company B goodwill", value: "$0" },
+    ],
+    question: "Based on management signals, which company's CEO is more likely to be creating long-term shareholder value?",
+    options: [
+      "Company A — more acquisitions means faster growth",
+      "Company B — high personal ownership, above-cost-of-capital returns, and disciplined capital allocation suggest strong alignment",
+      "They are equal — both earn $200M in net income",
+      "Company A — goodwill on the balance sheet represents real asset value",
+    ],
+    correctIndex: 1,
+    explanation: "Company A's CEO is acquiring at 14× revenue with a 6% ROIC below the cost of capital — destroying value with each deal, with minimal personal skin in the game. Company B's CEO owns 8% personally (huge alignment), earns 22% ROIC (well above cost of capital), and returns capital through buybacks. Same net income, completely different value creation. Management quality is the difference.",
+  },
+};
+
+const nrr: Lesson = {
+  id: "net-revenue-retention",
+  trackId: "market-indicators",
+  order: 8,
+  title: "Net Revenue Retention",
+  concept: "NRR & Subscription Business Health",
+  difficulty: "Medium",
+  fields: ["HF", "VC", "AM"],
+  teaching: {
+    intro: "A single number separates good subscription businesses from great ones: Net Revenue Retention. It tells you whether a company grows even when it stops selling to new customers — and it's the most powerful indicator of product-market fit in recurring revenue businesses.",
+    sections: [
+      {
+        heading: "What NRR measures",
+        body: "Net Revenue Retention (NRR) measures how much revenue a company generates from its existing customer base this year versus last year — including expansions, upgrades, and contractions, but excluding new customers.\n\nNRR = (Starting Revenue − Churn − Downgrades + Expansions) ÷ Starting Revenue\n\nAn NRR above 100% means the existing base is growing on its own. Below 100% means the company is losing ground with the customers it already has.",
+        example: "Company A has 100 customers paying $1,000/month each = $1.2M ARR. A year later: 5 customers churned (−$60K), 8 customers upgraded to $1,500/month (+$40K), the rest stayed flat. Ending revenue from that cohort = $1.18M. NRR = $1.18M ÷ $1.2M = 98.3%. They're declining with existing customers.",
+      },
+      {
+        heading: "Why 100% is the breakeven, 120%+ is exceptional",
+        body: "Below 100% NRR: the company must run fast just to stay still. Every year it loses ground on its existing base and must acquire enough new customers to cover that shrinkage plus grow.\n\nAbove 100% NRR: the existing base compounds by itself. New customer acquisition becomes pure acceleration on top of organic growth. A company with 120% NRR and no new customers would still grow 20% annually — just from existing customers expanding their usage.",
+      },
+      {
+        heading: "What drives high NRR",
+        body: "The best NRR businesses have products that become more valuable as customers use them more: seat-based pricing (more employees → more licenses), usage-based pricing (more activity → more cost), and module-based pricing (solve one problem → upsell adjacent ones).\n\nLow NRR signals a product that delivers a one-time fix rather than ongoing value — or a market where competitive pressure forces pricing concessions over time.",
+      },
+    ],
+    keyTakeaway: "NRR above 100% means a company grows without new customers — the most powerful sign that a product is deeply embedded and customers are expanding their use of it over time.",
+  },
+  practice: [
+    {
+      question: "A SaaS company starts the year with $50M ARR from existing customers. By year-end, that same cohort generates $61M (after churn and expansions). NRR is:",
+      options: ["122% — strong expansion motion", "111% — above average but moderate", "82% — the base is shrinking", "100% — flat, no growth"],
+      correctIndex: 0,
+      explanation: "$61M ÷ $50M = 122%. This means existing customers expanded their spending by 22% on average — without a single new customer, the company would grow at 22% annually. This is an exceptional result that suggests deep product embedding and strong upsell.",
+    },
+    {
+      question: "Company A has 95% NRR. Company B has 118% NRR. Both are growing total revenue at 30%. Which statement is most accurate?",
+      options: [
+        "They are equivalent — total revenue growth is what matters",
+        "Company B is in a stronger position: its growth is driven by expansion; Company A must acquire aggressively just to offset churn",
+        "Company A is more efficient — it doesn't need expensive upsell motions",
+        "High NRR is only relevant for very early-stage companies",
+      ],
+      correctIndex: 1,
+      explanation: "At 95% NRR, Company A loses 5% of its base annually and must acquire 35%+ in new customers just to report 30% total growth. At 118% NRR, Company B's base grows 18% on its own — new customer sales are pure acceleration. Company A's growth is fragile; Company B's is compounding.",
+    },
+    {
+      question: "A productivity SaaS company charges per seat. A customer starts with 50 seats at $120/year. Over 2 years they expand to 200 seats. The impact on NRR from this customer is:",
+      options: [
+        "Neutral — they are the same customer",
+        "Positive — expansion revenue is counted in NRR and pushes it above 100%",
+        "Negative — more seats means higher support costs",
+        "Not counted — NRR only tracks new customers",
+      ],
+      correctIndex: 1,
+      explanation: "Seat expansion from 50 to 200 at $120/seat = from $6,000 to $24,000 annually from one customer. That 4× expansion is captured in NRR as revenue from the existing cohort growing. Seat-based pricing is one of the most powerful NRR drivers because adoption naturally grows with the customer's team.",
+    },
+    {
+      question: "A company with 80% NRR claims its product has 'exceptional customer satisfaction.' What is the most useful counter-question?",
+      options: [
+        "What is your revenue growth rate?",
+        "If satisfaction is exceptional, why are you losing 20% of your customer base revenue every year?",
+        "How many customers have you retained in absolute terms?",
+        "What is your gross margin?",
+      ],
+      correctIndex: 1,
+      explanation: "80% NRR means the existing base shrinks 20% annually. If customers were truly satisfied, they would stay and expand. High satisfaction scores that don't translate into retention and expansion suggest either measurement issues or that satisfaction doesn't translate to genuine stickiness.",
+    },
+  ],
+  apply: {
+    setup: "You are evaluating two subscription software companies. Both have $100M ARR and 25% total revenue growth. You are trying to determine which has a more durable business model.",
+    data: [
+      { label: "Company A — NRR", value: "92%" },
+      { label: "Company A — new customer ARR added", value: "$33M/year" },
+      { label: "Company B — NRR", value: "117%" },
+      { label: "Company B — new customer ARR added", value: "$8M/year" },
+      { label: "Sales & marketing spend (Company A)", value: "58% of revenue" },
+      { label: "Sales & marketing spend (Company B)", value: "22% of revenue" },
+    ],
+    question: "Which company has a more durable and capital-efficient growth model, and why?",
+    options: [
+      "Company A — it adds far more new customers each year",
+      "Company B — its existing base compounds at 17% with minimal S&M spend; Company A burns cash fighting churn",
+      "They are equivalent — same revenue and growth rate",
+      "Company A — higher S&M spend means a larger sales team and better market coverage",
+    ],
+    correctIndex: 1,
+    explanation: "Company A needs $33M in new ARR every year just to grow 25% because its 92% NRR is eroding the base by $8M annually. At 58% S&M spend, that growth is expensive. Company B's existing customers provide 17% organic growth — it only needs $8M in new ARR to hit 25% total. At 22% S&M spend, that growth is cheap. Company B is building a compounding machine; Company A is running on a treadmill.",
+  },
+};
+
+const qualityOfEarnings: Lesson = {
+  id: "quality-of-earnings",
+  trackId: "advanced-concepts",
+  order: 7,
+  title: "Quality of Earnings",
+  concept: "Real vs Reported Earnings & Accounting Red Flags",
+  difficulty: "Hard",
+  fields: ["HF", "PE", "IB"],
+  teaching: {
+    intro: "Not all earnings are created equal. Two companies can report identical profits while one generates real cash and the other is running an accounting illusion. Quality of earnings is the discipline of figuring out which one you own.",
+    sections: [
+      {
+        heading: "Why reported earnings can mislead",
+        body: "GAAP earnings follow accounting rules — but accounting rules allow significant judgment. Revenue can be recognized before cash is collected. Expenses can be deferred or capitalised rather than run through the income statement. One-time gains can inflate profits in a single quarter. 'Adjusted' numbers strip out costs that conveniently recur every year.\n\nThe result: a company can show growing EPS while the underlying business is deteriorating — and vice versa. Quality of earnings analysis closes the gap.",
+      },
+      {
+        heading: "Three key signals",
+        body: "1. Accruals ratio: if net income is much higher than operating cash flow, revenue is being recognised before it's collected. The accruals ratio = (Net Income − Operating Cash Flow) ÷ Total Assets. High positive accruals are a warning sign.\n\n2. 'Adjusted' EBITDA abuse: legitimate adjustments remove truly one-time items. Aggressive adjustments exclude things like stock-based compensation, restructuring charges that happen every year, or acquisition costs on serial acquirers. If the gap between GAAP and 'adjusted' is large and growing, ask why.\n\n3. Deferred revenue: for subscription businesses, declining deferred revenue is a leading indicator of future revenue weakness — customers are signing shorter contracts or not renewing.",
+        example: "A software company reports $200M net income. Operating cash flow: $85M. Stock-based compensation: $120M. The $200M includes $115M in paper profits from acquisitions and 'restructuring' that happens every quarter. Real cash earnings: ~$85M. Same number, very different businesses.",
+      },
+      {
+        heading: "One-time items: how to evaluate them",
+        body: "Truly one-time items are legitimate: gain on sale of a building, a one-time legal settlement, a pandemic-era government grant. Add back or remove these to get a clean view of the underlying business.\n\nSuspect 'one-time' items are things that show up every year: restructuring charges at a company that is always restructuring, 'integration costs' on a company that acquires every year, 'impairment' charges that conveniently offset earnings.\n\nThe test: has this 'one-time' item appeared before? If yes, it is recurring.",
+      },
+    ],
+    keyTakeaway: "High-quality earnings convert to cash. Low-quality earnings stay on paper — divergence between net income and operating cash flow is the single most important red flag in financial statement analysis.",
+  },
+  practice: [
+    {
+      question: "A company reports $180M net income and $42M in operating cash flow. The most likely explanation is:",
+      options: [
+        "The company is investing heavily in capex — normal for growing businesses",
+        "Earnings quality is poor — income is significantly outrunning cash collection, suggesting aggressive revenue recognition or accrual inflation",
+        "The company pays large dividends — reducing operating cash flow",
+        "Operating cash flow always lags net income by a few quarters — nothing to worry about",
+      ],
+      correctIndex: 1,
+      explanation: "When net income is 4× operating cash flow, something is wrong. Either revenue is being recognised before it's collected (receivables building), expenses are being deferred, or there are large non-cash income items. This divergence is one of the earliest signs of accounting manipulation or deteriorating earnings quality.",
+    },
+    {
+      question: "A company's 'Adjusted EBITDA' is $400M. GAAP EBITDA is $180M. The adjustments include: stock-based compensation ($120M), 'restructuring charges' ($60M, 4th consecutive year), 'integration costs' ($40M, 3rd acquisition in 3 years). How should you treat this?",
+      options: [
+        "Use the $400M — adjusted metrics remove distortions for a cleaner view",
+        "Be skeptical — recurring 'one-time' items are not one-time; the real number is probably closer to $180M",
+        "Average the two: $290M is a reasonable middle ground",
+        "Only exclude the SBC — restructuring and integration are truly one-time",
+      ],
+      correctIndex: 1,
+      explanation: "Restructuring charges in year 4 are not one-time. Integration costs on a serial acquirer are a permanent part of their business model. SBC is a real cost — employees are being paid in equity, which dilutes shareholders. Stripping all three turns $180M in real EBITDA into $400M on paper. The $180M is closer to truth.",
+    },
+    {
+      question: "A SaaS company's deferred revenue (money collected but not yet recognised as revenue) fell 18% year-over-year despite 20% reported revenue growth. This is:",
+      options: [
+        "A positive sign — the company is converting deferred revenue into recognised revenue faster",
+        "A warning sign — customers may be signing shorter contracts, reducing future revenue visibility",
+        "Irrelevant — deferred revenue is a balance sheet item, not an earnings quality metric",
+        "Expected — deferred revenue always falls as companies mature",
+      ],
+      correctIndex: 1,
+      explanation: "Deferred revenue is the pipeline of future revenue already locked in. If it's shrinking while current revenue grows, customers are either signing shorter contracts or not renewing at the same rate. Today's revenue looks fine; tomorrow's is under pressure. This is a leading indicator, not a lagging one.",
+    },
+    {
+      question: "Company A has earnings quality score of: Net Income = $300M, Operating Cash Flow = $290M, low accruals, minimal adjustments. Company B: Net Income = $300M, Operating Cash Flow = $95M, large accruals, $180M in annual 'one-time' charges. Which deserves a higher valuation multiple?",
+      options: [
+        "Company B — it is growing earnings faster after adjustments",
+        "Company A — its earnings are nearly fully backed by cash; they are real",
+        "They deserve the same multiple — both earn $300M",
+        "Neither — P/E ratio is the only relevant metric",
+      ],
+      correctIndex: 1,
+      explanation: "Company A's earnings convert almost entirely to cash — $290M of the $300M net income is real. Company B's $300M net income produces only $95M in cash. The remaining $205M is paper. Real cash is what can be returned to shareholders, reinvested, or used to survive a downturn. Company A's earnings are worth more per dollar.",
+    },
+  ],
+  apply: {
+    setup: "You are reviewing two industrial companies both reporting $150M net income. You are deciding which has higher quality earnings before assigning a valuation multiple.",
+    data: [
+      { label: "Company A — operating cash flow", value: "$138M" },
+      { label: "Company A — 'one-time' charges (last 4 years)", value: "$0, $0, $0, $0" },
+      { label: "Company A — stock-based compensation", value: "$8M" },
+      { label: "Company B — operating cash flow", value: "$41M" },
+      { label: "Company B — 'one-time' charges (last 4 years)", value: "$38M, $44M, $51M, $55M" },
+      { label: "Company B — stock-based compensation", value: "$62M" },
+    ],
+    question: "Based on earnings quality, which company deserves a higher P/E multiple and why?",
+    options: [
+      "Company B — growing one-time charges indicate active cost management and restructuring",
+      "Company A — $138M in operating cash flow vs $41M means its earnings are real; Company B's $150M in net income is substantially illusory",
+      "They are equal — net income is net income regardless of cash flow",
+      "Company B — higher SBC means it attracts better talent",
+    ],
+    correctIndex: 1,
+    explanation: "Company A converts 92% of its net income to operating cash flow with zero recurring 'one-time' items. Its earnings are real. Company B converts only 27% to cash, has $55M in suspiciously escalating 'one-time' charges (clearly recurring), and $62M in SBC that transfers value from shareholders to employees. Company A deserves a meaningfully higher multiple because its $150M in earnings is $150M in reality — Company B's is largely accounting.",
+  },
+};
+
+const networkEffects: Lesson = {
+  id: "network-effects",
+  trackId: "advanced-concepts",
+  order: 8,
+  title: "Network Effects & Platform Dynamics",
+  concept: "Winner-Take-Most Markets & Network Moats",
+  difficulty: "Hard",
+  fields: ["HF", "VC", "PE"],
+  teaching: {
+    intro: "Some businesses get stronger with every new user. Others don't. That difference — the network effect — is the most powerful moat in modern business and the primary reason why platforms like payment networks, marketplaces, and social networks can sustain dominant market positions for decades.",
+    sections: [
+      {
+        heading: "What a network effect actually is",
+        body: "A network effect exists when a product becomes more valuable to each user as more users join it. Metcalfe's Law says the value of a network scales with the square of its users — double the users, quadruple the value.\n\nNot all growth creates network effects. A restaurant that opens a second location doesn't get more valuable to existing customers. But a payment network that adds 10 million merchants becomes more valuable to every cardholder, and vice versa. That compounding dynamic is what makes network effects a genuine moat.",
+        example: "Visa's network: every new merchant who accepts Visa makes Visa more valuable to every cardholder. Every new cardholder makes Visa more attractive to every merchant. This self-reinforcing cycle has sustained Visa's dominance for 60 years at 50%+ operating margins.",
+      },
+      {
+        heading: "Types of network effects",
+        body: "Direct (same-side): more users of the same type make the product better. Social networks, messaging apps, multiplayer games.\n\nIndirect (cross-side): more users on one side attract more users on the other. Marketplaces (more buyers → more sellers), operating systems (more developers → more apps → more users), payment networks (more cardholders → more merchants).\n\nData network effects: more users generate more data, which improves the product, which attracts more users. Search engines, recommendation algorithms, fraud detection systems.\n\nThe strongest moats combine multiple types: a marketplace with strong data effects and switching costs on both sides.",
+      },
+      {
+        heading: "Winner-take-most, not always winner-take-all",
+        body: "Network effects don't guarantee monopoly — they determine whether a market can support multiple players. In payments, Visa and Mastercard coexist because merchants want multi-network acceptance. In social media, Instagram and TikTok coexist because each serves different use cases.\n\nThe key question: are network effects local or global? Ride-sharing networks are local — Uber dominates a city, but a competitor can enter and win a different city. Payment networks are global — switching costs are extreme once established. Local network effects are weaker and more contestable.\n\nFor investors, identifying a business with genuine and durable network effects justifies premium valuation multiples. Identifying one where 'network effects' are just marketing is equally important.",
+      },
+    ],
+    keyTakeaway: "Network effects create businesses that get harder to compete with over time — but only when the network genuinely makes the product more valuable to each user as it grows. Verify the mechanism, not the claim.",
+  },
+  practice: [
+    {
+      question: "A payment network has 80M cardholders and 2M merchant locations. A competitor launches with 10M cardholders and 200K merchants. What makes it difficult for the competitor to close the gap?",
+      options: [
+        "Patents on payment technology",
+        "Both sides of the market reinforce each other: merchants prefer the larger cardholder network; cardholders prefer the wider merchant acceptance — the incumbent's advantage compounds with scale",
+        "Lower transaction fees from the incumbent",
+        "Government regulation protecting the established player",
+      ],
+      correctIndex: 1,
+      explanation: "This is a classic two-sided network effect. Cardholders choose the network accepted at more places. Merchants choose the network carried by more cardholders. The incumbent's 8× advantage on each side creates a near-impossible barrier — the challenger must solve both sides simultaneously, which requires enormous investment just to reach the critical mass where the network becomes self-sustaining.",
+    },
+    {
+      question: "A food delivery marketplace has strong network effects in San Francisco but struggles to enter Miami. What type of network effect does this suggest?",
+      options: [
+        "Global network effects — still valuable even if only in one city",
+        "Local network effects — value is geographically bounded, making expansion costly and contestable market by market",
+        "Data network effects — user preferences are too different by city",
+        "No network effects — true network effects would work everywhere",
+      ],
+      correctIndex: 1,
+      explanation: "Local network effects mean dominance in one geography doesn't transfer to another. Every new city requires rebuilding the network from scratch — attracting restaurants and customers simultaneously. This is a weaker moat than a global network: a well-funded competitor can pick off individual cities, which is exactly what happens in food delivery markets worldwide.",
+    },
+    {
+      question: "A company claims to have 'data network effects' because it collects more user data each year. What would you verify before accepting this claim?",
+      options: [
+        "That they store the data in a secure and compliant way",
+        "That the additional data actually improves the product in a way users experience — more data that doesn't change the product isn't a moat",
+        "That they have more data than any competitor",
+        "That the data is proprietary and can't be replicated",
+      ],
+      correctIndex: 1,
+      explanation: "Many companies claim data network effects but the data doesn't improve the product in ways users notice. True data network effects require a feedback loop: more data → better model → better product → more users → more data. If the additional data sits in a warehouse without changing the user experience, it's not a moat — it's a marketing claim.",
+    },
+    {
+      question: "You are evaluating two marketplace businesses. Company A takes 15% of GMV and has strong buyer and seller network effects with low churn. Company B takes 15% of GMV and has moderate network effects but heavy dependence on paid acquisition. Which is more defensible?",
+      options: [
+        "Company B — higher marketing spend means faster growth",
+        "Company A — organic network-driven growth and low churn means the moat deepens over time without cost; Company B's growth disappears when the ad spend stops",
+        "They are equivalent — same take rate and similar network effects",
+        "Company B — paid acquisition allows precise targeting that organic growth cannot",
+      ],
+      correctIndex: 1,
+      explanation: "Company A's buyers and sellers come back and bring others organically — the network does the selling. Churn is low because switching means leaving the network. Company B replaces churned users with paid acquisition — an ongoing cost that stops the moment the budget is cut. Paid growth is rented growth; network-driven growth is owned growth.",
+    },
+  ],
+  apply: {
+    setup: "You are comparing two software-adjacent businesses for investment. Both have $500M revenue and are growing at 35%. You are trying to assess which has stronger network effects and defensibility.",
+    data: [
+      { label: "Company A", value: "Developer tools platform — 2M developers, each tool integrates with 40+ others in the ecosystem" },
+      { label: "Company A churn", value: "3% annually" },
+      { label: "Company A customer acquisition", value: "85% organic / word-of-mouth" },
+      { label: "Company B", value: "HR software — manages payroll for 15,000 companies, limited integration ecosystem" },
+      { label: "Company B churn", value: "12% annually" },
+      { label: "Company B customer acquisition", value: "70% paid marketing" },
+    ],
+    question: "Which company has stronger network effects and why?",
+    options: [
+      "Company B — payroll is more mission-critical than developer tools",
+      "Company A — 40+ integrations per tool create cross-side network effects; switching means disconnecting from the entire ecosystem. 3% churn and 85% organic growth confirm the moat is working",
+      "They are equivalent — both are growing at 35% with similar revenues",
+      "Company B — enterprise HR software has higher contract values and longer sales cycles",
+    ],
+    correctIndex: 1,
+    explanation: "Company A's developer ecosystem creates genuine cross-side network effects: each new tool makes all existing tools more valuable (they can integrate with it), and the 40+ integrations mean switching means disconnecting from your entire workflow — not just one product. 3% annual churn and 85% organic growth are the proof. Company B with 12% churn and 70% paid acquisition is a good software business but not a network — it retains customers through switching costs and contract lock-in, not because the product gets better with scale.",
+  },
+};
+
 export const ALL_TRACKS: Track[] = [
-  { ...financialMetrics101, lessons: [...financialMetrics101.lessons, dividendYield] },
-  { ...readingTheMarket, lessons: [...readingTheMarket.lessons, ipoMechanics] },
+  { ...financialMetrics101, lessons: [...financialMetrics101.lessons, dividendYield, workingCapital] },
+  { ...readingTheMarket, lessons: [...readingTheMarket.lessons, ipoMechanics, managementSignals] },
   { ...volatilityAndRisk, lessons: [...volatilityAndRisk.lessons, maxDrawdown] },
-  { ...marketIndicators, lessons: [...marketIndicators.lessons, fedAndRates] },
-  advancedConcepts,
+  { ...marketIndicators, lessons: [...marketIndicators.lessons, fedAndRates, nrr] },
+  { ...advancedConcepts, lessons: [...advancedConcepts.lessons, qualityOfEarnings, networkEffects] },
 ];
 
 export function getTrackById(id: string): Track | undefined {
