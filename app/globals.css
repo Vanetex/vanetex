@@ -77,13 +77,13 @@ body {
 
 /* ── Page content shell (main content wrapper) ───────────────────────── */
 .page-shell {
-  background: linear-gradient(160deg, rgba(20,30,65,0.52) 0%, rgba(8,12,30,0.58) 100%);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(160deg, rgba(31,50,120,0.22) 0%, rgba(8,14,38,0.28) 100%);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(100,150,255,0.14);
   box-shadow:
-    0 8px 32px rgba(3,7,18,0.3),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+    0 8px 32px rgba(3,7,18,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.1);
   color: var(--paper);
 }
 
