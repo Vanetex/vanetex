@@ -1,3 +1,14 @@
+function safeUrl(url) {
+  // Only allow relative paths or same-origin absolute URLs
+  if (!url) return "/challenge";
+  if (url.startsWith("/")) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.origin === self.location.origin) return url;
+  } catch { /* fall through */ }
+  return "/challenge";
+}
+
 self.addEventListener("push", (event) => {
   if (!event.data) return;
   let data = {};
@@ -10,7 +21,7 @@ self.addEventListener("push", (event) => {
     badge: "/pwa-icon?size=96",
     tag: data.tag ?? "vanetex-daily",
     renotify: true,
-    data: { url: data.url ?? "/challenge" },
+    data: { url: safeUrl(data.url) },
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -18,7 +29,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? "/challenge";
+  const url = safeUrl(event.notification.data?.url);
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const client of list) {

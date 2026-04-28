@@ -10,8 +10,9 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const scenarioId = searchParams.get("scenarioId");
-  if (!scenarioId) {
-    return NextResponse.json({ error: "Missing scenarioId" }, { status: 400 });
+  // Scenario IDs follow the pattern sc-001 through sc-999
+  if (!scenarioId || !/^sc-\d{3}$/.test(scenarioId)) {
+    return NextResponse.json({ error: "Invalid scenarioId" }, { status: 400 });
   }
 
   const admin = createAdminClient();

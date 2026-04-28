@@ -43,6 +43,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const rl = checkRateLimit("push:unsubscribe", clientIdFromRequest(request), 10, 60 * 60_000);
+  if (!rl.allowed) return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });

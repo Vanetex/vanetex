@@ -4,7 +4,8 @@ import { NextRequest } from "next/server";
 export const runtime = "edge";
 
 export function GET(req: NextRequest) {
-  const size = parseInt(req.nextUrl.searchParams.get("size") ?? "192", 10);
+  const raw = parseInt(req.nextUrl.searchParams.get("size") ?? "192", 10);
+  const size = Math.max(16, Math.min(512, Number.isFinite(raw) ? raw : 192));
   const iconSize = Math.round(size * 0.56);
 
   return new ImageResponse(
