@@ -55,7 +55,14 @@ export default function ScenarioCard({ scenario }: { scenario: Scenario }) {
             {s.description}
           </p>
         </div>
-        <div className="shrink-0 rounded-xl bg-gradient-to-br from-ink to-accent px-3 py-2 text-right font-mono text-sm text-paper shadow-lg shadow-ink/20">
+        <div
+          className="shrink-0 rounded-xl px-3 py-2 text-right font-mono text-sm text-paper"
+          style={{
+            background: "linear-gradient(135deg, rgba(var(--color-accent-rgb),0.25), rgba(var(--color-accent-rgb),0.12))",
+            border: "1px solid rgba(var(--color-accent-rgb),0.3)",
+            boxShadow: "0 4px 16px rgba(var(--color-accent-rgb),0.2)",
+          }}
+        >
           <div className="text-[10px] opacity-70">PRICE</div>
           <div>${s.price.toFixed(2)}</div>
         </div>
@@ -77,7 +84,7 @@ export default function ScenarioCard({ scenario }: { scenario: Scenario }) {
         </div>
         <ul className="mt-2 space-y-1.5 text-sm">
           {s.headlines.map((h, i) => (
-            <li key={i} className="flex gap-2 rounded-lg bg-black/[0.015] px-2.5 py-1.5">
+            <li key={i} className="flex gap-2 rounded-lg px-2.5 py-1.5" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
               <span className="text-muted">•</span>
               <span>{h}</span>
             </li>

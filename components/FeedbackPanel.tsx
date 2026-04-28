@@ -22,7 +22,7 @@ export default function FeedbackPanel({ evaluation }: { evaluation: Evaluation }
       <Section title="What you did well" emoji="✅">
         <ul className="space-y-1">
           {evaluation.didWell.map((t, i) => (
-            <li key={i} className="rounded-lg bg-black/[0.02] px-2.5 py-1.5 text-sm">{t}</li>
+            <li key={i} className="rounded-lg px-2.5 py-1.5 text-sm" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>{t}</li>
           ))}
         </ul>
       </Section>
@@ -30,7 +30,7 @@ export default function FeedbackPanel({ evaluation }: { evaluation: Evaluation }
       <Section title="What you missed" emoji="⚠️">
         <ul className="space-y-1">
           {evaluation.missed.map((t, i) => (
-            <li key={i} className="rounded-lg bg-black/[0.02] px-2.5 py-1.5 text-sm">{t}</li>
+            <li key={i} className="rounded-lg px-2.5 py-1.5 text-sm" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>{t}</li>
           ))}
         </ul>
       </Section>
@@ -44,7 +44,8 @@ export default function FeedbackPanel({ evaluation }: { evaluation: Evaluation }
           {evaluation.tags.map((t, i) => (
             <span
               key={i}
-              className="rounded-full border border-black/10 bg-ink/[0.04] px-2.5 py-1 text-[11px] font-medium text-ink/80"
+              className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+            style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(250,250,247,0.7)" }}
             >
               {t}
             </span>
