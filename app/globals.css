@@ -124,6 +124,11 @@ body {
 .surface-card [class*="bg-ink"]      { background-color: rgba(255,255,255,0.06) !important; }
 .surface-card [class*="border-black"]{ border-color: rgba(255,255,255,0.08) !important; }
 
+/* Inputs/textareas keep dark text — they have a light background */
+.surface-card input,
+.surface-card textarea,
+.surface-card select { color: #0B0C0F !important; }
+
 .cta-primary {
   background: linear-gradient(135deg, #0B0C0F 0%, rgb(var(--color-accent-rgb)) 155%);
   box-shadow:
