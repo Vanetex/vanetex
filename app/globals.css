@@ -240,26 +240,6 @@ body {
   background: rgba(255, 255, 255, 0.05) !important;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .interactive-panel {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .interactive-panel::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.28) 50%, transparent 75%);
-    transform: translateX(-140%);
-    transition: transform 700ms ease;
-    pointer-events: none;
-  }
-
-  .interactive-panel:hover::before {
-    transform: translateX(140%);
-  }
-}
 
 /* ── Ticker ──────────────────────────────────────────────────────────────── */
 
