@@ -1,13 +1,51 @@
 import type { Scenario } from "@/lib/types";
 
+type Difficulty = "Easy" | "Medium" | "Hard";
+
+function getDifficulty(scenario: Scenario): Difficulty {
+  const { returnPct, idealAction } = scenario.outcome;
+  const { peRatio, revenueGrowthPct, profitMarginPct } = scenario;
+
+  // Value trap — looks cheap but collapses
+  if (peRatio > 0 && peRatio <= 12 && returnPct <= -15 && idealAction === "PASS") return "Hard";
+  // Growth trap — strong revenue growth, bad outcome (counterintuitive)
+  if (revenueGrowthPct >= 25 && returnPct <= -10) return "Hard";
+  // Fakeout — profitable company still fell hard
+  if (profitMarginPct >= 15 && returnPct <= -20) return "Hard";
+  // Catastrophic outcome regardless of metrics
+  if (returnPct <= -40) return "Hard";
+
+  // Clear momentum buy — all green lights, pays off
+  if (revenueGrowthPct >= 20 && profitMarginPct >= 10 && returnPct >= 12 && idealAction === "BUY") return "Easy";
+  // Obvious avoid — slow growth, thin margins, bad outcome
+  if (revenueGrowthPct <= 3 && profitMarginPct <= 5 && returnPct <= -15 && idealAction === "PASS") return "Easy";
+  // Strong momentum with big return
+  if (revenueGrowthPct >= 30 && returnPct >= 20 && idealAction === "BUY") return "Easy";
+
+  return "Medium";
+}
+
+const DIFFICULTY_STYLES: Record<Difficulty, { label: string; className: string }> = {
+  Easy:   { label: "Easy",   className: "bg-success/10 text-success border-success/20" },
+  Medium: { label: "Medium", className: "bg-warn/10 text-warn border-warn/20" },
+  Hard:   { label: "Hard",   className: "bg-danger/10 text-danger border-danger/20" },
+};
+
 export default function ScenarioCard({ scenario }: { scenario: Scenario }) {
   const s = scenario;
+  const difficulty = getDifficulty(scenario);
+  const diffStyle = DIFFICULTY_STYLES[difficulty];
   return (
     <div className="surface-card interactive-panel fade-in rounded-3xl p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-            {s.sector}
+          <div className="flex items-center gap-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted">
+              {s.sector}
+            </div>
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${diffStyle.className}`}>
+              {diffStyle.label}
+            </span>
           </div>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight">
             {s.company}{" "}
