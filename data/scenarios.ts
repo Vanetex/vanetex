@@ -2264,6 +2264,916 @@ export const SCENARIOS: Scenario[] = [
         "124% net retention in enterprise security means customers are solving a mission-critical problem and expanding — not just renewing. A -4% margin at 34% growth is controlled investment, not a problem. FCF turning positive removes the last bear argument.",
     },
   },
+  // ── sc-088 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-088",
+    ticker: "VLTR",
+    company: "Voltara Motors",
+    sector: "Electric Vehicles",
+    description:
+      "Designs and manufactures electric trucks targeting commercial fleets. Manufacturing ramp underway at its first gigafactory.",
+    price: 18.40,
+    revenueGrowthPct: 85,
+    peRatio: 0,
+    profitMarginPct: -22,
+    headlines: [
+      "Q3 deliveries miss guidance by 28% — supply chain bottlenecks cited",
+      "Cash burn rate implies 9 months of runway at current pace",
+    ],
+    signal: "Order backlog still 3× current capacity but cancellation rate rising",
+    outcome: {
+      returnPct: -38,
+      summary:
+        "A secondary offering at a steep discount diluted shareholders. The gigafactory ramp stalled 18 months. Two quarters later, guidance was cut 40%. Stock fell 38%.",
+      idealAction: "PASS",
+      idealRationale:
+        "85% revenue growth sounds impressive until you see -22% margins and 9 months of cash. A manufacturing ramp with rising cancellations and no profitability path is a cash incinerator. High growth with no execution is just an exciting story.",
+    },
+  },
+  // ── sc-089 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-089",
+    ticker: "SHLY",
+    company: "Shieldly Security",
+    sector: "Cybersecurity SaaS",
+    description:
+      "Cloud-native identity and access management platform. Protects employee logins and device access for mid-market and enterprise companies.",
+    price: 84.0,
+    revenueGrowthPct: 42,
+    peRatio: 0,
+    profitMarginPct: 8,
+    headlines: [
+      "Net revenue retention hits 127% — upsell attach rate improving every quarter",
+      "Land-and-expand motion accelerating: average customer now on 2.4 modules vs 1.6 last year",
+    ],
+    signal: "FCF turned positive this quarter for the first time",
+    outcome: {
+      returnPct: 24,
+      summary:
+        "NRR stayed above 125% for three consecutive quarters. FCF remained positive and expanded. Two large enterprise wins broke into a new vertical. Stock up 24% over the following 3 months.",
+      idealAction: "BUY",
+      idealRationale:
+        "127% NRR means the existing base alone grows revenue without a single new customer. 42% topline growth with FCF turning positive means the growth is beginning to pay for itself. Identity security has near-zero churn — once embedded, it's nearly impossible to remove.",
+    },
+  },
+  // ── sc-090 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-090",
+    ticker: "NXGN",
+    company: "Nexagen Biotech",
+    sector: "Biotechnology",
+    description:
+      "Clinical-stage biotech developing a gene therapy for a rare pediatric neurological disorder. Phase 3 trial results expected next quarter.",
+    price: 22.10,
+    revenueGrowthPct: 0,
+    peRatio: 0,
+    profitMarginPct: -210,
+    headlines: [
+      "Phase 3 primary endpoint results due in 6 weeks — trial fully enrolled",
+      "Cash position covers approximately 14 months of operations",
+    ],
+    signal: "Lead investigator filed a secondary data patent — raises questions about primary endpoint confidence",
+    outcome: {
+      returnPct: -52,
+      summary:
+        "Phase 3 trial missed its primary endpoint. The FDA placed a clinical hold on the program. Stock fell 52% in a single session on the data release.",
+      idealAction: "PASS",
+      idealRationale:
+        "Binary clinical-stage biotechs are not investing — they are gambling. No revenue, 14 months of cash, and a patent filing that suggests the lead investigator may be hedging on the primary endpoint. The risk/reward here is coin-flip, and coins don't belong in a disciplined portfolio.",
+    },
+  },
+  // ── sc-091 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-091",
+    ticker: "PNCP",
+    company: "Pinnacle Properties REIT",
+    sector: "Real Estate",
+    description:
+      "Office and mixed-use REIT with 42 properties across major US metro areas. Pays a 7.2% dividend yield.",
+    price: 31.80,
+    revenueGrowthPct: 4,
+    peRatio: 18,
+    profitMarginPct: 22,
+    headlines: [
+      "Occupancy rate: 81% — down from 88% two years ago as leases roll over",
+      "Fed signals rates to stay higher for longer; refinancing $800M in debt in 18 months",
+    ],
+    signal: "Three anchor tenants representing 24% of rent have not renewed term sheets",
+    outcome: {
+      returnPct: -18,
+      summary:
+        "Two anchor tenants did not renew. Occupancy dropped to 76%. Refinancing costs spiked, compressing dividends. The dividend was cut 35%. Stock fell 18% over 3 months.",
+      idealAction: "PASS",
+      idealRationale:
+        "A 7.2% yield looks attractive until you understand why it's that high. Rising rates hit office REITs from two directions: higher borrowing costs and tenants consolidating space post-pandemic. Anchor tenant uncertainty was the tell — they know before the market does.",
+    },
+  },
+  // ── sc-092 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-092",
+    ticker: "TAPF",
+    company: "Tapflow Payments",
+    sector: "Fintech / Payments",
+    description:
+      "Embedded payments infrastructure provider. APIs power checkout, invoicing, and payouts for 12,000 software platforms.",
+    price: 57.20,
+    revenueGrowthPct: 28,
+    peRatio: 45,
+    profitMarginPct: 18,
+    headlines: [
+      "Total payment volume up 34% YoY — platform count grew by 900 in the quarter",
+      "International expansion launches in 14 new markets next quarter",
+    ],
+    signal: "Take rate stable at 2.1% despite volume growth — no pricing pressure from competition",
+    outcome: {
+      returnPct: 19,
+      summary:
+        "International volumes ramped ahead of schedule. TPV growth accelerated to 38%. The stable take rate confirmed pricing power. Stock up 19% over 3 months.",
+      idealAction: "BUY",
+      idealRationale:
+        "Embedded payments is a winner-take-most market — the more platforms on the network, the stickier it becomes. 28% revenue growth at 18% margins with a stable take rate means they are not buying growth. The international launch is a free option on a larger TAM.",
+    },
+  },
+  // ── sc-093 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-093",
+    ticker: "GRMD",
+    company: "Graymark Department Stores",
+    sector: "Consumer Retail",
+    description:
+      "Mid-tier department store chain with 340 locations. Management is executing a 'digital-first transformation' strategy.",
+    price: 8.90,
+    revenueGrowthPct: 2,
+    peRatio: 9,
+    profitMarginPct: 3,
+    headlines: [
+      "Same-store sales down 6% — digital channel only 11% of total revenue",
+      "'Digital transformation' initiative now in its fourth consecutive year with no material share gain",
+    ],
+    signal: "Inventory aged 180+ days represents 31% of total stock — markdowns accelerating",
+    outcome: {
+      returnPct: -25,
+      summary:
+        "Same-store sales fell a further 8% the following quarter. Markdowns destroyed margins. Two profitable store closures were offset by four unprofitable ones. Stock fell 25%.",
+      idealAction: "PASS",
+      idealRationale:
+        "A 'digital transformation' that has been in year four with 11% digital penetration is not a strategy — it's a press release. Low P/E only matters if earnings are stable. When margins are 3% and aging inventory forces markdowns, that P/E compresses fast.",
+    },
+  },
+  // ── sc-094 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-094",
+    ticker: "NGDS",
+    company: "Northgard Defense Systems",
+    sector: "Aerospace & Defense",
+    description:
+      "Mid-size defense contractor specializing in unmanned aerial systems and electronic warfare platforms. 80% revenue from long-term government contracts.",
+    price: 72.50,
+    revenueGrowthPct: 11,
+    peRatio: 17,
+    profitMarginPct: 11,
+    headlines: [
+      "Congressional budget adds $2.1B in supplemental defense spending — UAS systems are a priority",
+      "Backlog grows to $4.8B — 3.2× annual revenue, providing 3+ years of visibility",
+    ],
+    signal: "Awarded preferred vendor status for a classified DoD program",
+    outcome: {
+      returnPct: 21,
+      summary:
+        "Supplemental defense budget passed with $1.8B allocated to UAS programs. Two new contract awards expanded the backlog. The classified program announcement was confirmed as a $600M win. Stock up 21%.",
+      idealAction: "BUY",
+      idealRationale:
+        "Long-term government contracts mean revenue is essentially guaranteed for years. A 3.2× backlog-to-revenue ratio at a 17× P/E is cheap for the earnings certainty it implies. Defense spending is geopolitically non-discretionary right now — this is a stable compounder with a tailwind.",
+    },
+  },
+  // ── sc-095 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-095",
+    ticker: "MRDC",
+    company: "Meridian Energy Corp",
+    sector: "Oil & Gas",
+    description:
+      "Independent E&P operator focused on low-cost Permian Basin assets. Generates strong free cash flow at $60+ oil.",
+    price: 41.20,
+    revenueGrowthPct: 18,
+    peRatio: 8,
+    profitMarginPct: 14,
+    headlines: [
+      "Breakeven cost per barrel: $38 — among the lowest in the Permian Basin",
+      "Returns 60% of FCF to shareholders via buybacks and dividend",
+    ],
+    signal: "Hedge book covers only 20% of production — fully exposed to spot prices",
+    outcome: {
+      returnPct: 26,
+      summary:
+        "Oil prices held above $75 for the quarter. FCF exceeded estimates. The buyback program retired 4% of shares. Dividend increased 12%. Stock up 26%.",
+      idealAction: "BUY",
+      idealRationale:
+        "A $38 breakeven with oil at $75 generates enormous FCF. At 8× P/E with 60% of FCF returned to shareholders, this is a capital-return story disguised as a value play. The low hedge ratio is a risk but also means full upside participation if oil holds.",
+    },
+  },
+  // ── sc-096 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-096",
+    ticker: "PHST",
+    company: "Phantomstrike Entertainment",
+    sector: "Video Games",
+    description:
+      "Independent game studio that released a blockbuster title 18 months ago. Now trading on anticipation of a sequel with no confirmed release date.",
+    price: 34.60,
+    revenueGrowthPct: 120,
+    peRatio: 0,
+    profitMarginPct: -15,
+    headlines: [
+      "Sequel announcement delayed — 'creative direction still being finalized'",
+      "Monthly active users for the original game down 64% from launch peak",
+    ],
+    signal: "Lead creative director quietly left the company 6 weeks ago",
+    outcome: {
+      returnPct: -28,
+      summary:
+        "The sequel was delayed another 12 months. User decline on the original accelerated. Without a new release, revenue collapsed. Stock fell 28%.",
+      idealAction: "PASS",
+      idealRationale:
+        "120% revenue growth was all from a single launch 18 months ago. DAUs down 64%, creative director gone, sequel delayed — this is a studio with one hit and no pipeline. Game studios without a release schedule are burning time and cash on hope.",
+    },
+  },
+  // ── sc-097 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-097",
+    ticker: "CRFH",
+    company: "CareFirst Health Systems",
+    sector: "Healthcare Services",
+    description:
+      "Regional hospital operator with 18 acute care facilities. Serves a mix of Medicare, Medicaid, and commercial patients.",
+    price: 19.40,
+    revenueGrowthPct: 3,
+    peRatio: 9,
+    profitMarginPct: 4,
+    headlines: [
+      "CMS proposes 2.8% cut to Medicare reimbursement rates for inpatient procedures",
+      "Nursing shortage driving agency labor costs up 22% YoY — no relief in sight",
+    ],
+    signal: "Two largest facilities flagged for Joint Commission review after patient safety incidents",
+    outcome: {
+      returnPct: -29,
+      summary:
+        "The CMS rate cut passed. Agency labor costs accelerated. Two facilities failed their Joint Commission review and required capital investment. Margins contracted to below 1%. Stock fell 29%.",
+      idealAction: "PASS",
+      idealRationale:
+        "Healthcare services companies with thin margins get crushed by any combination of reimbursement cuts and cost pressure. A 4% margin with rising labor costs and a 2.8% reimbursement cut means breakeven or losses. Low P/E on a deteriorating earnings base is a trap.",
+    },
+  },
+  // ── sc-098 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-098",
+    ticker: "LLCM",
+    company: "Linkloom Commerce",
+    sector: "E-commerce Infrastructure",
+    description:
+      "Commerce enablement platform powering storefronts, logistics, and payments for 80,000 independent merchants.",
+    price: 48.80,
+    revenueGrowthPct: 38,
+    peRatio: 0,
+    profitMarginPct: 6,
+    headlines: [
+      "GMV grew 44% YoY — merchants on platform now represent $12B in annualized sales",
+      "New fulfillment partnership cuts average shipping costs 18% for platform merchants",
+    ],
+    signal: "Merchant churn rate: 3.2% annually — among the lowest in the sector",
+    outcome: {
+      returnPct: 29,
+      summary:
+        "GMV growth accelerated to 49% following the fulfillment launch. Merchant count crossed 100,000. The low churn rate compressed further to 2.8%. Operating leverage drove margins toward double digits. Stock up 29%.",
+      idealAction: "BUY",
+      idealRationale:
+        "3.2% annual churn in commerce infrastructure is extraordinarily sticky — merchants build their entire business on this stack. 38% topline growth with improving margins means operating leverage is kicking in. The fulfillment partnership adds a moat, not just a feature.",
+    },
+  },
+  // ── sc-099 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-099",
+    ticker: "SKBD",
+    company: "Skybound Airways",
+    sector: "Airlines",
+    description:
+      "Low-cost domestic carrier operating 180 routes. Emerged from pandemic restructuring with a leaner cost structure.",
+    price: 14.20,
+    revenueGrowthPct: 22,
+    peRatio: 14,
+    profitMarginPct: 8,
+    headlines: [
+      "Load factor hits 88% for the quarter — highest in 5 years",
+      "Jet fuel hedged at $2.18/gallon for next 6 months — spot at $2.65",
+    ],
+    signal: "Pilots contract renewal due in 3 months — union publicly rejecting management's offer",
+    outcome: {
+      returnPct: 15,
+      summary:
+        "Load factors held at 87% for the following quarter. Fuel hedges protected margins as spot prices rose to $2.90. The pilot contract was settled at a higher cost than modeled but still within guidance. Stock up 15%.",
+      idealAction: "BUY",
+      idealRationale:
+        "88% load factor in a lean cost structure generates strong cash flow. Fuel hedges at $2.18 vs spot $2.65 are a tangible near-term tailwind. The pilot contract is a real risk but the market was pricing in a worst-case scenario that didn't materialise.",
+    },
+  },
+  // ── sc-100 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-100",
+    ticker: "CLRB",
+    company: "Clearwater Beverages",
+    sector: "Consumer Staples",
+    description:
+      "Premium water and functional beverage brand sold in 140,000 retail doors across North America. 82% household penetration in its core markets.",
+    price: 44.10,
+    revenueGrowthPct: 5,
+    peRatio: 22,
+    profitMarginPct: 14,
+    headlines: [
+      "Price increases of 6% held with no volume loss — elasticity lower than historical average",
+      "Private-label beverage sales up industry-wide — but premium segment holding share",
+    ],
+    signal: "New electrolyte line launching in convenience channel next quarter",
+    outcome: {
+      returnPct: 8,
+      summary:
+        "The electrolyte line launched successfully, adding 3% to revenue. Price increases continued to hold. Market share remained stable. Steady as expected. Stock up 8%.",
+      idealAction: "HOLD",
+      idealRationale:
+        "A premium beverage brand at 22× P/E with 5% growth and 14% margins is not cheap enough to pound the table on, but it is exactly what you hold. The pricing power is real — 6% increases with no volume loss is the definition of a brand moat.",
+    },
+  },
+  // ── sc-101 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-101",
+    ticker: "RDSI",
+    company: "Radiant Solar Industries",
+    sector: "Clean Energy",
+    description:
+      "Manufactures and installs utility-scale solar panels. Revenue growing rapidly as solar capacity globally expands.",
+    price: 26.80,
+    revenueGrowthPct: 45,
+    peRatio: 0,
+    profitMarginPct: -8,
+    headlines: [
+      "Panel prices fell 38% over the past 12 months — Chinese manufacturers flooding the market",
+      "Gross margin contracted from 22% to 11% in two quarters as ASPs collapse",
+    ],
+    signal: "CEO sold $4.2M in shares last month citing 'portfolio diversification'",
+    outcome: {
+      returnPct: -24,
+      summary:
+        "Panel price erosion continued. Gross margin turned negative. The company announced a $200M equity raise at a 22% discount. CEO resignation followed. Stock fell 24%.",
+      idealAction: "PASS",
+      idealRationale:
+        "A commoditising manufacturing market: when Chinese supply floods in and gross margins halve in two quarters, the trend doesn't reverse. Revenue growth in a market with collapsing ASPs is meaningless — you're growing yourself into losses. The CEO sale was the tell.",
+    },
+  },
+  // ── sc-102 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-102",
+    ticker: "PRXS",
+    company: "Praxis Software",
+    sector: "Enterprise Software",
+    description:
+      "ERP software vendor transitioning a 20-year-old perpetual license business to a cloud subscription model. Transition pain causing near-term revenue decline.",
+    price: 38.40,
+    revenueGrowthPct: -8,
+    peRatio: 0,
+    profitMarginPct: -5,
+    headlines: [
+      "ARR grew 34% YoY as legacy customers migrate — subscription now 58% of revenue",
+      "Remaining performance obligations (RPO) up 41% — indicates strong future revenue",
+    ],
+    signal: "Customer migration rate accelerating: 22% of legacy base converted this year vs 14% last year",
+    outcome: {
+      returnPct: 22,
+      summary:
+        "ARR growth held at 32%. Subscription crossed 70% of revenue. The RPO build proved out — revenue returned to growth the following quarter. Margins inflected as the high-margin subscription base scaled. Stock up 22%.",
+      idealAction: "BUY",
+      idealRationale:
+        "Revenue declining -8% sounds alarming until you understand the transition: subscription ARR growing 34% with 70% gross margins is replacing one-time perpetual revenue. The RPO build and accelerating migration rate are the real leading indicators. This is a deliberate and well-executed transition, not distress.",
+    },
+  },
+  // ── sc-103 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-103",
+    ticker: "AETM",
+    company: "Aethon Medical Devices",
+    sector: "Medical Devices",
+    description:
+      "Develops minimally invasive surgical tools and robotic assistance systems. Primary customers are orthopedic and spine surgery centers.",
+    price: 91.30,
+    revenueGrowthPct: 12,
+    peRatio: 28,
+    profitMarginPct: 22,
+    headlines: [
+      "Procedure volumes up 14% as surgical backlog from 2021–22 continues to clear",
+      "FDA clears next-generation robotic spine assistant — commercial launch in Q1",
+    ],
+    signal: "International distribution partnership signed with largest European hospital group",
+    outcome: {
+      returnPct: 14,
+      summary:
+        "The robotic spine assistant launched on schedule. International revenues contributed meaningfully in the first full quarter. Procedure volumes held steady. Stock up 14%.",
+      idealAction: "BUY",
+      idealRationale:
+        "22% margins at 12% growth with FDA clearance on a new product and an international distribution deal is a straightforward quality compounder. Medical devices have sticky hospital relationships and high switching costs. The new product is pure upside on an already profitable base.",
+    },
+  },
+  // ── sc-104 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-104",
+    ticker: "NXDX",
+    company: "Nexus Digital Exchange",
+    sector: "Crypto / Fintech",
+    description:
+      "Cryptocurrency spot and derivatives exchange. Generates revenue from trading fees across 80+ digital asset pairs.",
+    price: 44.80,
+    revenueGrowthPct: 180,
+    peRatio: 12,
+    profitMarginPct: 28,
+    headlines: [
+      "SEC subpoenas exchange for customer trading records — investigation scope undisclosed",
+      "Trading volumes down 38% from peak as crypto market cools",
+    ],
+    signal: "CFO and General Counsel both resigned within 30 days of each other",
+    outcome: {
+      returnPct: -44,
+      summary:
+        "The SEC investigation expanded to include allegations of wash trading. The exchange froze withdrawals for 72 hours amid a liquidity crunch. CFO resignation was tied to internal compliance failures. Stock fell 44%.",
+      idealAction: "PASS",
+      idealRationale:
+        "A 12× P/E looks cheap until the earnings it's priced on evaporate. SEC investigations, dual executive exits, and a platform whose volumes are crypto-cycle-dependent are three independent red flags. Each one alone is disqualifying. All three together is a pattern.",
+    },
+  },
+  // ── sc-105 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-105",
+    ticker: "QKDR",
+    company: "QuickDrop Delivery",
+    sector: "Food Delivery",
+    description:
+      "On-demand food delivery marketplace operating in 220 cities. Connects restaurants and consumers via a gig-worker courier network.",
+    price: 11.60,
+    revenueGrowthPct: 42,
+    peRatio: 0,
+    profitMarginPct: -38,
+    headlines: [
+      "Adjusted EBITDA: -$180M in the quarter — 'path to profitability' unchanged at '3–4 years'",
+      "Average order value declining as customers trade down to lower-priced options",
+    ],
+    signal: "Three largest cities representing 40% of orders are now subject to minimum wage laws for delivery workers",
+    outcome: {
+      returnPct: -31,
+      summary:
+        "New minimum wage laws in major cities raised per-delivery costs 22%. The path to profitability extended from '3–4 years' to '5+ years.' A bridge financing round priced at a 35% discount. Stock fell 31%.",
+      idealAction: "PASS",
+      idealRationale:
+        "42% growth sounds good until you see -38% margins and a profitability timeline measured in years. Food delivery economics depend on courier costs — and those are structurally increasing. When your 'path to profitability' keeps getting longer, it's not a path.",
+    },
+  },
+  // ── sc-106 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-106",
+    ticker: "CVDS",
+    company: "CoreVault Data Systems",
+    sector: "Data Infrastructure",
+    description:
+      "Operates hyperscale data centers and provides colocation and managed hosting services. AI workloads are driving unprecedented demand for GPU-dense capacity.",
+    price: 118.0,
+    revenueGrowthPct: 52,
+    peRatio: 38,
+    profitMarginPct: 18,
+    headlines: [
+      "Data center utilization: 97% — turning away new customers due to capacity constraints",
+      "Pre-leased 2 new hyperscale campuses for 2025 delivery — fully contracted before breaking ground",
+    ],
+    signal: "Power purchase agreements locked in at sub-4 cents/kWh through 2030",
+    outcome: {
+      returnPct: 41,
+      summary:
+        "Demand continued to outstrip supply. Pricing power emerged as utilization stayed above 95%. The new campuses attracted two additional hyperscaler tenants. Power cost advantage over competitors widened. Stock up 41%.",
+      idealAction: "BUY",
+      idealRationale:
+        "97% utilization means the constraint is supply, not demand — pricing power is absolute. Pre-leased facilities before construction means zero vacancy risk. Locked-in power costs below 4 cents are a structural cost advantage in a capital-intensive, energy-intensive business. AI infrastructure demand is a decade-long wave.",
+    },
+  },
+  // ── sc-107 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-107",
+    ticker: "VELG",
+    company: "Velo Apparel Group",
+    sector: "Consumer Apparel",
+    description:
+      "Fast-fashion retailer expanding aggressively into emerging markets. Known for rapid design-to-shelf cycles of 2–3 weeks.",
+    price: 22.30,
+    revenueGrowthPct: 28,
+    peRatio: 14,
+    profitMarginPct: 8,
+    headlines: [
+      "EU parliament opens probe into labor practices at supplier factories",
+      "Cotton and freight costs up 18% YoY — price increases not yet passed to consumers",
+    ],
+    signal: "Inventory-to-sales ratio at highest level in 6 years",
+    outcome: {
+      returnPct: -18,
+      summary:
+        "The EU probe expanded to include product safety concerns. Markdowns to clear elevated inventory destroyed margins. Net margin fell from 8% to 2%. Stock fell 18%.",
+      idealAction: "PASS",
+      idealRationale:
+        "Fast fashion carries compounding risks: ESG scrutiny, labor cost exposure, and the inventory management tightrope. When costs are rising and you can't pass them through, and inventory is bloated, the margin math doesn't work. The regulatory risk is not priced in at 14× P/E.",
+    },
+  },
+  // ── sc-108 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-108",
+    ticker: "STRP",
+    company: "Sterling Property Insurance",
+    sector: "Property & Casualty Insurance",
+    description:
+      "Regional P&C insurer with heavy concentration in Gulf Coast homeowners and commercial property coverage.",
+    price: 28.60,
+    revenueGrowthPct: 6,
+    peRatio: 11,
+    profitMarginPct: 8,
+    headlines: [
+      "NOAA raises hurricane season forecast to 'extremely active' — 19 named storms predicted",
+      "Reinsurance costs up 34% at renewal — the most expensive reinsurance market in a decade",
+    ],
+    signal: "Combined ratio crept above 95 in the last two quarters — approaching breakeven on underwriting",
+    outcome: {
+      returnPct: -22,
+      summary:
+        "Two Category 3 hurricanes made landfall in the Gulf Coast. Catastrophic loss claims exceeded reserves. The company raised its combined ratio guidance to 112 — meaning it was paying out more than it took in. Stock fell 22%.",
+      idealAction: "PASS",
+      idealRationale:
+        "A combined ratio creeping toward 100 with the most expensive reinsurance market in a decade means margin for error is near zero. Geographic concentration in hurricane-prone areas with an extremely active forecast season is uncompensated risk. The low P/E reflects the uncertainty, not a discount.",
+    },
+  },
+  // ── sc-109 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-109",
+    ticker: "ARCG",
+    company: "Arcadia Game Streaming",
+    sector: "Gaming / Entertainment",
+    description:
+      "Cloud gaming subscription service with access to 1,200 titles. 8.2M subscribers paying $14.99/month, targeting 20M by year-end.",
+    price: 31.40,
+    revenueGrowthPct: 38,
+    peRatio: 0,
+    profitMarginPct: -12,
+    headlines: [
+      "Monthly active users at 94% retention rate — churn at all-time low",
+      "Exclusive publishing deal signed with top independent studio for 4 titles over 3 years",
+    ],
+    signal: "Hardware partnerships with 3 TV manufacturers to pre-install app — 40M potential new devices",
+    outcome: {
+      returnPct: 16,
+      summary:
+        "Subscriber count reached 11M as the TV manufacturer integration drove organic installs. Churn stayed at 6%. The exclusive game launches drew critical acclaim and drove conversion. Stock up 16%.",
+      idealAction: "BUY",
+      idealRationale:
+        "94% monthly retention in subscription gaming is exceptional — it means subscribers are actively engaged, not passively churning. The hardware pre-install is a zero-cost distribution channel reaching 40M potential subscribers. Exclusive content is the Netflix playbook applied to gaming.",
+    },
+  },
+  // ── sc-110 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-110",
+    ticker: "PCSL",
+    company: "Prism Chemical Solutions",
+    sector: "Specialty Chemicals",
+    description:
+      "Manufactures specialty resins and adhesives for the construction and automotive industries. Revenue cyclical with downstream customer inventory cycles.",
+    price: 34.20,
+    revenueGrowthPct: -12,
+    peRatio: 14,
+    profitMarginPct: 12,
+    headlines: [
+      "Customers destocking — order volumes down 20% as supply chains normalise",
+      "Order book for Q3 back to pre-destocking levels — bookings inflecting higher",
+    ],
+    signal: "CEO initiates a $50M buyback at current prices — third buyback in four years",
+    outcome: {
+      returnPct: 22,
+      summary:
+        "Destocking ended faster than the market expected. Volumes recovered to pre-cycle levels by Q3. Margins expanded as fixed cost leverage returned. The buyback was well-timed. Stock up 22%.",
+      idealAction: "BUY",
+      idealRationale:
+        "Destocking cycles end — that's what makes them cycles. The order book inflecting and a buyback from a management team that has done this well twice before are the signals. A -12% revenue dip with 12% maintained margins means the business is intact; the volume decline is temporary and already reversing.",
+    },
+  },
+  // ── sc-111 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-111",
+    ticker: "BCWG",
+    company: "Beacon Wireless Group",
+    sector: "Telecommunications",
+    description:
+      "Regional wireless carrier serving 4.2M postpaid subscribers. Offers 5G in 60% of its footprint. Pays an 8.4% dividend yield.",
+    price: 19.80,
+    revenueGrowthPct: 3,
+    peRatio: 11,
+    profitMarginPct: 9,
+    headlines: [
+      "5G rollout requires $1.8B capex over next 24 months — FCF will be negative this year",
+      "Subscriber growth: +0.3% — below population growth, indicating share loss to larger carriers",
+    ],
+    signal: "Dividend payout ratio at 110% of free cash flow — paid from debt",
+    outcome: {
+      returnPct: -17,
+      summary:
+        "FCF turned deeply negative during the 5G build. The dividend was cut 40% to preserve capital. Subscriber losses accelerated as the larger carriers undercut on price with superior network coverage. Stock fell 17%.",
+      idealAction: "PASS",
+      idealRationale:
+        "An 8.4% dividend yield paid from debt is not income — it's a return of capital you'll lose in stock price. Regional carriers in a 5G arms race against T-Mobile and Verizon cannot win. The capex requirement will destroy FCF and force a dividend cut. A dividend cut in a yield-driven stock creates a cascading sell.",
+    },
+  },
+  // ── sc-112 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-112",
+    ticker: "AURG",
+    company: "Aurelion Luxury Group",
+    sector: "Luxury Goods",
+    description:
+      "European luxury conglomerate with brands spanning leather goods, watches, and fine fragrance. 44% of revenue from mainland China.",
+    price: 148.0,
+    revenueGrowthPct: 2,
+    peRatio: 24,
+    profitMarginPct: 22,
+    headlines: [
+      "China stores reopening after 18 months of COVID restrictions — foot traffic recovering rapidly",
+      "Aspirational luxury segment under pressure from wealth effect reversal in Western markets",
+    ],
+    signal: "Chinese Lunar New Year sales exceeded 2019 levels for the first time",
+    outcome: {
+      returnPct: 29,
+      summary:
+        "China revenue surged 38% in the quarter as pent-up demand released. Western markets stabilised. The Lunar New Year signal proved prescient — Chinese consumers spent aggressively on delayed luxury purchases. Stock up 29%.",
+      idealAction: "BUY",
+      idealRationale:
+        "China reopening is a binary event for luxury houses with heavy mainland exposure. Pent-up demand from 18 months of restrictions combined with the cultural significance of Lunar New Year gifting is a powerful catalyst. 24× P/E on 22% margins with a China recovery embedded is not expensive for a brand with genuine pricing power.",
+    },
+  },
+  // ── sc-113 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-113",
+    ticker: "TWFS",
+    company: "Transway Freight Solutions",
+    sector: "Logistics",
+    description:
+      "Third-party logistics provider specialising in LTL and full truckload freight brokerage. Revenue surged 280% during pandemic-era volume spike.",
+    price: 48.30,
+    revenueGrowthPct: -18,
+    peRatio: 12,
+    profitMarginPct: 8,
+    headlines: [
+      "Freight spot rates down 42% from peak — capacity returning faster than demand",
+      "Volume declines moderating — Q4 comps will be much easier",
+    ],
+    signal: "Management holding 2025 guidance flat — implies stabilisation, not further decline",
+    outcome: {
+      returnPct: -8,
+      summary:
+        "Freight markets stabilised by Q4 as excess capacity was absorbed. The -18% revenue decline slowed to -5% by year-end. Margins contracted but held positive. Stock fell 8% — better than feared.",
+      idealAction: "HOLD",
+      idealRationale:
+        "Freight cycles normalise — the question is whether it's a controlled descent or a collapse. Volume declines moderating and easier comps ahead mean the worst is largely visible. Management holding guidance is a confidence signal. This is not a buy, but not a sell either — it's a cycle bottom, not a structural decline.",
+    },
+  },
+  // ── sc-114 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-114",
+    ticker: "HLXT",
+    company: "Helix Therapeutics",
+    sector: "Biotechnology",
+    description:
+      "Commercial-stage biotech that received FDA approval for a first-in-class treatment for a chronic autoimmune condition. Early commercial launch underway.",
+    price: 38.70,
+    revenueGrowthPct: 280,
+    peRatio: 0,
+    profitMarginPct: -25,
+    headlines: [
+      "Script growth: 40% week-over-week in early launch — payer coverage at 78% of commercial lives",
+      "Formulary access improving — two large PBMs added to preferred tier",
+    ],
+    signal: "KOL survey shows 72% of physicians familiar with the drug at 8 months post-launch — tracking ahead of expectations",
+    outcome: {
+      returnPct: 33,
+      summary:
+        "Script growth continued accelerating. Coverage hit 90% within 6 months. The peak sales estimate was revised up 40% by the Street. Profitability arrived 4 quarters ahead of consensus. Stock up 33%.",
+      idealAction: "BUY",
+      idealRationale:
+        "Weekly script growth of 40% with 78% coverage at 8 months is a successful launch — the hardest part (formulary access and physician adoption) is proving out. A first-in-class approved drug with this trajectory has a wide range of outcomes, most of them good. The -25% margin is temporary; the revenue is real and growing.",
+    },
+  },
+  // ── sc-115 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-115",
+    ticker: "HPTH",
+    company: "Homepath Technologies",
+    sector: "PropTech",
+    description:
+      "Real estate marketplace facilitating home purchases and sales using an iBuying and direct-listing model. Revenue collapsed alongside transaction volumes.",
+    price: 9.20,
+    revenueGrowthPct: 28,
+    peRatio: 0,
+    profitMarginPct: -18,
+    headlines: [
+      "Existing home sales at lowest level in 28 years as 7% mortgage rates freeze the market",
+      "iBuying inventory carrying $840M in homes that can't be offloaded without steep discounts",
+    ],
+    signal: "CEO exercising put options on personal shares — downside protection, not confidence",
+    outcome: {
+      returnPct: -46,
+      summary:
+        "Interest rates rose further. Transaction volumes fell another 24%. The iBuying inventory was sold at a loss, crystallising $180M in write-downs. A dilutive equity raise followed. Stock fell 46%.",
+      idealAction: "PASS",
+      idealRationale:
+        "A real estate marketplace business at 7% mortgage rates has no volume — the market is structurally frozen. $840M in iBuying inventory is a liability, not an asset, when prices are falling and it can't be sold. CEO put options is a CEO telling you what he thinks of the stock.",
+    },
+  },
+  // ── sc-116 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-116",
+    ticker: "MESK",
+    company: "Mesa Kitchen Group",
+    sector: "Restaurants",
+    description:
+      "Fast-casual restaurant chain with 680 locations. Known for customizable grain bowls targeting the health-conscious consumer.",
+    price: 24.80,
+    revenueGrowthPct: 8,
+    peRatio: 19,
+    profitMarginPct: 7,
+    headlines: [
+      "Same-store sales: +6% — driven by check size increases, not traffic growth",
+      "Restaurant-level margins contracted 180bps YoY as minimum wage laws take effect in 3 key states",
+    ],
+    signal: "Traffic counts flat despite 6% comp — price increases doing all the work",
+    outcome: {
+      returnPct: -9,
+      summary:
+        "Labor cost increases continued. New minimum wage laws in two additional states extended the margin pressure. Traffic counts turned negative in Q3, revealing that customers had absorbed all the price they would take. Stock fell 9%.",
+      idealAction: "HOLD",
+      idealRationale:
+        "A restaurant business growing same-store sales entirely through price increases with flat traffic is in a fragile equilibrium. 7% margins with rising labor costs means there is no buffer. Hold if you own it, but the risk-reward for a new position at 19× with deteriorating real unit economics is not attractive.",
+    },
+  },
+  // ── sc-117 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-117",
+    ticker: "HVIQ",
+    company: "HarvestIQ Technologies",
+    sector: "Agricultural Technology",
+    description:
+      "Precision farming software and sensor platform. Optimises irrigation, fertiliser application, and crop yield for large commercial farms.",
+    price: 41.60,
+    revenueGrowthPct: 24,
+    peRatio: 0,
+    profitMarginPct: 4,
+    headlines: [
+      "Platform now covers 8.2M acres — up from 5.4M acres a year ago",
+      "Multi-year SaaS contracts averaging 4.2 years signed with two of the top 10 US farming cooperatives",
+    ],
+    signal: "Net promoter score of 74 — among highest in agricultural software",
+    outcome: {
+      returnPct: 17,
+      summary:
+        "Acreage coverage grew to 11M. The cooperative partnerships expanded as other members of each co-op adopted the platform. NPS held above 70, supporting low churn. Stock up 17%.",
+      idealAction: "BUY",
+      idealRationale:
+        "Network effects in agricultural software are subtle but real — when a cooperative adopts a platform, peer pressure propagates adoption. 4.2-year average contract terms mean revenue visibility is exceptional. An NPS of 74 means farmers are recommending this to other farmers, which is hard to manufacture and hard to replicate.",
+    },
+  },
+  // ── sc-118 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-118",
+    ticker: "THDW",
+    company: "Threadwave Social",
+    sector: "Social Media",
+    description:
+      "Short-form video and community platform targeting 18–34-year-olds. 94M monthly active users with declining DAU/MAU ratio.",
+    price: 17.40,
+    revenueGrowthPct: 6,
+    peRatio: 14,
+    profitMarginPct: 12,
+    headlines: [
+      "Average revenue per user up 22% — new ad format delivering 3× click-through vs display",
+      "DAU/MAU ratio declined from 68% to 61% — users visiting less frequently",
+    ],
+    signal: "Time-in-app metric stable despite lower session frequency — users going deeper, not broader",
+    outcome: {
+      returnPct: 13,
+      summary:
+        "The new ad format scaled across all advertisers. ARPU grew a further 18%. DAU/MAU stabilised as a redesigned feed algorithm improved session frequency. Stock up 13%.",
+      idealAction: "BUY",
+      idealRationale:
+        "ARPU growth of 22% with a 3× click-through improvement means the monetisation layer is genuinely working. A declining DAU/MAU is concerning but the time-in-app stability suggests engagement is deep when users do show up. At 14× P/E with 12% margins and an improving revenue engine, this is cheap for a platform with 94M users.",
+    },
+  },
+  // ── sc-119 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-119",
+    ticker: "BRMT",
+    company: "Bridgeline Mortgage Trust",
+    sector: "Mortgage REIT",
+    description:
+      "Externally managed mortgage REIT investing in agency and non-agency MBS. Pays a 10.8% dividend yield funded by leveraged interest income.",
+    price: 11.20,
+    revenueGrowthPct: 2,
+    peRatio: 8,
+    profitMarginPct: 16,
+    headlines: [
+      "Book value per share down 18% over 6 months as rising rates compress MBS values",
+      "Dividend cut 25% last quarter — management flagged potential for further cuts",
+    ],
+    signal: "Leverage ratio at 8.2× equity — near the top of the covenant limit",
+    outcome: {
+      returnPct: -36,
+      summary:
+        "Rates rose another 75bps. Book value declined a further 22%. The leverage covenant was breached, triggering a forced asset sale at distressed prices. Dividend eliminated. Stock fell 36%.",
+      idealAction: "PASS",
+      idealRationale:
+        "A 10.8% yield already cut 25% with more cuts signalled is a dividend trap, not income. mREITs use 8× leverage — when rates rise, book value collapses and leverage covenants bind. The 16% margin is illusory: it exists only when the yield curve cooperates. This is a rate bet, not an investment.",
+    },
+  },
+  // ── sc-120 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-120",
+    ticker: "VTEX",
+    company: "Voltex Energy Storage",
+    sector: "Clean Energy",
+    description:
+      "Manufactures grid-scale lithium iron phosphate battery storage systems. Beneficiary of IRA clean energy tax credits and utility procurement mandates.",
+    price: 29.40,
+    revenueGrowthPct: 68,
+    peRatio: 0,
+    profitMarginPct: 6,
+    headlines: [
+      "Backlog reaches $2.1B — 2.8× annual revenue; fully contracted into next year",
+      "IRA domestic content credits improve project economics by 14% for US-manufactured systems",
+    ],
+    signal: "Signed 10-year supply agreement with three major US utilities",
+    outcome: {
+      returnPct: 26,
+      summary:
+        "The utility agreements triggered additional procurement decisions across the grid. Backlog expanded to $3.4B. IRA credits remained intact. Margins improved as the manufacturing line scaled toward nameplate capacity. Stock up 26%.",
+      idealAction: "BUY",
+      idealRationale:
+        "A 2.8× backlog-to-revenue with fully contracted visibility and IRA subsidies improving unit economics is a rare combination. Grid-scale storage is a multi-decade buildout driven by policy mandates, not discretionary demand. At 6% margins early in the manufacturing scale, the leverage to profitability as volume grows is significant.",
+    },
+  },
+  // ── sc-121 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-121",
+    ticker: "MCRS",
+    company: "Meridian Credit Solutions",
+    sector: "Consumer Finance",
+    description:
+      "Speciality consumer lender focused on personal loans and buy-now-pay-later products for near-prime borrowers.",
+    price: 32.80,
+    revenueGrowthPct: 22,
+    peRatio: 14,
+    profitMarginPct: 16,
+    headlines: [
+      "30-day delinquency rates up 180bps YoY — now at highest level since 2019",
+      "Provision for loan losses increased 34% — management still calling it 'normalisation'",
+    ],
+    signal: "Net charge-off rate on BNPL portfolio doubled in one quarter",
+    outcome: {
+      returnPct: -19,
+      summary:
+        "Delinquencies continued rising, reaching 2020 levels. Management increased the provision for credit losses 60% by year-end. BNPL charge-offs required a material reserve build. Net interest margin compressed. Stock fell 19%.",
+      idealAction: "PASS",
+      idealRationale:
+        "Near-prime borrowers are the first to crack in a softening consumer environment. Delinquencies rising 180bps with charge-offs doubling in a single quarter is not normalisation — it is the beginning of a credit cycle turn. When lenders say 'normalisation,' check the data; the data here says deterioration.",
+    },
+  },
+  // ── sc-122 ──────────────────────────────────────────────────────────────────
+  {
+    id: "sc-122",
+    ticker: "DMND",
+    company: "Diamond Ridge Spirits",
+    sector: "Beverages / Spirits",
+    description:
+      "Premium whiskey and spirits producer with aged inventory representing 6+ years of future supply. Sells across 48 countries.",
+    price: 88.40,
+    revenueGrowthPct: 14,
+    peRatio: 26,
+    profitMarginPct: 24,
+    headlines: [
+      "US spirits volumes down 4% industry-wide — first decline in 12 years",
+      "Premium+ category where Diamond Ridge plays still growing at 3% — trading down limited so far",
+    ],
+    signal: "Aged inventory as a percentage of assets increased — patient accumulation for future releases",
+    outcome: {
+      returnPct: 11,
+      summary:
+        "Volume declines in the broader spirits market did not reach the premium tier. Diamond Ridge's aged inventory release schedule supported a 14% revenue increase for the year. International markets partially offset US softness. Stock up 11%.",
+      idealAction: "HOLD",
+      idealRationale:
+        "Premium spirits have genuine pricing power and their aged inventory is a real asset that competitors cannot replicate on a short timeline. The broader volume decline is a concern but premium has historically held in mild downturns. At 26× P/E with 24% margins this is a quality business priced fairly — hold, don't chase.",
+    },
+  },
 ];
 
 /** Deterministic daily scenario picker — same day = same scenario. */
