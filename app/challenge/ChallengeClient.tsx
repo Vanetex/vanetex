@@ -20,6 +20,7 @@ import { listDecisions,
 import { listAwardedAchievements, awardAchievements } from "@/lib/supabase/achievements";
 import { computeEligibleAchievements } from "@/lib/achievements";
 import AchievementToast from "@/components/AchievementToast";
+import PushPrompt from "@/components/PushPrompt";
 import type {
   Action,
   Evaluation,
@@ -252,6 +253,7 @@ export default function ChallengeClient({ scenario }: { scenario: Scenario }) {
 
       {newAchievements.length > 0 && <AchievementToast newIds={newAchievements} />}
       {stage === "done" && sessionXP && <XPToast sessionXP={sessionXP} totalXP={totalXP} />}
+      {stage === "done" && <PushPrompt />}
 
       {stage === "done" && action && (
         <ShareCard

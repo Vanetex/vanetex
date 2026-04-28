@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
+import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -38,7 +39,9 @@ export async function GET(request: NextRequest) {
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const FROM = process.env.RESEND_FROM ?? "Vanetex <reminders@vanetex.com>";
-  const results = await Promise.allSettled(
+
+  // Send emails
+  const emailResults = await Promise.allSettled(
     (targets as ReminderTarget[]).map((t) =>
       resend.emails.send({
         from: FROM,
@@ -48,15 +51,60 @@ export async function GET(request: NextRequest) {
       }),
     ),
   );
+  const emailsSent = emailResults.filter((r) => r.status === "fulfilled").length;
 
-  const sent = results.filter((r) => r.status === "fulfilled").length;
-  const failed = results.length - sent;
+  // Send push notifications (if VAPID keys are configured)
+  let pushSent = 0;
+  const vapidPublic = process.env.VAPID_PUBLIC_KEY;
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+  const vapidSubject = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vanetex.vercel.app";
 
-  if (failed > 0) {
-    console.error(`[streak-reminder] ${failed} emails failed to send`);
+  if (vapidPublic && vapidPrivate) {
+    webpush.setVapidDetails(`mailto:${vapidSubject}`, vapidPublic, vapidPrivate);
+
+    const userIds = (targets as ReminderTarget[]).map((t) => t.user_id);
+    const { data: subs } = await supabase
+      .from("push_subscriptions")
+      .select("user_id, endpoint, p256dh, auth")
+      .in("user_id", userIds);
+
+    if (subs?.length) {
+      const targetMap = new Map(
+        (targets as ReminderTarget[]).map((t) => [t.user_id, t]),
+      );
+
+      const pushResults = await Promise.allSettled(
+        subs.map((sub) => {
+          const target = targetMap.get(sub.user_id);
+          const payload = JSON.stringify({
+            title: "Vanetex",
+            body: target
+              ? `🔥 Your ${target.streak_days}-day streak is at risk. Today's challenge is waiting.`
+              : "🔥 Your streak is at risk. Today's challenge is waiting.",
+            url: "/challenge",
+            tag: "streak-reminder",
+          });
+          return webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload,
+          ).catch(async (err) => {
+            // 410 Gone = subscription expired — clean it up
+            if (err.statusCode === 410) {
+              await supabase.from("push_subscriptions")
+                .delete().eq("endpoint", sub.endpoint);
+            }
+            throw err;
+          });
+        }),
+      );
+      pushSent = pushResults.filter((r) => r.status === "fulfilled").length;
+    }
   }
 
-  return NextResponse.json({ sent, failed, total: targets.length });
+  return NextResponse.json({
+    emails: { sent: emailsSent, total: targets.length },
+    push: { sent: pushSent },
+  });
 }
 
 function escapeHtml(str: string): string {
