@@ -93,6 +93,11 @@ export default function PrivacyPage() {
               <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#1e47eb" }}>Google Privacy Policy</a>
             </Subsection>
 
+            <Subsection title="Vercel Analytics">
+              We use Vercel Analytics to collect anonymized, aggregated usage data such as page views and performance metrics. No personally identifiable information is shared with Vercel Analytics. This data helps us understand how the product is used and where to improve it.{" "}
+              <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: "#1e47eb" }}>Vercel Privacy Policy</a>
+            </Subsection>
+
             <p>We may also disclose information if required by law, court order, or to protect the rights and safety of our users or the public.</p>
           </Section>
 
@@ -136,7 +141,36 @@ export default function PrivacyPage() {
             <p>We may update this Privacy Policy from time to time. If we make material changes, we will update the &ldquo;Last updated&rdquo; date at the top of this page and notify you by email where appropriate. Your continued use of the Service after changes are posted constitutes acceptance of the revised policy.</p>
           </Section>
 
-          <Section title="10. Contact">
+          <Section title="10. Information for Users in the EEA and United Kingdom (GDPR)">
+            <p>If you are located in the European Economic Area (EEA) or the United Kingdom, the following applies in addition to the rest of this policy.</p>
+            <Subsection title="Legal Basis for Processing">
+              We process your personal data on the following legal bases:
+              <ul style={{ paddingLeft: 20, marginTop: 8 }}>
+                <li style={{ marginBottom: 6 }}><strong>Performance of a contract</strong> — storing your decisions, progress, and account information to provide the Service</li>
+                <li style={{ marginBottom: 6 }}><strong>Legitimate interests</strong> — sending streak reminders and weekly recaps to users with active accounts</li>
+                <li style={{ marginBottom: 6 }}><strong>Consent</strong> — push notification permissions, where you have explicitly opted in</li>
+              </ul>
+            </Subsection>
+            <Subsection title="Your Rights">
+              Under the GDPR and UK GDPR, you have the right to access, rectify, or erase your personal data; restrict or object to its processing; and receive your data in a portable format. You also have the right to lodge a complaint with your local data protection supervisory authority. To exercise any of these rights, contact us at <a href="mailto:vanetexinvestingapp@gmail.com" style={{ color: "#1e47eb" }}>vanetexinvestingapp@gmail.com</a>. We will respond within 30 days.
+            </Subsection>
+            <Subsection title="International Data Transfers">
+              Your data is stored and processed in the United States. By using the Service, you acknowledge that your data may be transferred to and processed in the United States, which may have different data protection standards than your country. Where required, we rely on Standard Contractual Clauses for such transfers.
+            </Subsection>
+          </Section>
+
+          <Section title="11. Information for California Residents (CCPA)">
+            <p>If you are a California resident, the California Consumer Privacy Act (CCPA) grants you the following rights:</p>
+            <ul style={{ paddingLeft: 20, marginTop: 8 }}>
+              <li style={{ marginBottom: 6 }}><strong>Right to Know</strong> — you may request the categories and specific pieces of personal information we have collected about you</li>
+              <li style={{ marginBottom: 6 }}><strong>Right to Delete</strong> — you may request deletion of your personal information, which you can exercise directly through the Settings page</li>
+              <li style={{ marginBottom: 6 }}><strong>Right to Opt-Out of Sale</strong> — we do not sell your personal information</li>
+              <li style={{ marginBottom: 6 }}><strong>Right to Non-Discrimination</strong> — we will not discriminate against you for exercising any of your CCPA rights</li>
+            </ul>
+            <p>To submit a request, contact us at <a href="mailto:vanetexinvestingapp@gmail.com" style={{ color: "#1e47eb" }}>vanetexinvestingapp@gmail.com</a>.</p>
+          </Section>
+
+          <Section title="12. Contact">
             <p>If you have questions, concerns, or requests related to your privacy, please contact us at <a href="mailto:vanetexinvestingapp@gmail.com" style={{ color: "#1e47eb" }}>vanetexinvestingapp@gmail.com</a>.</p>
           </Section>
         </div>
