@@ -3176,10 +3176,15 @@ export const SCENARIOS: Scenario[] = [
   },
 ];
 
-/** Deterministic daily scenario picker — same day = same scenario. */
+/** Deterministic daily scenario picker — same day = same scenario, day boundary at midnight EST/EDT. */
 export function getTodayScenario(): Scenario {
-  const d = new Date();
-  const dayKey = Number(`${d.getFullYear()}${d.getMonth() + 1}${d.getDate()}`);
+  // toLocaleDateString("en-CA") returns "YYYY-MM-DD"; split+map gives [year, month, day] in EST.
+  // Avoids the UTC offset on Vercel servers where new Date() day changes at 5 AM EST.
+  const [year, month, day] = new Date()
+    .toLocaleDateString("en-CA", { timeZone: "America/New_York" })
+    .split("-")
+    .map(Number);
+  const dayKey = Number(`${year}${month}${day}`);
   return SCENARIOS[dayKey % SCENARIOS.length];
 }
 

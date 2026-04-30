@@ -111,8 +111,8 @@ export default function Ticker() {
       </div>
 
       {/* Fade edges */}
-      <div aria-hidden style={{ position: "absolute", left: 95, top: 0, bottom: 0, width: 32, background: "linear-gradient(to right, rgba(8,11,20,0.95), transparent)", pointerEvents: "none", zIndex: 1 }} />
-      <div aria-hidden style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 32, background: "linear-gradient(to left, rgba(8,11,20,0.88), transparent)", pointerEvents: "none", zIndex: 1 }} />
+      <div aria-hidden style={{ position: "absolute", left: 95, top: 0, bottom: 0, width: 48, background: "linear-gradient(to right, rgba(8,11,20,1), transparent)", pointerEvents: "none", zIndex: 1 }} />
+      <div aria-hidden style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 120, background: "linear-gradient(to left, rgba(8,11,20,1), transparent)", pointerEvents: "none", zIndex: 1 }} />
     </div>
   );
 }
