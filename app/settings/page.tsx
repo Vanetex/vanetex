@@ -85,39 +85,23 @@ export default function SettingsPage() {
     setProfileMessage(null);
     setError(null);
 
-    const trimmed = newDisplayName.trim();
-    if (!trimmed) {
-      setError("Username cannot be empty.");
-      return;
-    }
-
     setProfileSaving(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
-    if (!user) {
-      setProfileSaving(false);
-      setError("Not authenticated.");
-      return;
-    }
-
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ display_name: trimmed })
-      .eq("id", user.id);
-
-    if (profileError) {
-      setProfileSaving(false);
-      setError(profileError.message);
-      return;
-    }
-
-    await supabase.auth.updateUser({
-      data: { display_name: trimmed },
+    const res = await fetch("/api/profile/display-name", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: newDisplayName }),
     });
+    const data = await res.json() as { success?: boolean; error?: string; name?: string };
 
-    setDisplayName(trimmed);
+    if (!res.ok || !data.success) {
+      setProfileSaving(false);
+      setError(data.error ?? "Failed to update username.");
+      return;
+    }
+
+    await supabase.auth.updateUser({ data: { display_name: data.name } });
+    setDisplayName(data.name ?? newDisplayName.trim());
     setProfileMessage("Username updated.");
     setProfileSaving(false);
   }

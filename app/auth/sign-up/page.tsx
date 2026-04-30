@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { validateDisplayName } from "@/lib/profanity";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -45,6 +46,12 @@ export default function SignUpPage() {
 
     if (password.length < 8) {
       setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    const nameCheck = validateDisplayName(displayName);
+    if (!nameCheck.ok) {
+      setError(nameCheck.error ?? "Invalid display name.");
       return;
     }
 
