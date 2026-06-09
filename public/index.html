@@ -90,7 +90,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .tip-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
 
 /* Product cards — glass */
-.products{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.05)}
+.products{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05)}
 .pcard{position:relative;padding:20px 28px 0;overflow:hidden;text-decoration:none;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.05);transition:background .25s}
 .pcard:last-child{border-right:none}
 .pcard::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .35s;pointer-events:none}
@@ -144,6 +144,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 @keyframes riseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1200px){.products{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}}
 
 /* Country brief modal */
@@ -239,6 +240,23 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <div class="pcard-preview"><div class="data-grid" id="data-grid"></div></div>
       <div class="pcard-tags"><span class="ptag">Market Overview</span><span class="ptag">Watchlist</span><span class="ptag">Dark Pools</span><span class="ptag">Charts + Indicators</span><span class="ptag">AI Research</span></div>
       <div class="pcard-cta"><button class="block-btn">Launch Intelligence →</button></div>
+    </a>
+    <a class="pcard pb" href="/auth/sign-up">
+      <div class="pcard-head">
+        <div><div class="pcard-num">Module 03</div><div class="pcard-name">Education</div></div>
+        <span class="pcard-status ps-live"><span class="ldot"></span>Live</span>
+      </div>
+      <div class="pcard-desc">Real market simulations with AI-graded feedback. Trade paper portfolios daily, track your edge, and develop institutional-grade discipline.</div>
+      <div class="pcard-preview">
+        <svg class="chart-svg" viewBox="0 0 400 56" preserveAspectRatio="none">
+          <defs><linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+          <path class="cfill" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2 L400,56 L0,56Z" fill="url(#bg2)" opacity=".1"/>
+          <path class="cp cp-spy" d="M0,48 C60,44 120,40 180,38 C240,36 300,34 360,32 L400,31" stroke="#1e3050" stroke-width="1" fill="none" stroke-linecap="round"/>
+          <path class="cp cp-port" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2" stroke="#3b82f6" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="pcard-tags"><span class="ptag">Daily Scenarios</span><span class="ptag">AI Grading</span><span class="ptag">Skill Tracking</span><span class="ptag">Reasoning Score</span></div>
+      <div class="pcard-cta"><button class="block-btn">Launch Education →</button></div>
     </a>
   </div>
 </div>
