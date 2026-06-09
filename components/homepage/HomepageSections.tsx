@@ -185,7 +185,7 @@ function Products() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
           {products.map(p => (
             <Link key={p.num} href={p.href} style={{ textDecoration: "none", display: "flex", flexDirection: "column" }}>
-              <div style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.065) 0%, rgba(255,255,255,0.025) 100%)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 24, padding: "30px 28px", flex: 1, cursor: "pointer", transition: "all 0.3s ease", hover: { background: "linear-gradient(160deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)", borderColor: `${p.color}40` } }}>
+              <div style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.065) 0%, rgba(255,255,255,0.025) 100%)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 24, padding: "30px 28px", flex: 1, cursor: "pointer", transition: "all 0.3s ease" }}>
                 <div style={{ width: 40, height: 40, borderRadius: 12, background: `${p.color}18`, border: `1px solid ${p.color}35`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, flexShrink: 0 }}>
                   <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: p.color }}>{p.num}</span>
                 </div>
