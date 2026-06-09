@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
+html,body{height:100%}
 body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8edf8}
 :root{--blue:#3b82f6;--cyan:#22d3ee;--green:#10b981;--red:#ef4444;--gold:#f59e0b;--muted:#3d5270;
   --glass:rgba(255,255,255,0.025);--glass-border:rgba(255,255,255,0.07);
@@ -60,9 +60,9 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .layout{position:fixed;top:73px;bottom:34px;left:0;right:0;z-index:10;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
 
 /* Hero */
-.hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px;flex-shrink:0;height:auto}
+.hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px;flex-shrink:0;min-height:600px}
 .hero-left{flex:1;max-width:500px}
-.hero-right{flex:0 0 490px;height:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
+.hero-right{flex:0 0 490px;height:480px;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
 
 .eyebrow{font-size:9.5px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:rgba(59,130,246,.7);margin-bottom:16px;display:flex;align-items:center;gap:9px;opacity:0;animation:riseIn .7s .2s ease forwards}
 .eyebrow::before{content:'';display:block;width:22px;height:1px;background:currentColor}
@@ -587,14 +587,16 @@ window.closeModal=closeModal;
 // ── Market data ───────────────────────────────
 const MKT=['SPY','QQQ','GLD','VIXY'];
 async function loadMarket(){
-  const r=await Promise.all(MKT.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
-  r.forEach((d,i)=>{if(!d?.c)return;const s=MKT[i];
-    const v=document.getElementById('mv-'+s),c=document.getElementById('mc-'+s);
-    if(v)v.textContent='$'+d.c.toFixed(2);
-    if(c){const p=d.dp||0;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn')}
-  });
+  try{
+    const r=await Promise.all(MKT.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(e=>{console.warn(`${s} failed:`,e);return null;})));
+    r.forEach((d,i)=>{if(!d?.c){console.warn(`No data for ${MKT[i]}`);return;}const s=MKT[i];
+      const v=document.getElementById('mv-'+s),c=document.getElementById('mc-'+s);
+      if(v){v.textContent='$'+d.c.toFixed(2);}else{console.warn(`Element mv-${s} not found`);}
+      if(c){const p=d.dp||0;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn');}
+    });
+  }catch(e){console.error('loadMarket error:',e);}
 }
-loadMarket();setInterval(loadMarket,30000);
+setTimeout(loadMarket,100);setInterval(loadMarket,30000);
 
 // ── Ticker ────────────────────────────────────
 const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
