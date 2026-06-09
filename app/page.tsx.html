@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vanetex — Professional Financial Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@100;200;300;400&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8edf8}
+:root{--blue:#3b82f6;--cyan:#22d3ee;--green:#10b981;--red:#ef4444;--gold:#f59e0b;--muted:#3d5270;
+  --glass:rgba(255,255,255,0.025);--glass-border:rgba(255,255,255,0.07);
+  --glass-shine:rgba(255,255,255,0.06)}
+
+#cvs{position:fixed;inset:0;z-index:0}
+
+/* Orbs */
+.orbs{position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.orb{position:absolute;border-radius:50%;filter:blur(120px);opacity:0;animation:orbIn 2s ease forwards,float ease-in-out infinite}
+.o1{width:1000px;height:1000px;background:radial-gradient(circle,#0b2558,transparent);top:-350px;left:-250px;animation-delay:0s,2s;animation-duration:2s,28s}
+.o2{width:700px;height:700px;background:radial-gradient(circle,#053e58,transparent);top:25%;right:-200px;animation-delay:.5s,2.5s;animation-duration:2s,32s}
+.o3{width:600px;height:600px;background:radial-gradient(circle,#0e2870,transparent);bottom:-200px;left:25%;animation-delay:1s,3s;animation-duration:2s,24s}
+.o4{width:500px;height:500px;background:radial-gradient(circle,#073040,transparent);top:0;left:50%;animation-delay:.3s,2.3s;animation-duration:2s,38s}
+@keyframes orbIn{to{opacity:.5}}
+@keyframes float{0%,100%{transform:translate(0,0)}33%{transform:translate(22px,-30px)}66%{transform:translate(-18px,16px)}}
+
+/* Scan + vignette */
+.scan{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.018) 2px,rgba(0,0,0,.018) 4px)}
+.vignette{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 40%,rgba(0,0,0,.7) 100%)}
+
+/* Glass mixin */
+.glass{background:var(--glass);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);border:1px solid var(--glass-border);box-shadow:inset 0 1px 0 var(--glass-shine),inset 0 -1px 0 rgba(0,0,0,.15),0 20px 60px rgba(0,0,0,.45)}
+
+/* Topbar */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:500;height:46px;display:flex;align-items:center;padding:0 28px;justify-content:space-between;background:rgba(3,5,8,.6);backdrop-filter:blur(32px) saturate(180%);border-bottom:1px solid rgba(255,255,255,.06);box-shadow:0 1px 0 rgba(255,255,255,.04)}
+.logo{display:flex;align-items:center;gap:11px}
+.logo-mark{width:22px;height:22px;border-radius:5px;background:linear-gradient(135deg,#3b82f6,#22d3ee);display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(59,130,246,.4)}
+/* ← New brand font: Raleway 200, spaced out */
+.logo-name{font-family:'Raleway',sans-serif;font-weight:200;font-size:14px;letter-spacing:.38em;color:#d0daf0;text-transform:uppercase}
+.logo-name em{color:#6db3f2;font-style:normal}
+.topbar-right{display:flex;align-items:center;gap:18px}
+.mkt-live{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--green);font-weight:600;letter-spacing:.04em}
+.ldot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:blink 1.8s ease-in-out infinite}
+.clock{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.05em}
+
+/* Ticker */
+.ticker-bar{position:fixed;top:46px;left:0;right:0;z-index:490;height:27px;display:flex;align-items:center;background:rgba(3,5,8,.75);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.04);overflow:hidden}
+.ticker-track{display:flex;align-items:center;width:max-content;will-change:transform}
+.ticker-track.go{animation:tickscroll linear infinite}
+@keyframes tickscroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ti{display:inline-flex;align-items:center;gap:6px;padding:0 18px;height:27px;border-right:1px solid rgba(255,255,255,.04);font-size:10.5px;white-space:nowrap}
+.ti-s{color:#2e4060;font-weight:700;font-size:10px;letter-spacing:.08em}
+.ti-p{color:#b0c0d8;font-weight:600}.ti-c{font-weight:600}
+.up{color:var(--green)}.dn{color:var(--red)}
+
+/* Layout */
+.layout{position:fixed;top:73px;bottom:34px;left:0;right:0;z-index:10;display:grid;grid-template-rows:1fr auto;overflow:hidden}
+
+/* Hero */
+.hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px}
+.hero-left{flex:1;max-width:500px}
+.hero-right{flex:0 0 490px;height:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
+
+.eyebrow{font-size:9.5px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:rgba(59,130,246,.7);margin-bottom:16px;display:flex;align-items:center;gap:9px;opacity:0;animation:riseIn .7s .2s ease forwards}
+.eyebrow::before{content:'';display:block;width:22px;height:1px;background:currentColor}
+
+/* ← New hero title font */
+.hero-title{font-family:'Raleway',sans-serif;font-weight:100;font-size:clamp(52px,7vw,88px);letter-spacing:.18em;line-height:1;margin-bottom:14px;background:linear-gradient(135deg,#f0f4ff 0%,#93c5fd 50%,#67e8f9 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;opacity:0;animation:riseIn .9s .3s ease forwards;text-transform:uppercase}
+
+.hero-sub{font-size:14px;color:#3a5068;line-height:1.7;max-width:400px;margin-bottom:24px;font-weight:400;opacity:0;animation:riseIn .7s .48s ease forwards}
+
+/* Glassy market bar */
+.mkt-bar{display:grid;grid-template-columns:repeat(4,1fr);border-radius:12px;overflow:hidden;opacity:0;animation:riseIn .7s .62s ease forwards;background:rgba(255,255,255,.02);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 32px rgba(0,0,0,.35)}
+.mkt-cell{padding:10px 14px;border-right:1px solid rgba(255,255,255,.05);position:relative}
+.mkt-cell:last-child{border-right:none}
+.mkt-cell::before{content:'';position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.025),transparent 60%);pointer-events:none}
+.mkt-lbl{font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.mkt-val{font-size:15px;font-weight:600;color:#d8e4f4;font-variant-numeric:tabular-nums}
+.mkt-chg{font-size:10px;font-weight:600;margin-top:2px;letter-spacing:.02em}
+
+/* Tooltip */
+#geo-tip{position:fixed;z-index:600;pointer-events:none;opacity:0;transition:opacity .15s;background:rgba(8,14,28,.92);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;min-width:160px;box-shadow:0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06)}
+#geo-tip.show{opacity:1}
+.tip-status{font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:5px}
+.tip-name{font-size:13px;font-weight:600;color:#e8edf8;margin-bottom:3px}
+.tip-desc{font-size:11px;color:#4e6080;line-height:1.4}
+.tip-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+
+/* Product cards — glass */
+.products{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.05)}
+.pcard{position:relative;padding:20px 28px 0;overflow:hidden;text-decoration:none;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.05);transition:background .25s}
+.pcard:last-child{border-right:none}
+.pcard::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .35s;pointer-events:none}
+.pb::before{background:linear-gradient(155deg,rgba(59,130,246,.06),transparent 55%)}
+.pi::before{background:linear-gradient(155deg,rgba(34,211,238,.06),transparent 55%)}
+.pcard::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);pointer-events:none}
+.pcard:hover::before{opacity:1}
+.pcard:hover{background:rgba(255,255,255,.01)}
+.pcard>*{position:relative;z-index:2}
+.pcard-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
+.pcard-num{font-size:9px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;margin-bottom:2px;opacity:.5}
+.pb .pcard-num{color:var(--blue)}.pi .pcard-num{color:var(--cyan)}
+.pcard-name{font-size:19px;font-weight:700;letter-spacing:-.01em;color:#d8e4f4}
+.pcard-status{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-top:3px;letter-spacing:.04em}
+.ps-live{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.15)}.ps-build{background:rgba(245,158,11,.08);color:var(--gold);border:1px solid rgba(245,158,11,.12)}
+.pcard-desc{font-size:12px;color:#2e4060;line-height:1.62;margin-bottom:8px;max-width:340px}
+
+/* Glassy preview */
+.pcard-preview{height:56px;border-radius:8px;overflow:hidden;margin-bottom:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);position:relative;flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.pcard-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px}
+.ptag{font-size:9.5px;font-weight:500;padding:2px 8px;border-radius:4px;letter-spacing:.02em;border:1px solid rgba(255,255,255,.05)}
+.pb .ptag{background:rgba(59,130,246,.07);color:#5a8fc8;border-color:rgba(59,130,246,.1)}
+.pi .ptag{background:rgba(34,211,238,.07);color:#4eaabf;border-color:rgba(34,211,238,.1)}
+
+/* Block CTA — glass button */
+.pcard-cta{margin-top:auto}
+.block-btn{display:block;width:calc(100% + 56px);margin:0 -28px;padding:13px 28px;font-size:11px;font-weight:700;font-family:inherit;border:none;border-top:1px solid rgba(255,255,255,.06);cursor:pointer;letter-spacing:.12em;text-transform:uppercase;transition:all .2s;text-align:center;position:relative;overflow:hidden}
+.block-btn::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .2s}
+.block-btn:hover::before{opacity:1}
+.block-btn:hover{letter-spacing:.16em}
+.pb .block-btn{background:linear-gradient(90deg,rgba(20,60,180,.8),rgba(59,130,246,.75));color:rgba(255,255,255,.9);box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+.pb .block-btn::before{background:linear-gradient(90deg,rgba(30,80,220,.9),rgba(79,150,246,.85))}
+.pi .block-btn{background:linear-gradient(90deg,rgba(6,120,150,.8),rgba(34,211,238,.7));color:rgba(4,6,15,.9);box-shadow:inset 0 1px 0 rgba(255,255,255,.15)}
+.pi .block-btn::before{background:linear-gradient(90deg,rgba(8,145,178,.9),rgba(54,231,255,.8))}
+
+/* Chart animation */
+.chart-svg{width:100%;height:100%}
+.cp{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.cp-port{stroke:#3b82f6;stroke-width:1.5;stroke-dasharray:700;stroke-dashoffset:700;animation:draw 2.5s .4s ease forwards}
+.cp-spy{stroke:#1e3050;stroke-width:1;stroke-dasharray:700;stroke-dashoffset:700;animation:draw 2.5s .8s ease forwards}
+.cfill{fill:url(#bg);opacity:.1}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+.data-grid{position:absolute;inset:0;padding:5px 10px;display:flex;flex-direction:column;gap:2px}
+.data-row{display:flex;justify-content:space-between;align-items:center;font-size:9.5px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.dr-s{font-weight:700;color:#253545;letter-spacing:.06em;width:44px}.dr-p{font-weight:600;color:#a0b8cc}.dr-c{font-weight:600;font-size:9px}
+
+.bottombar{position:fixed;bottom:0;left:0;right:0;z-index:500;height:34px;display:flex;align-items:center;padding:0 28px;justify-content:space-between;background:rgba(3,5,8,.6);backdrop-filter:blur(32px);border-top:1px solid rgba(255,255,255,.05)}
+.sys{display:flex;align-items:center;gap:10px;font-size:10px;color:var(--muted)}
+.sys-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 2s ease-in-out infinite}
+
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes riseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}}
+
+/* Country brief modal */
+.cmodal{position:fixed;z-index:700;top:50%;left:50%;transform:translate(-50%,-60%);width:340px;background:rgba(6,12,28,.96);backdrop-filter:blur(28px);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:22px 24px 20px;box-shadow:0 24px 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.07);display:none;animation:modalIn .2s ease}
+.cmodal.show{display:block}
+@keyframes modalIn{from{opacity:0;transform:translate(-50%,-55%)}to{opacity:1;transform:translate(-50%,-60%)}}
+.cmodal-close{position:absolute;top:14px;right:16px;background:none;border:none;color:#4e6080;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px}
+.cmodal-close:hover{color:#e8edf8}
+.cmodal-status{font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px}
+.cmodal-name{font-size:20px;font-weight:700;color:#e8edf8;letter-spacing:-.01em;margin-bottom:10px}
+.cmodal-body{font-size:12.5px;color:#4e6080;line-height:1.7}
+.cmodal-overlay{position:fixed;inset:0;z-index:699;display:none}
+.cmodal-overlay.show{display:block}
+</style>
+</head>
+<body>
+<canvas id="cvs"></canvas>
+<div class="orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div><div class="orb o4"></div></div>
+<div class="scan"></div>
+<div class="vignette"></div>
+
+<!-- Geo tooltip -->
+<!-- Country click modal -->
+<div class="cmodal-overlay" id="cmodal-overlay" onclick="closeModal()"></div>
+<div class="cmodal" id="cmodal">
+  <button class="cmodal-close" onclick="closeModal()">✕</button>
+  <div class="cmodal-status" id="cmodal-status"></div>
+  <div class="cmodal-name" id="cmodal-name"></div>
+  <div class="cmodal-body" id="cmodal-body"></div>
+</div>
+
+<div id="geo-tip">
+  <div class="tip-status" id="tip-status"></div>
+  <div class="tip-name" id="tip-name"></div>
+  <div class="tip-desc" id="tip-desc"></div>
+</div>
+
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-mark"><svg viewBox="0 0 12 12" fill="none" width="12" height="12"><polyline points="1,9 4,5 7,7 11,2" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="logo-name"><em>Vanetex</em></div>
+  </div>
+  <div class="topbar-right">
+    <div class="mkt-live"><span class="ldot"></span>Markets Live</div>
+    <div class="clock" id="clock"></div>
+  </div>
+</header>
+
+<div class="ticker-bar"><div class="ticker-track" id="ttape"></div></div>
+
+<div class="layout">
+  <div class="hero">
+    <div class="hero-left">
+      <div class="eyebrow">Professional Financial Platform</div>
+      <h1 class="hero-title">Vanetex</h1>
+      <p class="hero-sub">Institutional-grade tools for portfolio analysis, market intelligence, and data-driven investment research.</p>
+      <div class="mkt-bar">
+        <div class="mkt-cell"><div class="mkt-lbl">S&amp;P 500</div><div class="mkt-val" id="mv-SPY">—</div><div class="mkt-chg" id="mc-SPY">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Nasdaq</div><div class="mkt-val" id="mv-QQQ">—</div><div class="mkt-chg" id="mc-QQQ">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Gold</div><div class="mkt-val" id="mv-GLD">—</div><div class="mkt-chg" id="mc-GLD">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Volatility</div><div class="mkt-val" id="mv-VIXY">—</div><div class="mkt-chg" id="mc-VIXY">—</div></div>
+      </div>
+    </div>
+    <div class="hero-right">
+      <canvas id="globe-canvas"></canvas>
+    </div>
+  </div>
+
+  <div class="products">
+    <a class="pcard pb" href="backtesting.html">
+      <div class="pcard-head">
+        <div><div class="pcard-num">Module 01</div><div class="pcard-name">Backtesting</div></div>
+        <span class="pcard-status ps-live"><span class="ldot"></span>Live</span>
+      </div>
+      <div class="pcard-desc">Build multi-asset portfolios and stress-test against real historical data with institutional-grade risk metrics.</div>
+      <div class="pcard-preview">
+        <svg class="chart-svg" viewBox="0 0 400 56" preserveAspectRatio="none">
+          <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+          <path class="cfill" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2 L400,56 L0,56Z"/>
+          <path class="cp cp-spy" d="M0,48 C60,44 120,40 180,38 C240,36 300,34 360,32 L400,31"/>
+          <path class="cp cp-port" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2"/>
+        </svg>
+      </div>
+      <div class="pcard-tags"><span class="ptag">Portfolio Builder</span><span class="ptag">Real Price Data</span><span class="ptag">Sharpe · Sortino · Calmar</span><span class="ptag">SPY Benchmark</span><span class="ptag">Rebalancing</span></div>
+      <div class="pcard-cta"><button class="block-btn">Launch Backtesting →</button></div>
+    </a>
+    <a class="pcard pi" href="intelligence.html">
+      <div class="pcard-head">
+        <div><div class="pcard-num">Module 02</div><div class="pcard-name">Intelligence</div></div>
+        <span class="pcard-status ps-build"><span class="ldot"></span>Building</span>
+      </div>
+      <div class="pcard-desc">Professional market terminal with live data streams, dark pool flow, interactive charts, and AI-powered research.</div>
+      <div class="pcard-preview"><div class="data-grid" id="data-grid"></div></div>
+      <div class="pcard-tags"><span class="ptag">Market Overview</span><span class="ptag">Watchlist</span><span class="ptag">Dark Pools</span><span class="ptag">Charts + Indicators</span><span class="ptag">AI Research</span></div>
+      <div class="pcard-cta"><button class="block-btn">Launch Intelligence →</button></div>
+    </a>
+  </div>
+</div>
+
+<div class="bottombar">
+  <div class="sys"><span class="sys-dot"></span><span>All systems operational</span><span style="opacity:.3">·</span><span>Supabase · Finnhub · Yahoo Finance</span></div>
+  <div style="font-size:10px;color:var(--muted)">Vanetex v2.0</div>
+</div>
+
+<script>
+const FH='d7h7btpr01qhiu0ai3s0d7h7btpr01qhiu0ai3sg';
+
+// ── Background: flowing data lines ────────────
+(()=>{
+  const cvs=document.getElementById('cvs'),ctx=cvs.getContext('2d');
+  let W=innerWidth,H=innerHeight;cvs.width=W;cvs.height=H;
+  const lines=Array.from({length:14},(_,i)=>({y:H*(i+1)/15,speed:.2+Math.random()*.6,amp:4+Math.random()*20,freq:.005+Math.random()*.009,phase:Math.random()*Math.PI*2,alpha:.02+Math.random()*.055,color:Math.random()>.55?'59,130,246':'34,211,238'}));
+  let t=0;
+  function frame(){ctx.clearRect(0,0,W,H);t+=.006;lines.forEach(l=>{ctx.beginPath();for(let x=0;x<=W;x+=4){const y=l.y+Math.sin(x*l.freq+t*l.speed+l.phase)*l.amp+Math.sin(x*l.freq*.4+t*l.speed*.6)*l.amp*.3;x===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}ctx.strokeStyle=`rgba(${l.color},${l.alpha})`;ctx.lineWidth=.8;ctx.stroke()});requestAnimationFrame(frame)}
+  frame();
+  addEventListener('resize',()=>{W=innerWidth;H=innerHeight;cvs.width=W;cvs.height=H;lines.forEach((l,i)=>l.y=H*(i+1)/15)});
+})();
+
+// ── Modal controls ────────────────────────────
+function closeModal(){
+  document.getElementById('cmodal').classList.remove('show');
+  document.getElementById('cmodal-overlay').classList.remove('show');
+}
+window.closeModal=closeModal;
+
+// ── Geopolitical globe — orthographic projection, real borders ─
+(async()=>{
+  const cvs=document.getElementById('globe-canvas');
+  if(!cvs)return;
+  const ctx=cvs.getContext('2d');
+  const SIZE=480;
+  cvs.width=SIZE;cvs.height=SIZE;
+  cvs.style.width=SIZE+'px';cvs.style.height=SIZE+'px';
+  const CX=SIZE/2,CY=SIZE/2,R=SIZE*.44;
+
+  const STATUS={
+    4:'red',180:'red',231:'red',332:'red',434:'red',466:'red',562:'red',643:'red',706:'red',729:'red',760:'red',804:'red',854:'red',887:'red',376:'red',
+    104:'yellow',120:'yellow',156:'yellow',170:'yellow',178:'yellow',192:'yellow',268:'yellow',364:'yellow',368:'yellow',408:'yellow',422:'yellow',484:'yellow',498:'yellow',508:'yellow',558:'yellow',566:'yellow',586:'yellow',604:'yellow',608:'yellow',682:'yellow',710:'yellow',762:'yellow',764:'yellow',788:'yellow',792:'yellow',800:'yellow',818:'yellow',862:'yellow',716:'yellow',450:'yellow'
+  };
+
+  const FILLS={red:{fill:'rgba(239,68,68,0.55)',border:'rgba(239,68,68,0.8)'},yellow:{fill:'rgba(245,158,11,0.45)',border:'rgba(245,158,11,0.75)'},green:{fill:'rgba(16,185,129,0.22)',border:'rgba(16,185,129,0.45)'}};
+
+  // Complete country names — fixed
+  const NAMES={4:'Afghanistan',8:'Albania',12:'Algeria',24:'Angola',32:'Argentina',36:'Australia',40:'Austria',50:'Bangladesh',56:'Belgium',68:'Bolivia',76:'Brazil',100:'Bulgaria',104:'Myanmar',116:'Cambodia',120:'Cameroon',124:'Canada',152:'Chile',156:'China',170:'Colombia',178:'Republic of Congo',180:'DR Congo',188:'Costa Rica',192:'Cuba',196:'Cyprus',203:'Czechia',208:'Denmark',218:'Ecuador',818:'Egypt',222:'El Salvador',231:'Ethiopia',246:'Finland',250:'France',268:'Georgia',276:'Germany',288:'Ghana',300:'Greece',320:'Guatemala',332:'Haiti',340:'Honduras',348:'Hungary',356:'India',360:'Indonesia',364:'Iran',368:'Iraq',372:'Ireland',376:'Israel',380:'Italy',392:'Japan',400:'Jordan',398:'Kazakhstan',404:'Kenya',408:'North Korea',410:'South Korea',414:'Kuwait',418:'Laos',422:'Lebanon',434:'Libya',440:'Lithuania',450:'Madagascar',458:'Malaysia',466:'Mali',484:'Mexico',496:'Mongolia',498:'Moldova',504:'Morocco',508:'Mozambique',524:'Nepal',528:'Netherlands',554:'New Zealand',558:'Nicaragua',562:'Niger',566:'Nigeria',578:'Norway',586:'Pakistan',600:'Paraguay',604:'Peru',608:'Philippines',616:'Poland',620:'Portugal',634:'Qatar',642:'Romania',643:'Russia',646:'Rwanda',682:'Saudi Arabia',686:'Senegal',706:'Somalia',710:'South Africa',729:'Sudan',752:'Sweden',756:'Switzerland',760:'Syria',762:'Tajikistan',764:'Thailand',788:'Tunisia',792:'Turkey',800:'Uganda',804:'Ukraine',784:'UAE',826:'United Kingdom',834:'Tanzania',840:'United States',854:'Burkina Faso',858:'Uruguay',862:'Venezuela',887:'Yemen',716:'Zimbabwe'};
+
+  // Country situation briefings
+  const BRIEFINGS={
+    4:'Afghanistan: Taliban control, humanitarian crisis ongoing, drug production accelerating.',
+    180:'DR Congo: Ongoing conflict in east (M23), competition for rare earth minerals.',
+    231:'Ethiopia: Tigray war concluded but regional instability remains, economic strain.',
+    332:'Haiti: State collapse, gang violence controlling major cities, government dysfunction.',
+    434:'Libya: Government fragmentation, ongoing civil conflict, refugee crisis.',
+    466:'Mali: Military coup 2021, terrorist groups active, French withdrawal.',
+    562:'Niger: Military coup 2023, Islamic militant activity, destabilization risk.',
+    643:'Russia: Active invasion of Ukraine, major geopolitical flashpoint, sanctions regime.',
+    706:'Somalia: Al-Shabaab terrorist activity, weak federal government, piracy zones.',
+    729:'Sudan: Civil war 2023-present, RSF vs SAF, major humanitarian crisis unfolding.',
+    760:'Syria: Ongoing civil war, humanitarian catastrophe, refugee flows.',
+    804:'Ukraine: Russian invasion ongoing, massive displacement, energy security crisis.',
+    854:'Burkina Faso: Jihadist insurgency spreading, coup 2022, internal instability.',
+    887:'Yemen: Humanitarian disaster, Houthi-Saudi conflict, famine conditions.',
+    376:'Israel: Gaza conflict escalated Oct 2023, complex regional tensions.',
+    104:'Myanmar: Military coup 2021, ongoing civil unrest, Karen state tensions.',
+    156:'China: Taiwan strait tensions, South China Sea disputes, trade friction.',
+    268:'Georgia: Russian-backed South Ossetia control, occupation tensions.',
+    364:'Iran: Nuclear program controversy, regional proxy conflicts, sanctions.',
+    408:'North Korea: Isolated regime, nuclear weapons development, constant tension.',
+    422:'Lebanon: Economic collapse, political deadlock, Hezbollah influence.',
+    484:'Mexico: Drug cartel violence, migration issues, border security concerns.',
+    498:'Moldova: Russian-backed Transnistria occupation, NATO integration push.',
+    586:'Pakistan: Political instability, militant groups active, China ties.',
+    792:'Turkey: Syria border tensions, Kurdish conflict, NATO member but complications.',
+    862:'Venezuela: Economic collapse, migrant exodus, authoritarian governance.',
+    156:'China: Strategic tensions, regional disputes, economic competition.',
+    710:'South Africa: Electricity crisis, xenophobic violence, governance challenges.',
+  };
+
+  const STATUS_LABEL={red:'⚠ Active Conflict / Crisis',yellow:'⚡ Elevated Tension',green:'✓ Stable'};
+  const STATUS_COLOR={red:'#ef4444',yellow:'#f59e0b',green:'#10b981'};
+
+  let rotY=0;
+  let countries=null;
+  let hoveredId=null;
+  let pauseRotation=false;
+
+  // lat/lon → 3D point on sphere
+  // Camera looks from +z toward origin. lon=0 faces viewer at rotY=0.
+  function ll2xyz(lat,lon){
+    const φ=lat*Math.PI/180, λ=lon*Math.PI/180;
+    return{
+      x: R*Math.cos(φ)*Math.sin(λ),  // east → right
+      y:-R*Math.sin(φ),               // north → up (neg because canvas y-down)
+      z: R*Math.cos(φ)*Math.cos(λ)   // toward viewer when lon=0
+    };
+  }
+
+  // Rotate around Y-axis then project orthographically
+  // Slight perspective (fov large) so globe looks 3D not flat
+  function proj3d(x,y,z){
+    const c=Math.cos(rotY),s=Math.sin(rotY);
+    const rx= x*c+z*s;   // rotated x
+    const rz=-x*s+z*c;   // rotated z — positive = facing viewer
+    const fov=R*9;        // large fov ≈ near-orthographic
+    const sc=fov/(fov-rz); // correct: closer (rz>0) → larger scale
+    return{px:CX+rx*sc, py:CY+y*sc, pz:rz};
+  }
+
+  // Draw one polygon ring, lifting pen when crossing to back hemisphere
+  function drawRing(ring){
+    let wasFront=null;
+    ring.forEach(([lon,lat],i)=>{
+      const {x,y,z}=ll2xyz(lat,lon);
+      const {px,py,pz}=proj3d(x,y,z);
+      const front=pz>0;
+      if(i===0){ctx.moveTo(px,py)}
+      else if(front&&wasFront){ctx.lineTo(px,py)}
+      else{ctx.moveTo(px,py)}  // lift pen at hemisphere boundary
+      wasFront=front;
+    });
+  }
+
+  function renderGlobe(){
+    ctx.clearRect(0,0,SIZE,SIZE);
+    if(!pauseRotation)rotY+=.0018;
+
+    // Ocean fill
+    const ocean=ctx.createRadialGradient(CX-R*.2,CY-R*.25,R*.05,CX,CY,R);
+    ocean.addColorStop(0,'rgba(10,28,70,0.85)');
+    ocean.addColorStop(0.65,'rgba(4,12,40,0.9)');
+    ocean.addColorStop(1,'rgba(2,6,20,0.95)');
+    ctx.fillStyle=ocean;ctx.beginPath();ctx.arc(CX,CY,R,0,Math.PI*2);ctx.fill();
+
+    // Clip all drawing to globe circle
+    ctx.save();
+    ctx.beginPath();ctx.arc(CX,CY,R,0,Math.PI*2);ctx.clip();
+
+    // Draw country fills
+    if(countries){
+      countries.forEach(f=>{
+        const id=parseInt(f.id);
+        const s=STATUS[id]||'green';
+        const col=FILLS[s];
+        const geom=f.geometry;
+        const polys=geom.type==='Polygon'?[geom.coordinates]:geom.coordinates;
+        polys.forEach(poly=>{
+          ctx.beginPath();
+          poly.forEach(ring=>drawRing(ring));
+          ctx.fillStyle=col.fill;ctx.fill('evenodd');
+          ctx.strokeStyle=col.border;ctx.lineWidth=0.5;ctx.stroke();
+        });
+      });
+    }
+
+    // Grid lines — lat/lon correctly bounded -180..180
+    for(let lat=-60;lat<=60;lat+=30){
+      ctx.beginPath();let f=true;
+      for(let lon=-180;lon<=180;lon+=2){
+        const {x,y,z}=ll2xyz(lat,lon);const{px,py,pz}=proj3d(x,y,z);
+        if(pz<0){f=true;continue}
+        f?ctx.moveTo(px,py):ctx.lineTo(px,py);f=false;
+      }
+      ctx.strokeStyle=lat===0?'rgba(100,160,255,0.35)':'rgba(70,110,200,0.15)';
+      ctx.lineWidth=lat===0?.65:.3;ctx.stroke();
+    }
+    for(let lon=-180;lon<=180;lon+=30){
+      ctx.beginPath();let f=true;
+      for(let lat=-85;lat<=85;lat+=2){
+        const {x,y,z}=ll2xyz(lat,lon);const{px,py,pz}=proj3d(x,y,z);
+        if(pz<0){f=true;continue}
+        f?ctx.moveTo(px,py):ctx.lineTo(px,py);f=false;
+      }
+      ctx.strokeStyle='rgba(70,110,200,0.08)';ctx.lineWidth=.25;ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Globe rim
+    ctx.beginPath();ctx.arc(CX,CY,R,0,Math.PI*2);
+    ctx.strokeStyle='rgba(80,130,220,0.5)';ctx.lineWidth=1.5;ctx.stroke();
+
+    // Atmosphere glow
+    const atm=ctx.createRadialGradient(CX,CY,R*.9,CX,CY,R*1.18);
+    atm.addColorStop(0,'rgba(59,130,246,0.08)');atm.addColorStop(1,'transparent');
+    ctx.fillStyle=atm;ctx.beginPath();ctx.arc(CX,CY,R*1.18,0,Math.PI*2);ctx.fill();
+
+    requestAnimationFrame(renderGlobe);
+  }
+
+  // Load TopoJSON world data
+  try{
+    const world=await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json());
+    countries=topojson.feature(world,world.objects.countries).features;
+  }catch(e){console.warn('Globe data failed',e)}
+
+  renderGlobe();
+
+  // Tooltip + interactivity
+  const tip=document.getElementById('geo-tip');
+  let lastClicked=null;
+
+  cvs.addEventListener('mousemove',e=>{
+    pauseRotation=true;  // ← PAUSE on hover
+    if(!countries)return;
+    const rect=cvs.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*(SIZE/rect.width);
+    const my=(e.clientY-rect.top)*(SIZE/rect.height);
+    let best=null,bestD=1600;
+    countries.forEach(f=>{
+      const geom=f.geometry;
+      const ring=geom.type==='Polygon'?geom.coordinates[0]:geom.coordinates[0]?.[0];
+      if(!ring?.length)return;
+      const mid=ring[Math.floor(ring.length/2)];
+      const {x,y,z}=ll2xyz(mid[1],mid[0]);
+      const {px,py,pz}=proj3d(x,y,z);
+      if(pz<0)return;
+      const d=(px-mx)**2+(py-my)**2;
+      if(d<bestD){bestD=d;best=f}
+    });
+    if(best&&bestD<1600){
+      const id=parseInt(best.id);
+      const s=STATUS[id]||'green';
+      lastClicked=id;
+      document.getElementById('tip-status').textContent=STATUS_LABEL[s];
+      document.getElementById('tip-status').style.color=STATUS_COLOR[s];
+      document.getElementById('tip-name').textContent=NAMES[id]||'Unknown Region';
+      document.getElementById('tip-desc').textContent='Click for details';
+      tip.style.left=Math.min(e.clientX+14,innerWidth-195)+'px';
+      tip.style.top=(e.clientY-10)+'px';
+      tip.classList.add('show');
+    }else{tip.classList.remove('show');lastClicked=null}
+  });
+
+  cvs.addEventListener('mouseleave',()=>{
+    pauseRotation=false;  // ← RESUME on leave
+    tip.classList.remove('show');
+  });
+
+  cvs.addEventListener('click',e=>{
+    if(!lastClicked||!BRIEFINGS[lastClicked])return;
+    const id=lastClicked;
+    const s=STATUS[id]||'green';
+    const name=NAMES[id]||'Unknown Region';
+    document.getElementById('cmodal-status').textContent=STATUS_LABEL[s];
+    document.getElementById('cmodal-status').style.color=STATUS_COLOR[s];
+    document.getElementById('cmodal-name').textContent=name;
+    document.getElementById('cmodal-body').textContent=BRIEFINGS[id]||'No briefing available.';
+    document.getElementById('cmodal').classList.add('show');
+    document.getElementById('cmodal-overlay').classList.add('show');
+  });
+})();
+
+// ── Market data ───────────────────────────────
+const MKT=['SPY','QQQ','GLD','VIXY'];
+async function loadMarket(){
+  const r=await Promise.all(MKT.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
+  r.forEach((d,i)=>{if(!d?.c)return;const s=MKT[i];
+    const v=document.getElementById('mv-'+s),c=document.getElementById('mc-'+s);
+    if(v)v.textContent='$'+d.c.toFixed(2);
+    if(c){const p=d.dp||0;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn')}
+  });
+}
+loadMarket();setInterval(loadMarket,30000);
+
+// ── Ticker ────────────────────────────────────
+const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
+async function loadTicker(){
+  const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
+  const html=TSYMS.map((s,i)=>{const d=r[i];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=d.dp||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+  const tape=document.getElementById('ttape');tape.innerHTML=html+html;tape.style.animationDuration=(TSYMS.length*4.5)+'s';tape.classList.add('go');
+}
+loadTicker();setInterval(loadTicker,60000);
+
+// ── Intelligence preview ──────────────────────
+const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
+async function loadPreview(){
+  const r=await Promise.all(PSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
+  const grid=document.getElementById('data-grid');if(!grid)return;
+  grid.innerHTML=PSYMS.map((s,i)=>{const d=r[i];if(!d?.c)return'';const p=d.dp||0;return`<div class="data-row"><span class="dr-s">${s}</span><span class="dr-p">$${d.c.toFixed(2)}</span><span class="dr-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+}
+loadPreview();setInterval(loadPreview,15000);
+
+// ── Clock ─────────────────────────────────────
+function tick(){const el=document.getElementById('clock');if(el)el.textContent='ET '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/New_York'})}
+setInterval(tick,1000);tick();
+</script>
+</body>
+</html>
