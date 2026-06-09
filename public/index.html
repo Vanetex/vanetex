@@ -57,10 +57,10 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .up{color:var(--green)}.dn{color:var(--red)}
 
 /* Layout */
-.layout{position:fixed;top:73px;bottom:34px;left:0;right:0;z-index:10;display:grid;grid-template-rows:1fr auto;overflow:hidden}
+.layout{position:fixed;top:73px;bottom:34px;left:0;right:0;z-index:10;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
 
 /* Hero */
-.hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px}
+.hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px;flex-shrink:0;height:auto}
 .hero-left{flex:1;max-width:500px}
 .hero-right{flex:0 0 490px;height:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
 
@@ -90,7 +90,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .tip-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
 
 /* Product cards — glass */
-.products{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.05)}
+.products{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0}
 .pcard{position:relative;padding:20px 28px 0;overflow:hidden;text-decoration:none;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.05);transition:background .25s}
 .pcard:last-child{border-right:none}
 .pcard::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .35s;pointer-events:none}
@@ -144,7 +144,32 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 @keyframes riseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-@media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}}
+
+/* Expanded modules section */
+.modules-expand{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05);width:100%;flex-shrink:0}
+.module-panel{padding:60px 40px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:hidden;min-height:100vh}
+.module-panel:last-child{border-right:none}
+.module-panel::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}
+.module-panel:hover::before{opacity:1}
+.mp-blue::before{background:linear-gradient(135deg,rgba(59,130,246,.08),transparent)}
+.mp-cyan::before{background:linear-gradient(135deg,rgba(34,211,238,.08),transparent)}
+.mp-green::before{background:linear-gradient(135deg,rgba(16,185,129,.08),transparent)}
+.module-content{position:relative;z-index:2;max-width:480px}
+.module-label{font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(59,130,246,.6);margin-bottom:12px}
+.mp-cyan .module-label{color:rgba(34,211,238,.6)}
+.mp-green .module-label{color:rgba(16,185,129,.6)}
+.module-title{font-family:'Raleway',sans-serif;font-size:42px;font-weight:700;letter-spacing:-.02em;margin-bottom:16px;color:#e8edf8;line-height:1.1}
+.module-desc{font-size:14px;color:#4e6080;line-height:1.8;margin-bottom:32px}
+.module-features{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
+.mf-item{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#5a7494}
+.mf-check{width:16px;height:16px;border-radius:3px;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px}
+.mp-blue .mf-check{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
+.mp-cyan .mf-check{background:rgba(34,211,238,.2);color:#22d3ee;border:1px solid rgba(34,211,238,.3)}
+.mp-green .mf-check{background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+.module-graphic{position:absolute;right:-60px;top:50%;transform:translateY(-50%);opacity:.15;width:500px;height:500px;pointer-events:none}
+
+@media(max-width:1200px){.modules-expand{grid-template-columns:1fr;min-height:auto}.module-panel{border-right:none;border-bottom:1px solid rgba(255,255,255,.05);padding:50px 30px}.module-graphic{opacity:.08;width:300px;height:300px;right:-40px}}
+@media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}.module-panel{padding:40px 20px}}
 
 /* Country brief modal */
 .cmodal{position:fixed;z-index:700;top:50%;left:50%;transform:translate(-50%,-60%);width:340px;background:rgba(6,12,28,.96);backdrop-filter:blur(28px);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:22px 24px 20px;box-shadow:0 24px 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.07);display:none;animation:modalIn .2s ease}
@@ -240,6 +265,70 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <div class="pcard-tags"><span class="ptag">Market Overview</span><span class="ptag">Watchlist</span><span class="ptag">Dark Pools</span><span class="ptag">Charts + Indicators</span><span class="ptag">AI Research</span></div>
       <div class="pcard-cta"><button class="block-btn">Launch Intelligence →</button></div>
     </a>
+    <a class="pcard pb" href="/auth/sign-up">
+      <div class="pcard-head">
+        <div><div class="pcard-num">Module 03</div><div class="pcard-name">Education</div></div>
+        <span class="pcard-status ps-live"><span class="ldot"></span>Live</span>
+      </div>
+      <div class="pcard-desc">Real market simulations with AI-graded feedback. Trade paper portfolios daily, track your edge, and develop institutional-grade discipline.</div>
+      <div class="pcard-preview">
+        <svg class="chart-svg" viewBox="0 0 400 56" preserveAspectRatio="none">
+          <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+          <path class="cfill" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2 L400,56 L0,56Z"/>
+          <path class="cp cp-spy" d="M0,48 C60,44 120,40 180,38 C240,36 300,34 360,32 L400,31"/>
+          <path class="cp cp-port" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2"/>
+        </svg>
+      </div>
+      <div class="pcard-tags"><span class="ptag">Daily Scenarios</span><span class="ptag">AI Grading</span><span class="ptag">Skill Tracking</span><span class="ptag">Reasoning Edge</span></div>
+      <div class="pcard-cta"><button class="block-btn">Launch Education →</button></div>
+    </a>
+  </div>
+
+  <div class="modules-expand">
+  <div class="module-panel mp-blue">
+    <svg class="module-graphic" viewBox="0 0 200 200" fill="none"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#1e40af"/></linearGradient></defs><circle cx="60" cy="60" r="40" stroke="url(#g1)" stroke-width="1.5" opacity="0.6"/><path d="M 40 100 Q 100 80 160 100" stroke="url(#g1)" stroke-width="1.5" fill="none" opacity="0.5"/><rect x="70" y="130" width="60" height="40" stroke="url(#g1)" stroke-width="1.5" fill="none" opacity="0.4"/></svg>
+    <div class="module-content">
+      <div class="module-label">Module 01</div>
+      <h2 class="module-title">Backtesting</h2>
+      <p class="module-desc">Test multi-asset strategies on 10+ years of real market data. See what actually works before deploying capital.</p>
+      <div class="module-features">
+        <div class="mf-item"><div class="mf-check">✓</div><div>Real historical OHLCV data</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Institutional risk metrics (Sharpe, Sortino, Calmar)</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Rebalancing & fee simulation</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>SPY benchmarking</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-panel mp-cyan">
+    <svg class="module-graphic" viewBox="0 0 200 200" fill="none"><defs><linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#0891b2"/></linearGradient></defs><circle cx="100" cy="100" r="50" stroke="url(#g2)" stroke-width="1.5" opacity="0.5"/><path d="M 50 100 L 150 100 M 100 50 L 100 150" stroke="url(#g2)" stroke-width="1.5" opacity="0.4"/><circle cx="100" cy="100" r="30" stroke="url(#g2)" stroke-width="1" opacity="0.6"/><circle cx="100" cy="100" r="15" fill="url(#g2)" opacity="0.3"/></svg>
+    <div class="module-content">
+      <div class="module-label">Module 02</div>
+      <h2 class="module-title">Intelligence</h2>
+      <p class="module-desc">Professional-grade terminal with live data, dark pool monitoring, and AI-powered market research.</p>
+      <div class="module-features">
+        <div class="mf-item"><div class="mf-check">✓</div><div>Live multi-timeframe charts</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Dark pool flow analysis</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Geopolitical risk heatmap</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>AI research synthesis</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-panel mp-green">
+    <svg class="module-graphic" viewBox="0 0 200 200" fill="none"><defs><linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#047857"/></linearGradient></defs><path d="M 50 150 L 70 100 L 90 130 L 120 70 L 150 120" stroke="url(#g3)" stroke-width="2" opacity="0.6"/><circle cx="70" cy="100" r="4" fill="url(#g3)" opacity="0.7"/><circle cx="120" cy="70" r="4" fill="url(#g3)" opacity="0.7"/><rect x="40" y="160" width="120" height="2" fill="url(#g3)" opacity="0.4"/></svg>
+    <div class="module-content">
+      <div class="module-label">Module 03</div>
+      <h2 class="module-title">Education</h2>
+      <p class="module-desc">Build trading discipline through daily AI-graded scenarios. Practice like a pro, track your edge, improve systematically.</p>
+      <div class="module-features">
+        <div class="mf-item"><div class="mf-check">✓</div><div>Real market scenarios daily</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>AI grades your reasoning</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Skill progression tracking</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Paper trading with real data</div></div>
+      </div>
+    </div>
+  </div>
   </div>
 </div>
 
