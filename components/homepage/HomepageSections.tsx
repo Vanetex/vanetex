@@ -144,6 +144,66 @@ function Features() {
   );
 }
 
+function Products() {
+  const products = [
+    {
+      num: "01",
+      title: "Training Platform",
+      body: "Build investment judgment with AI-graded decisions, real-time feedback, and tracked skill progression. Paper trade across 30+ sectors.",
+      cta: "Start Training",
+      href: "/auth/sign-up",
+      color: "#1e47eb",
+      external: false,
+    },
+    {
+      num: "02",
+      title: "Backtesting Engine",
+      body: "Backtest multi-asset portfolios against real historical data. Risk metrics (Sharpe, Sortino, Calmar), SPY benchmarking, and rebalancing simulation.",
+      cta: "Launch Backtesting",
+      href: "/software",
+      color: "#16A34A",
+      external: false,
+    },
+    {
+      num: "03",
+      title: "Intelligence Terminal",
+      body: "Professional market terminal with live data streams, dark pool monitoring, interactive charts, AI research, and geopolitical risk analysis.",
+      cta: "Launch Intelligence",
+      href: "/software",
+      color: "#D97706",
+      external: false,
+    },
+  ];
+
+  return (
+    <section style={{ padding: "80px 24px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#1e47eb", marginBottom: 12 }}>The Vanetex Suite</p>
+          <h2 style={{ fontSize: "clamp(26px, 3.5vw, 40px)", fontWeight: 700, color: "#FAFAF7", letterSpacing: "-0.025em" }}>Three tools. One platform.</h2>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+          {products.map(p => (
+            <Link key={p.num} href={p.href} style={{ textDecoration: "none", display: "flex", flexDirection: "column" }}>
+              <div style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.065) 0%, rgba(255,255,255,0.025) 100%)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 24, padding: "30px 28px", flex: 1, cursor: "pointer", transition: "all 0.3s ease", hover: { background: "linear-gradient(160deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)", borderColor: `${p.color}40` } }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: `${p.color}18`, border: `1px solid ${p.color}35`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, flexShrink: 0 }}>
+                  <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: p.color }}>{p.num}</span>
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#FAFAF7", marginBottom: 10 }}>{p.title}</h3>
+                <p style={{ fontSize: 13, color: "rgba(250,250,247,0.5)", lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{p.body}</p>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: p.color }}>
+                  {p.cta}
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M7 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FinalCTA() {
   return (
     <section style={{ padding: "0 24px 100px" }}>
@@ -180,6 +240,7 @@ export default function HomepageSections() {
   return (
     <>
       <TheLoop />
+      <Products />
       <Features />
       <FinalCTA />
       <Footer />
