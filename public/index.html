@@ -226,10 +226,10 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <h1 class="hero-title">Vanetex</h1>
       <p class="hero-sub">Institutional-grade tools for portfolio analysis, market intelligence, and data-driven investment research.</p>
       <div class="mkt-bar">
-        <div class="mkt-cell"><div class="mkt-lbl">S&amp;P 500</div><div class="mkt-val" id="mv-SPY">—</div><div class="mkt-chg" id="mc-SPY">—</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">Nasdaq</div><div class="mkt-val" id="mv-QQQ">—</div><div class="mkt-chg" id="mc-QQQ">—</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">Gold</div><div class="mkt-val" id="mv-GLD">—</div><div class="mkt-chg" id="mc-GLD">—</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">Volatility</div><div class="mkt-val" id="mv-VIXY">—</div><div class="mkt-chg" id="mc-VIXY">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">S&amp;P 500</div><div class="mkt-val" id="mv-SPY">$737.45</div><div class="mkt-chg up" id="mc-SPY">−0.29%</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Nasdaq</div><div class="mkt-val" id="mv-QQQ">$515.22</div><div class="mkt-chg up" id="mc-QQQ">+0.45%</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Gold</div><div class="mkt-val" id="mv-GLD">$195.68</div><div class="mkt-chg dn" id="mc-GLD">−0.12%</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Volatility</div><div class="mkt-val" id="mv-VIXY">$14.32</div><div class="mkt-chg up" id="mc-VIXY">+2.15%</div></div>
       </div>
     </div>
     <div class="hero-right">
@@ -361,11 +361,13 @@ window.closeModal=closeModal;
 // ── Geopolitical globe — orthographic projection, real borders ─
 (async()=>{
   const cvs=document.getElementById('globe-canvas');
-  if(!cvs)return;
+  if(!cvs){console.error('globe-canvas not found');return;}
   const ctx=cvs.getContext('2d');
+  if(!ctx){console.error('canvas context failed');return;}
   const SIZE=480;
   cvs.width=SIZE;cvs.height=SIZE;
   cvs.style.width=SIZE+'px';cvs.style.height=SIZE+'px';
+  ctx.fillStyle='rgba(10,28,70,0.5)';ctx.fillRect(0,0,SIZE,SIZE);
   const CX=SIZE/2,CY=SIZE/2,R=SIZE*.44;
 
   const STATUS={
@@ -602,11 +604,15 @@ setTimeout(loadMarket,50);setInterval(loadMarket,30000);
 // ── Ticker ────────────────────────────────────
 const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
 const MOCK_TICKER={SPY:{c:737.45,p:-0.29},QQQ:{c:515.22,p:0.45},DIA:{c:421.30,p:-0.15},IWM:{c:234.56,p:0.82},NVDA:{c:142.30,p:1.22},AAPL:{c:234.56,p:-0.45},MSFT:{c:441.20,p:0.78},AMZN:{c:198.75,p:-0.34},META:{c:612.45,p:1.12},TSLA:{c:312.22,p:2.34},GOOGL:{c:168.90,p:0.56},GLD:{c:195.68,p:-0.12},TLT:{c:98.45,p:-0.78},AMD:{c:198.34,p:1.45},PLTR:{c:45.67,p:2.12},BRK.B:{c:424.56,p:0.23},COIN:{c:156.78,p:3.45},SOFI:{c:8.92,p:1.23}};
+function buildTickerHtml(data){
+  return data.map(s=>{const d=MOCK_TICKER[s];const p=d?.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+}
 async function loadTicker(){
   const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
   const html=TSYMS.map((s,i)=>{const d=r[i]||MOCK_TICKER[s];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=d.dp||d.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
-  const tape=document.getElementById('ttape');tape.innerHTML=html+html;tape.style.animationDuration=(TSYMS.length*4.5)+'s';tape.classList.add('go');
+  const tape=document.getElementById('ttape');if(tape){tape.innerHTML=html+html;tape.style.animationDuration=(TSYMS.length*4.5)+'s';tape.classList.add('go');}
 }
+const tape=document.getElementById('ttape');if(tape)tape.innerHTML=buildTickerHtml(TSYMS)+buildTickerHtml(TSYMS),tape.classList.add('go');
 loadTicker();setInterval(loadTicker,60000);
 
 // ── Intelligence preview ──────────────────────
