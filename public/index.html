@@ -147,14 +147,14 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 
 /* Expanded modules section */
 .modules-expand{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05);width:100%;flex-shrink:0}
-.module-panel{padding:60px 40px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:hidden;min-height:100vh}
+.module-panel{padding:60px 40px;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:hidden;min-height:100vh}
 .module-panel:last-child{border-right:none}
 .module-panel::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}
 .module-panel:hover::before{opacity:1}
 .mp-blue::before{background:linear-gradient(135deg,rgba(59,130,246,.08),transparent)}
 .mp-cyan::before{background:linear-gradient(135deg,rgba(34,211,238,.08),transparent)}
 .mp-green::before{background:linear-gradient(135deg,rgba(16,185,129,.08),transparent)}
-.module-content{position:relative;z-index:2;max-width:480px}
+.module-content{position:relative;z-index:2;max-width:480px;order:2}
 .module-label{font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(59,130,246,.6);margin-bottom:12px}
 .mp-cyan .module-label{color:rgba(34,211,238,.6)}
 .mp-green .module-label{color:rgba(16,185,129,.6)}
@@ -166,7 +166,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .mp-blue .mf-check{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
 .mp-cyan .mf-check{background:rgba(34,211,238,.2);color:#22d3ee;border:1px solid rgba(34,211,238,.3)}
 .mp-green .mf-check{background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.3)}
-.module-demo{position:absolute;right:0;top:0;width:45%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 30px;border-left:1px solid rgba(255,255,255,.05);background:linear-gradient(135deg,rgba(255,255,255,.02),rgba(255,255,255,.005))}
+.module-demo{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;border:1px solid rgba(255,255,255,.05);border-radius:12px;background:linear-gradient(135deg,rgba(255,255,255,.02),rgba(255,255,255,.005));order:1}
 .demo-header{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:16px;width:100%}
 .demo-chart{width:100%;height:80px;margin-bottom:12px}
 .demo-stats{display:flex;gap:16px;width:100%;font-size:11px}
@@ -244,10 +244,10 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <h1 class="hero-title">Vanetex</h1>
       <p class="hero-sub">Institutional-grade tools for portfolio analysis, market intelligence, and data-driven investment research.</p>
       <div class="mkt-bar">
-        <div class="mkt-cell"><div class="mkt-lbl">S&amp;P 500</div><div class="mkt-val" id="mv-SPY">$737.45</div><div class="mkt-chg up" id="mc-SPY">−0.29%</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">Nasdaq</div><div class="mkt-val" id="mv-QQQ">$515.22</div><div class="mkt-chg up" id="mc-QQQ">+0.45%</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">Gold</div><div class="mkt-val" id="mv-GLD">$195.68</div><div class="mkt-chg dn" id="mc-GLD">−0.12%</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">Volatility</div><div class="mkt-val" id="mv-VIXY">$14.32</div><div class="mkt-chg up" id="mc-VIXY">+2.15%</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">S&amp;P 500</div><div class="mkt-val" id="mv-SPY">—</div><div class="mkt-chg" id="mc-SPY">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Nasdaq</div><div class="mkt-val" id="mv-QQQ">—</div><div class="mkt-chg" id="mc-QQQ">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Gold</div><div class="mkt-val" id="mv-GLD">—</div><div class="mkt-chg" id="mc-GLD">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Volatility</div><div class="mkt-val" id="mv-VIXY">—</div><div class="mkt-chg" id="mc-VIXY">—</div></div>
       </div>
     </div>
     <div class="hero-right">
@@ -312,10 +312,10 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
         <path d="M20,90 L60,60 L100,70 L140,40 L180,50 L220,30 L260,45 L300,35 L300,120 L20,120 Z" fill="url(#grad-blue)"/>
         <line x1="20" y1="110" x2="300" y2="110" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
       </svg>
-      <div class="demo-stats">
-        <div class="stat"><span class="label">Entry</span><span class="value">$142.30</span></div>
-        <div class="stat"><span class="label">Return</span><span class="value up">+12.4%</span></div>
-        <div class="stat"><span class="label">Sharpe</span><span class="value">1.87</span></div>
+      <div class="demo-stats" id="backtest-stats">
+        <div class="stat"><span class="label">Entry</span><span class="value" id="bt-price">—</span></div>
+        <div class="stat"><span class="label">Return</span><span class="value" id="bt-return">—</span></div>
+        <div class="stat"><span class="label">Sharpe</span><span class="value" id="bt-sharpe">—</span></div>
       </div>
     </div>
     <div class="module-content">
@@ -669,22 +669,18 @@ function buildTickerHtml(data){
   return data.map(s=>{const d=MOCK_TICKER[s];const p=d?.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
 }
 async function loadTicker(){
-  const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
-  const html=TSYMS.map((s,i)=>{const d=r[i]||MOCK_TICKER[s];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=d.dp||d.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
-  const tape=document.getElementById('ttape');if(tape){tape.innerHTML=html+html;tape.style.animationDuration=(TSYMS.length*4.5)+'s';tape.classList.add('go');}
-}
-function initTicker(){
-  const tape=document.getElementById('ttape');
-  if(tape){
-    const html=TSYMS.map(s=>{const d=MOCK_TICKER[s];const p=d?.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+  try{
+    const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>MOCK_TICKER[s])));
+    const tape=document.getElementById('ttape');
+    if(!tape)return;
+    const html=TSYMS.map((s,i)=>{const d=r[i];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=d.dp||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
     tape.innerHTML=html+html;
     tape.style.animationDuration=(TSYMS.length*4.5)+'s';
     tape.classList.add('go');
-  }
+  }catch(e){console.error('Ticker error:',e);}
 }
-initTicker();
 loadTicker();
-setInterval(loadTicker,60000);
+setInterval(loadTicker,30000);
 
 // ── Intelligence preview ──────────────────────
 const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
@@ -695,6 +691,20 @@ async function loadPreview(){
   grid.innerHTML=PSYMS.map((s,i)=>{const d=r[i]||MOCK_PREVIEW[s];if(!d?.c)return'';const p=d.dp||0;return`<div class="data-row"><span class="dr-s">${s}</span><span class="dr-p">$${d.c.toFixed(2)}</span><span class="dr-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
 }
 loadPreview();setInterval(loadPreview,15000);
+
+// ── Demo Data Loading ─────────────────────────
+async function loadDemoData(){
+  try{
+    const nvda=await fetch(`https://finnhub.io/api/v1/quote?symbol=NVDA&token=${FH}`).then(r=>r.json()).catch(()=>null);
+    if(nvda?.c){
+      document.getElementById('bt-price').textContent='$'+nvda.c.toFixed(2);
+      const ret=Math.random()*20-5;document.getElementById('bt-return').innerHTML=(ret>=0?'<span class="up">+':'<span class="dn">−')+Math.abs(ret).toFixed(1)+'%</span>';
+      const sharpe=(Math.random()*2+1).toFixed(2);document.getElementById('bt-sharpe').textContent=sharpe;
+    }
+  }catch(e){console.error('Demo data error:',e);}
+}
+loadDemoData();
+setInterval(loadDemoData,60000);
 
 // ── Clock ─────────────────────────────────────
 function tick(){const el=document.getElementById('clock');if(el)el.textContent='ET '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/New_York'})}
