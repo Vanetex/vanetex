@@ -360,10 +360,11 @@ window.closeModal=closeModal;
 
 // ── Geopolitical globe — orthographic projection, real borders ─
 (async()=>{
-  const cvs=document.getElementById('globe-canvas');
-  if(!cvs){console.error('globe-canvas not found');return;}
-  const ctx=cvs.getContext('2d');
-  if(!ctx){console.error('canvas context failed');return;}
+  try{
+    const cvs=document.getElementById('globe-canvas');
+    if(!cvs){console.error('globe-canvas not found');return;}
+    const ctx=cvs.getContext('2d');
+    if(!ctx){console.error('canvas context failed');return;}
   const SIZE=480;
   cvs.width=SIZE;cvs.height=SIZE;
   cvs.style.width=SIZE+'px';cvs.style.height=SIZE+'px';
@@ -584,6 +585,7 @@ window.closeModal=closeModal;
     document.getElementById('cmodal').classList.add('show');
     document.getElementById('cmodal-overlay').classList.add('show');
   });
+  }catch(e){console.error('Globe error:',e);}
 })();
 
 // ── Market data ───────────────────────────────
@@ -612,8 +614,18 @@ async function loadTicker(){
   const html=TSYMS.map((s,i)=>{const d=r[i]||MOCK_TICKER[s];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=d.dp||d.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
   const tape=document.getElementById('ttape');if(tape){tape.innerHTML=html+html;tape.style.animationDuration=(TSYMS.length*4.5)+'s';tape.classList.add('go');}
 }
-const tape=document.getElementById('ttape');if(tape)tape.innerHTML=buildTickerHtml(TSYMS)+buildTickerHtml(TSYMS),tape.classList.add('go');
-loadTicker();setInterval(loadTicker,60000);
+function initTicker(){
+  const tape=document.getElementById('ttape');
+  if(tape){
+    const html=TSYMS.map(s=>{const d=MOCK_TICKER[s];const p=d?.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+    tape.innerHTML=html+html;
+    tape.style.animationDuration=(TSYMS.length*4.5)+'s';
+    tape.classList.add('go');
+  }
+}
+initTicker();
+loadTicker();
+setInterval(loadTicker,60000);
 
 // ── Intelligence preview ──────────────────────
 const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
