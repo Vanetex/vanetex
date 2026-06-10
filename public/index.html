@@ -498,7 +498,7 @@ window.closeModal=closeModal;
         f?ctx.moveTo(px,py):ctx.lineTo(px,py);f=false;
       }
       ctx.strokeStyle=lat===0?'rgba(100,160,255,0.35)':'rgba(70,110,200,0.15)';
-      ctx.lineWidth=lat===0?.65:.3;ctx.stroke();
+      ctx.lineWidth=lat===0?0.65:0.3;ctx.stroke();
     }
     for(let lon=-180;lon<=180;lon+=30){
       ctx.beginPath();let f=true;
