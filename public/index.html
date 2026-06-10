@@ -147,14 +147,14 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 
 /* Expanded modules section */
 .modules-expand{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05);width:100%;flex-shrink:0}
-.module-panel{padding:60px 40px;display:grid;grid-template-columns:1fr 55%;gap:60px;align-items:center;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:hidden;min-height:100vh}
+.module-panel{padding:60px 50px;display:grid;grid-template-columns:45% 55%;gap:80px;align-items:center;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:visible;min-height:100vh}
 .module-panel:last-child{border-right:none}
 .module-panel::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}
 .module-panel:hover::before{opacity:1}
 .mp-blue::before{background:linear-gradient(135deg,rgba(59,130,246,.08),transparent)}
 .mp-cyan::before{background:linear-gradient(135deg,rgba(34,211,238,.08),transparent)}
 .mp-green::before{background:linear-gradient(135deg,rgba(16,185,129,.08),transparent)}
-.module-content{position:relative;z-index:2;max-width:480px;order:2}
+.module-content{position:relative;z-index:2;width:100%;order:2;overflow:visible;white-space:normal;word-wrap:break-word}
 .module-label{font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(59,130,246,.6);margin-bottom:12px}
 .mp-cyan .module-label{color:rgba(34,211,238,.6)}
 .mp-green .module-label{color:rgba(16,185,129,.6)}
@@ -617,10 +617,11 @@ window.closeModal=closeModal;
       const id=parseInt(best.id);
       const s=STATUS[id]||'green';
       lastClicked=id;
-      document.getElementById('tip-status').textContent=STATUS_LABEL[s];
-      document.getElementById('tip-status').style.color=STATUS_COLOR[s];
-      document.getElementById('tip-name').textContent=NAMES[id]||'Region '+id;
-      document.getElementById('tip-desc').textContent='Click for details';
+      const name=NAMES[id]||'Region '+id;
+      document.getElementById('tip-status').textContent=STATUS_LABEL[s]||'Status Unknown';
+      document.getElementById('tip-status').style.color=STATUS_COLOR[s]||'#888';
+      document.getElementById('tip-name').textContent=name;
+      document.getElementById('tip-desc').textContent=s==='green'?'Stable':'Monitor';
       tip.style.left=Math.min(e.clientX+14,innerWidth-195)+'px';
       tip.style.top=(e.clientY-10)+'px';
       tip.classList.add('show');
