@@ -605,7 +605,7 @@ setTimeout(loadMarket,50);setInterval(loadMarket,30000);
 
 // ── Ticker ────────────────────────────────────
 const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
-const MOCK_TICKER={SPY:{c:737.45,p:-0.29},QQQ:{c:515.22,p:0.45},DIA:{c:421.30,p:-0.15},IWM:{c:234.56,p:0.82},NVDA:{c:142.30,p:1.22},AAPL:{c:234.56,p:-0.45},MSFT:{c:441.20,p:0.78},AMZN:{c:198.75,p:-0.34},META:{c:612.45,p:1.12},TSLA:{c:312.22,p:2.34},GOOGL:{c:168.90,p:0.56},GLD:{c:195.68,p:-0.12},TLT:{c:98.45,p:-0.78},AMD:{c:198.34,p:1.45},PLTR:{c:45.67,p:2.12},BRK.B:{c:424.56,p:0.23},COIN:{c:156.78,p:3.45},SOFI:{c:8.92,p:1.23}};
+const MOCK_TICKER={SPY:{c:737.45,p:-0.29},QQQ:{c:515.22,p:0.45},DIA:{c:421.30,p:-0.15},IWM:{c:234.56,p:0.82},NVDA:{c:142.30,p:1.22},AAPL:{c:234.56,p:-0.45},MSFT:{c:441.20,p:0.78},AMZN:{c:198.75,p:-0.34},META:{c:612.45,p:1.12},TSLA:{c:312.22,p:2.34},GOOGL:{c:168.90,p:0.56},GLD:{c:195.68,p:-0.12},TLT:{c:98.45,p:-0.78},AMD:{c:198.34,p:1.45},PLTR:{c:45.67,p:2.12},"BRK.B":{c:424.56,p:0.23},COIN:{c:156.78,p:3.45},SOFI:{c:8.92,p:1.23}};
 function buildTickerHtml(data){
   return data.map(s=>{const d=MOCK_TICKER[s];const p=d?.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
 }
