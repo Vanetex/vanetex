@@ -166,6 +166,24 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .mp-blue .mf-check{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
 .mp-cyan .mf-check{background:rgba(34,211,238,.2);color:#22d3ee;border:1px solid rgba(34,211,238,.3)}
 .mp-green .mf-check{background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+.module-demo{position:absolute;right:0;top:0;width:45%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 30px;border-left:1px solid rgba(255,255,255,.05);background:linear-gradient(135deg,rgba(255,255,255,.02),rgba(255,255,255,.005))}
+.demo-header{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:16px;width:100%}
+.demo-chart{width:100%;height:80px;margin-bottom:12px}
+.demo-stats{display:flex;gap:16px;width:100%;font-size:11px}
+.stat{flex:1;text-align:center}
+.stat .label{display:block;color:rgba(255,255,255,.4);margin-bottom:4px;font-size:9px;letter-spacing:.08em}
+.stat .value{display:block;font-weight:700;font-size:13px;color:#e8edf8}
+.stat .value.up{color:#10b981}
+.demo-table{width:100%;font-size:11px;border-collapse:collapse}
+.demo-table th{text-align:left;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.1);font-weight:600;color:rgba(255,255,255,.6);font-size:9px;letter-spacing:.08em}
+.demo-table td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.05);color:#b0c0d8}
+.demo-table .up{color:#10b981}.demo-table .dn{color:#ef4444}
+.demo-scenario{width:100%;text-align:center;padding:20px}
+.scenario-badge{display:inline-block;padding:6px 12px;border-radius:6px;background:rgba(16,185,129,.15);color:#10b981;font-size:10px;font-weight:700;margin-bottom:12px;border:1px solid rgba(16,185,129,.2)}
+.scenario-text{font-size:13px;color:#b0c0d8;line-height:1.6;margin-bottom:12px}
+.scenario-buttons{display:flex;gap:8px;justify-content:center}
+.btn-small{padding:6px 12px;border-radius:4px;font-size:10px;font-weight:600;border:1px solid rgba(255,255,255,.1);cursor:pointer;transition:all .2s}
+.btn-small:hover{background:rgba(255,255,255,.05)}
 .module-graphic{position:absolute;right:-60px;top:50%;transform:translateY(-50%);opacity:.15;width:500px;height:500px;pointer-events:none}
 
 @media(max-width:1200px){.modules-expand{grid-template-columns:1fr;min-height:auto}.module-panel{border-right:none;border-bottom:1px solid rgba(255,255,255,.05);padding:50px 30px}.module-graphic{opacity:.08;width:300px;height:300px;right:-40px}}
@@ -286,7 +304,20 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 
   <div class="modules-expand">
   <div class="module-panel mp-blue">
-    <svg class="module-graphic" viewBox="0 0 200 200" fill="none"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#1e40af"/></linearGradient></defs><circle cx="60" cy="60" r="40" stroke="url(#g1)" stroke-width="1.5" opacity="0.6"/><path d="M 40 100 Q 100 80 160 100" stroke="url(#g1)" stroke-width="1.5" fill="none" opacity="0.5"/><rect x="70" y="130" width="60" height="40" stroke="url(#g1)" stroke-width="1.5" fill="none" opacity="0.4"/></svg>
+    <div class="module-demo">
+      <div class="demo-header">NVDA — Last 5D</div>
+      <svg viewBox="0 0 320 120" class="demo-chart">
+        <defs><linearGradient id="grad-blue" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+        <path d="M20,90 L60,60 L100,70 L140,40 L180,50 L220,30 L260,45 L300,35" stroke="#3b82f6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20,90 L60,60 L100,70 L140,40 L180,50 L220,30 L260,45 L300,35 L300,120 L20,120 Z" fill="url(#grad-blue)"/>
+        <line x1="20" y1="110" x2="300" y2="110" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      </svg>
+      <div class="demo-stats">
+        <div class="stat"><span class="label">Entry</span><span class="value">$142.30</span></div>
+        <div class="stat"><span class="label">Return</span><span class="value up">+12.4%</span></div>
+        <div class="stat"><span class="label">Sharpe</span><span class="value">1.87</span></div>
+      </div>
+    </div>
     <div class="module-content">
       <div class="module-label">Module 01</div>
       <h2 class="module-title">Backtesting</h2>
@@ -301,7 +332,21 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
   </div>
 
   <div class="module-panel mp-cyan">
-    <svg class="module-graphic" viewBox="0 0 200 200" fill="none"><defs><linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#0891b2"/></linearGradient></defs><circle cx="100" cy="100" r="50" stroke="url(#g2)" stroke-width="1.5" opacity="0.5"/><path d="M 50 100 L 150 100 M 100 50 L 100 150" stroke="url(#g2)" stroke-width="1.5" opacity="0.4"/><circle cx="100" cy="100" r="30" stroke="url(#g2)" stroke-width="1" opacity="0.6"/><circle cx="100" cy="100" r="15" fill="url(#g2)" opacity="0.3"/></svg>
+    <div class="module-demo">
+      <div class="demo-header">Live Trades</div>
+      <table class="demo-table">
+        <thead>
+          <tr><th>Symbol</th><th>Entry</th><th>P&L</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>AAPL</td><td>$234.56</td><td class="up">+2.1%</td></tr>
+          <tr><td>NVDA</td><td>$142.30</td><td class="up">+5.8%</td></tr>
+          <tr><td>TSLA</td><td>$312.22</td><td class="dn">−1.2%</td></tr>
+          <tr><td>META</td><td>$612.45</td><td class="up">+3.4%</td></tr>
+          <tr><td>MSFT</td><td>$441.20</td><td class="up">+1.9%</td></tr>
+        </tbody>
+      </table>
+    </div>
     <div class="module-content">
       <div class="module-label">Module 02</div>
       <h2 class="module-title">Intelligence</h2>
@@ -316,7 +361,21 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
   </div>
 
   <div class="module-panel mp-green">
-    <svg class="module-graphic" viewBox="0 0 200 200" fill="none"><defs><linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#047857"/></linearGradient></defs><path d="M 50 150 L 70 100 L 90 130 L 120 70 L 150 120" stroke="url(#g3)" stroke-width="2" opacity="0.6"/><circle cx="70" cy="100" r="4" fill="url(#g3)" opacity="0.7"/><circle cx="120" cy="70" r="4" fill="url(#g3)" opacity="0.7"/><rect x="40" y="160" width="120" height="2" fill="url(#g3)" opacity="0.4"/></svg>
+    <div class="module-demo">
+      <div class="scenario-badge">Scenario #847</div>
+      <div class="scenario-text">NVDA breaks resistance at $142. Volume surges 250%. RSI at 72. What's your edge?</div>
+      <svg viewBox="0 0 280 80" class="demo-chart" style="margin-bottom:16px">
+        <defs><linearGradient id="grad-green" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#10b981" stop-opacity="0.3"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>
+        <path d="M20,60 L50,50 L80,45 L110,40 L140,35 L170,32 L200,30 L230,28 L260,25" stroke="#10b981" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <path d="M20,60 L50,50 L80,45 L110,40 L140,35 L170,32 L200,30 L230,28 L260,25 L260,80 L20,80 Z" fill="url(#grad-green)"/>
+        <line x1="140" y1="25" x2="140" y2="80" stroke="rgba(16,185,129,0.3)" stroke-width="1" stroke-dasharray="2,2"/>
+      </svg>
+      <div class="scenario-buttons">
+        <button class="btn-small">Long</button>
+        <button class="btn-small">Short</button>
+        <button class="btn-small">Skip</button>
+      </div>
+    </div>
     <div class="module-content">
       <div class="module-label">Module 03</div>
       <h2 class="module-title">Education</h2>
