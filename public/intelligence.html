@@ -166,7 +166,7 @@ input{font-family:var(--ui)}
         <div style="display:flex;flex-direction:column;min-height:0;flex:1;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
           <div style="display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);flex-shrink:0;">
             <span style="width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos);animation:pulse 1.4s ease infinite;"></span>
-            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Live Tape · Time &amp; Sales</span>
+            <span id="tapeSourceLabel" style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Live Tape · Time &amp; Sales (simulated)</span>
           </div>
           <div style="display:grid;grid-template-columns:64px 1fr auto auto;gap:8px;padding:6px 13px;font-size:8.5px;letter-spacing:.1em;color:var(--mut);text-transform:uppercase;border-bottom:1px solid var(--line);flex-shrink:0;">
             <span>Time</span><span>Sym</span><span style="text-align:right;">Price</span><span style="text-align:right;">Size</span>
@@ -244,7 +244,7 @@ input{font-family:var(--ui)}
     <footer style="height:28px;flex-shrink:0;display:flex;align-items:center;gap:18px;padding:0 16px;border-top:1px solid var(--line);background:rgba(6,8,14,.6);font-family:var(--mono);font-size:10.5px;color:var(--mut);">
       <span style="display:flex;align-items:center;gap:6px;color:var(--pos);"><span style="width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.6s ease infinite;"></span>LIVE FEED</span>
       <span>LATENCY <span id="latencyVal">12</span>ms</span>
-      <span style="color:var(--warn);">◆ SIMULATED DEMO DATA</span>
+      <span id="dataModeLabel" style="color:var(--warn);">◆ SIMULATED DEMO DATA</span>
       <div style="flex:1;"></div>
       <span id="indicesBar" style="display:flex;gap:18px;"></span>
       <div style="flex:1;"></div>
@@ -261,7 +261,7 @@ const vtx = {
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: 12,
     indicators: { sma9: false, sma20: false },
-    moversSector: null, marketOpen: true, customAccent: null
+    moversSector: null, marketOpen: true, customAccent: null, feedLive: false
   },
 
   NEWS: [
@@ -431,7 +431,7 @@ const vtx = {
     setInterval(() => this.loadFinancials(), 30 * 60 * 1000);
 
     setInterval(() => {
-      if (!this.state.marketOpen) return;
+      if (!this.state.marketOpen || this.state.feedLive) return;
       this.state.tickers = this.state.tickers.map(t => {
         const drift = (Math.random()-0.5)*t.price*0.0016;
         const np = Math.max(0.5, t.price+drift);
@@ -443,11 +443,13 @@ const vtx = {
     }, 1100);
 
     setInterval(() => {
-      if (!this.state.marketOpen) return;
+      if (!this.state.marketOpen || this.state.feedLive) return;
       const t = this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)];
       this.state.tape = [this.mkPrint(t), ...this.state.tape].slice(0,26);
       this.renderTimeSales();
     }, 520);
+
+    this.connectFeed();
 
     setInterval(() => { this.renderClock(); }, 1000);
     setInterval(() => {
@@ -522,6 +524,7 @@ const vtx = {
       shares: this.hashN(sym,11)*3.6+0.5
     };
     this.state.tickers.push(t);
+    this.subscribeSymbol(sym);
     this.saveWatchlist();
     this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[];
     document.getElementById('searchInput').value=''; this.closeSearch();
@@ -548,6 +551,7 @@ const vtx = {
     if (this.state.tickers.length<=1) return;
     this.state.tickers = this.state.tickers.filter(t=>t.sym!==sym);
     if (this.state.focus===sym) this.state.focus = this.state.tickers[0].sym;
+    this.unsubscribeSymbol(sym);
     this.saveWatchlist();
     this.render();
   },
@@ -726,6 +730,84 @@ const vtx = {
     } catch (e) { /* keep previous data on failure */ }
   },
 
+  async connectFeed() {
+    try {
+      const res = await fetch('/api/stock/ws-token');
+      if (!res.ok) return;
+      const { token } = await res.json();
+      if (!token) return;
+
+      this._wsSymbols = new Set();
+      this._lastTradePrice = {};
+      this._renderPending = false;
+
+      const ws = new WebSocket(`wss://ws.finnhub.io?token=${token}`);
+      this._ws = ws;
+
+      ws.onopen = () => {
+        this.state.feedLive = true;
+        this.state.tickers.forEach(t => this.subscribeSymbol(t.sym));
+        this.renderMarketStatus();
+        this.renderFeedLabels();
+      };
+      ws.onmessage = ev => {
+        let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        if (msg.type === 'trade' && Array.isArray(msg.data)) {
+          msg.data.forEach(d => this.handleTrade(d));
+        }
+      };
+      ws.onclose = () => { this.state.feedLive = false; this.renderMarketStatus(); this.renderFeedLabels(); this.renderTimeSales(); };
+      ws.onerror = () => { this.state.feedLive = false; };
+
+      if (!this._feedFlushTimer) {
+        this._feedFlushTimer = setInterval(() => {
+          if (this._renderPending) { this._renderPending = false; this.render(); }
+        }, 700);
+      }
+    } catch (e) { /* fall back to simulated feed */ }
+  },
+  subscribeSymbol(sym) {
+    if (!this._ws || this._ws.readyState !== 1 || !this._wsSymbols) return;
+    if (this._wsSymbols.has(sym)) return;
+    this._wsSymbols.add(sym);
+    this._ws.send(JSON.stringify({ type: 'subscribe', symbol: sym }));
+  },
+  unsubscribeSymbol(sym) {
+    if (!this._ws || this._ws.readyState !== 1 || !this._wsSymbols) return;
+    if (!this._wsSymbols.has(sym)) return;
+    this._wsSymbols.delete(sym);
+    this._ws.send(JSON.stringify({ type: 'unsubscribe', symbol: sym }));
+  },
+  handleTrade(d) {
+    const sym = d.s, price = d.p, vol = d.v, ts = d.t;
+    if (!sym || !price) return;
+    const t = this.state.tickers.find(x => x.sym === sym);
+    if (!t) return;
+
+    const prev = this._lastTradePrice[sym] ?? t.price;
+    const side = price >= prev ? 'B' : 'S';
+    this._lastTradePrice[sym] = price;
+
+    this.state.tickers = this.state.tickers.map(x => {
+      if (x.sym !== sym) return x;
+      const hist = x.hist.concat(price); if (hist.length > 46) hist.shift();
+      return { ...x, price, hist };
+    });
+
+    const time = ts ? new Date(ts).toTimeString().slice(0, 8) : this.hhmmss();
+    this.state.tape = [{ id: Math.random(), time, sym, price: price.toFixed(2), size: Math.max(1, Math.round(vol || 0)).toLocaleString(), side }, ...this.state.tape].slice(0, 26);
+    this.renderTimeSales();
+    this._renderPending = true;
+  },
+  renderFeedLabels() {
+    const live = this.state.feedLive;
+    const tapeLabel = document.getElementById('tapeSourceLabel');
+    if (tapeLabel) tapeLabel.textContent = live ? 'Live Tape · Time & Sales (Finnhub real-time trades)' : 'Live Tape · Time & Sales (simulated)';
+    const dataMode = document.getElementById('dataModeLabel');
+    if (dataMode) dataMode.textContent = live ? '◆ LIVE TRADES (FINNHUB)' : '◆ SIMULATED DEMO DATA';
+    if (dataMode) dataMode.style.color = live ? 'var(--pos)' : 'var(--warn)';
+  },
+
   render() {
     const s = this.state, T = s.tickers;
     const f = T.find(t=>t.sym===s.focus) || T[0];
@@ -892,7 +974,7 @@ const vtx = {
 
   renderTimeSales() {
     const cPos='var(--pos)', cNeg='var(--neg)';
-    if (!this.state.marketOpen) {
+    if (!this.state.marketOpen && !this.state.feedLive) {
       document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">
         Market is closed — live prints resume at the next open.<br>
         <span style="color:var(--mut);opacity:.7;">Tape is simulated for demo purposes (see footer).</span>
