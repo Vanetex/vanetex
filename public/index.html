@@ -81,6 +81,30 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .mkt-val{font-size:15px;font-weight:600;color:#d8e4f4;font-variant-numeric:tabular-nums}
 .mkt-chg{font-size:10px;font-weight:600;margin-top:2px;letter-spacing:.02em}
 
+/* Market timers */
+.mkt-timers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;opacity:0;animation:riseIn .7s .7s ease forwards}
+.timer-cell{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);text-align:center}
+.timer-label{font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.timer-time{font-size:11px;font-weight:700;color:#d8e4f4;font-variant-numeric:tabular-nums}
+.timer-status{font-size:8px;margin-top:4px;letter-spacing:.05em}
+.timer-open{color:#10b981}.timer-closed{color:#ef4444}
+
+/* Asset class and indices section */
+.market-insights{display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:22px 50px 18px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.05);opacity:0;animation:riseIn .7s .8s ease forwards}
+.insight-panel{background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:20px;backdrop-filter:blur(20px)}
+.insight-title{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:14px}
+.asset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.asset-item{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05)}
+.asset-label{font-size:8.5px;font-weight:600;color:#b0c0d8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.asset-value{font-size:13px;font-weight:700;color:#d8e4f4;font-variant-numeric:tabular-nums}
+.asset-change{font-size:9px;margin-top:3px}
+.indices-list{display:flex;flex-direction:column;gap:8px}
+.index-row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05)}
+.index-name{font-size:10px;font-weight:600;color:#d8e4f4;letter-spacing:.04em}
+.index-data{display:flex;gap:12px;align-items:center}
+.index-value{font-size:11px;font-weight:700;color:#d8e4f4;font-variant-numeric:tabular-nums;min-width:70px;text-align:right}
+.index-change{font-size:9px;min-width:50px;text-align:right}
+
 /* Tooltip */
 #geo-tip{position:fixed;z-index:600;pointer-events:none;opacity:0;transition:opacity .15s;background:rgba(8,14,28,.92);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;min-width:160px;box-shadow:0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06)}
 #geo-tip.show{opacity:1}
@@ -249,9 +273,75 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
         <div class="mkt-cell"><div class="mkt-lbl">Gold</div><div class="mkt-val" id="mv-GLD">—</div><div class="mkt-chg" id="mc-GLD">—</div></div>
         <div class="mkt-cell"><div class="mkt-lbl">Volatility</div><div class="mkt-val" id="mv-VIXY">—</div><div class="mkt-chg" id="mc-VIXY">—</div></div>
       </div>
+      <div class="mkt-timers">
+        <div class="timer-cell"><div class="timer-label">Tokyo</div><div class="timer-time" id="timer-tokyo">—</div><div class="timer-status" id="status-tokyo">—</div></div>
+        <div class="timer-cell"><div class="timer-label">London</div><div class="timer-time" id="timer-london">—</div><div class="timer-status" id="status-london">—</div></div>
+        <div class="timer-cell"><div class="timer-label">New York</div><div class="timer-time" id="timer-ny">—</div><div class="timer-status" id="status-ny">—</div></div>
+      </div>
     </div>
     <div class="hero-right">
       <canvas id="globe-canvas"></canvas>
+    </div>
+  </div>
+
+  <div class="market-insights">
+    <div class="insight-panel">
+      <div class="insight-title">Asset Classes</div>
+      <div class="asset-grid">
+        <div class="asset-item">
+          <div class="asset-label">Equities</div>
+          <div class="asset-value" id="ac-equities">—</div>
+          <div class="asset-change" id="ac-equities-chg">—</div>
+        </div>
+        <div class="asset-item">
+          <div class="asset-label">Bonds</div>
+          <div class="asset-value" id="ac-bonds">—</div>
+          <div class="asset-change" id="ac-bonds-chg">—</div>
+        </div>
+        <div class="asset-item">
+          <div class="asset-label">Commodities</div>
+          <div class="asset-value" id="ac-commodities">—</div>
+          <div class="asset-change" id="ac-commodities-chg">—</div>
+        </div>
+        <div class="asset-item">
+          <div class="asset-label">Crypto</div>
+          <div class="asset-value" id="ac-crypto">—</div>
+          <div class="asset-change" id="ac-crypto-chg">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="insight-panel">
+      <div class="insight-title">Major Indices</div>
+      <div class="indices-list">
+        <div class="index-row">
+          <div class="index-name">S&amp;P 500</div>
+          <div class="index-data">
+            <div class="index-value" id="idx-spx">—</div>
+            <div class="index-change" id="idx-spx-chg">—</div>
+          </div>
+        </div>
+        <div class="index-row">
+          <div class="index-name">FTSE 100</div>
+          <div class="index-data">
+            <div class="index-value" id="idx-ftse">—</div>
+            <div class="index-change" id="idx-ftse-chg">—</div>
+          </div>
+        </div>
+        <div class="index-row">
+          <div class="index-name">Nikkei 225</div>
+          <div class="index-data">
+            <div class="index-value" id="idx-nikkei">—</div>
+            <div class="index-change" id="idx-nikkei-chg">—</div>
+          </div>
+        </div>
+        <div class="index-row">
+          <div class="index-name">Hang Seng</div>
+          <div class="index-data">
+            <div class="index-value" id="idx-hsi">—</div>
+            <div class="index-change" id="idx-hsi-chg">—</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -502,17 +592,15 @@ window.closeModal=closeModal;
     return{px:CX+rx*sc, py:CY+y*sc, pz:rz};
   }
 
-  // Draw one polygon ring, lifting pen when crossing to back hemisphere
+  // Draw one polygon ring, completely skipping back hemisphere points
   function drawRing(ring){
-    let wasFront=null;
+    let inFront=false;
     ring.forEach(([lon,lat],i)=>{
       const {x,y,z}=ll2xyz(lat,lon);
       const {px,py,pz}=proj3d(x,y,z);
-      const front=pz>0;
-      if(i===0){ctx.moveTo(px,py)}
-      else if(front&&wasFront){ctx.lineTo(px,py)}
-      else{ctx.moveTo(px,py)}  // lift pen at hemisphere boundary
-      wasFront=front;
+      if(pz<=0){inFront=false;return}  // skip back hemisphere entirely
+      if(!inFront){ctx.moveTo(px,py);inFront=true}
+      else{ctx.lineTo(px,py)}
     });
   }
 
@@ -716,6 +804,109 @@ setInterval(loadDemoData,60000);
 // ── Clock ─────────────────────────────────────
 function tick(){const el=document.getElementById('clock');if(el)el.textContent='ET '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/New_York'})}
 setInterval(tick,1000);tick();
+
+// ── Market Session Timers ─────────────────────
+function updateSessionTimers(){
+  const now=new Date();
+
+  // Tokyo (JST): 9:00 AM - 3:00 PM (0:00 - 6:00 UTC, next day)
+  const tokyoTime=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));
+  const tokyoHour=tokyoTime.getHours();
+  const tokyoMin=tokyoTime.getMinutes();
+  const tokyoOpen=9,tokyoClose=15;
+  let tokyoStatus,tokyoCountdown;
+  if(tokyoHour>=tokyoOpen&&tokyoHour<tokyoClose){
+    tokyoStatus='Open';
+    const minToClose=(tokyoClose-tokyoHour)*60-(tokyoMin);
+    const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
+    tokyoCountdown=`${hrs}h ${mins}m`;
+  }else{
+    tokyoStatus='Closed';
+    const nextOpen=tokyoHour<tokyoOpen?tokyoOpen-tokyoHour:(24-tokyoHour)+tokyoOpen;
+    const minToOpen=nextOpen*60-(tokyoMin);
+    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+    tokyoCountdown=`${hrs}h ${mins}m`;
+  }
+
+  // London (GMT/BST): 8:00 AM - 4:30 PM
+  const londonTime=new Date(now.toLocaleString('en-US',{timeZone:'Europe/London'}));
+  const londonHour=londonTime.getHours();
+  const londonMin=londonTime.getMinutes();
+  const londonOpen=8,londonClose=16,londonCloseMin=30;
+  let londonStatus,londonCountdown;
+  const londonOpenMin=0;
+  if(londonHour>londonOpen||(londonHour===londonOpen&&londonMin>=londonOpenMin)||(londonHour<londonClose||(londonHour===londonClose&&londonMin<londonCloseMin))){
+    if(londonHour>=londonOpen&&(londonHour<londonClose||(londonHour===londonClose&&londonMin<londonCloseMin))){
+      londonStatus='Open';
+      const minToClose=(londonClose-londonHour)*60+(londonCloseMin-londonMin);
+      const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
+      londonCountdown=`${hrs}h ${mins}m`;
+    }else{
+      londonStatus='Closed';
+      const nextOpen=londonHour<londonOpen?londonOpen-londonHour:(24-londonHour)+londonOpen;
+      const minToOpen=nextOpen*60-(londonMin);
+      const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+      londonCountdown=`${hrs}h ${mins}m`;
+    }
+  }else{
+    londonStatus='Closed';
+    const nextOpen=londonHour<londonOpen?londonOpen-londonHour:(24-londonHour)+londonOpen;
+    const minToOpen=nextOpen*60-(londonMin);
+    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+    londonCountdown=`${hrs}h ${mins}m`;
+  }
+
+  // New York (ET): 9:30 AM - 4:00 PM
+  const nyTime=new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const nyHour=nyTime.getHours();
+  const nyMin=nyTime.getMinutes();
+  const nyOpen=9,nyOpenMin=30,nyClose=16;
+  let nyStatus,nyCountdown;
+  if((nyHour>nyOpen||(nyHour===nyOpen&&nyMin>=nyOpenMin))&&(nyHour<nyClose)){
+    nyStatus='Open';
+    const minToClose=(nyClose-nyHour)*60-(nyMin);
+    const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
+    nyCountdown=`${hrs}h ${mins}m`;
+  }else{
+    nyStatus='Closed';
+    const nextOpen=nyHour<nyOpen?(nyOpen-nyHour):(24-nyHour)+nyOpen;
+    const minToOpen=nextOpen*60+(nyOpenMin-nyMin);
+    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+    nyCountdown=`${hrs}h ${mins}m`;
+  }
+
+  // Update DOM
+  const setTimer=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
+  const setStatus=(id,status,countdown)=>{const el=document.getElementById(id);if(el)el.textContent=status+' • '+countdown;el.className='timer-status '+(status==='Open'?'timer-open':'timer-closed')};
+  setTimer('timer-tokyo',tokyoCountdown);setStatus('status-tokyo',tokyoStatus,tokyoCountdown);
+  setTimer('timer-london',londonCountdown);setStatus('status-london',londonStatus,londonCountdown);
+  setTimer('timer-ny',nyCountdown);setStatus('status-ny',nyStatus,nyCountdown);
+}
+updateSessionTimers();
+setInterval(updateSessionTimers,1000);
+
+// ── Asset Classes and Indices ──────────────────
+const ASSET_MOCK={equities:8245.50,eqChg:1.23,bonds:103.45,bondChg:-0.45,commodities:2156.32,commChg:0.89,crypto:67850.00,cryptoChg:3.45};
+const INDICES_MOCK={SPX:7321.45,SPXchg:0.72,FTSE:7942.30,FTSEchg:-0.15,Nikkei:28456.32,Nikkeichg:0.45,HSI:18234.56,HSIchg:-0.92};
+function loadAssetClasses(){
+  // Fallback data
+  const setAsset=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val.toFixed(2)};
+  const setAssetChg=(id,chg)=>{const el=document.getElementById(id);if(el){el.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';el.className='asset-change '+(chg>=0?'up':'dn')}};
+  setAsset('ac-equities',ASSET_MOCK.equities);setAssetChg('ac-equities-chg',ASSET_MOCK.eqChg);
+  setAsset('ac-bonds',ASSET_MOCK.bonds);setAssetChg('ac-bonds-chg',ASSET_MOCK.bondChg);
+  setAsset('ac-commodities',ASSET_MOCK.commodities);setAssetChg('ac-commodities-chg',ASSET_MOCK.commChg);
+  setAsset('ac-crypto',ASSET_MOCK.crypto);setAssetChg('ac-crypto-chg',ASSET_MOCK.cryptoChg);
+}
+function loadIndices(){
+  const setIdx=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val.toFixed(2)};
+  const setIdxChg=(id,chg)=>{const el=document.getElementById(id);if(el){el.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';el.className='index-change '+(chg>=0?'up':'dn')}};
+  setIdx('idx-spx',INDICES_MOCK.SPX);setIdxChg('idx-spx-chg',INDICES_MOCK.SPXchg);
+  setIdx('idx-ftse',INDICES_MOCK.FTSE);setIdxChg('idx-ftse-chg',INDICES_MOCK.FTSEchg);
+  setIdx('idx-nikkei',INDICES_MOCK.Nikkei);setIdxChg('idx-nikkei-chg',INDICES_MOCK.Nikkeichg);
+  setIdx('idx-hsi',INDICES_MOCK.HSI);setIdxChg('idx-hsi-chg',INDICES_MOCK.HSIchg);
+}
+loadAssetClasses();
+loadIndices();
 </script>
 </body>
 </html>
