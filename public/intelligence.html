@@ -272,6 +272,7 @@ const vtx = {
     return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars};
   },
   mktCap(t) { const v = t.shares*1e9*t.price; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(0)+'B'; },
+  mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
   pctOf(t) { return (t.price - t.open) / t.open * 100; },
   fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); },
 
@@ -323,7 +324,9 @@ const vtx = {
 
     this.render();
     this.loadQuotes();
+    this.loadFinancials();
     setInterval(() => this.loadQuotes(), 60 * 1000);
+    setInterval(() => this.loadFinancials(), 30 * 60 * 1000);
 
     setInterval(() => {
       this.state.tickers = this.state.tickers.map(t => {
@@ -418,6 +421,22 @@ const vtx = {
       });
       this.render();
     } catch (e) { /* keep previous prices on failure */ }
+  },
+
+  async loadFinancials() {
+    try {
+      const results = await Promise.all(this.state.tickers.map(t =>
+        fetch(`/api/stock/financials?symbol=${encodeURIComponent(t.sym)}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      ));
+      this.state.tickers = this.state.tickers.map((t, i) => {
+        const fin = results[i];
+        if (!fin || fin.error) return t;
+        return { ...t, fin };
+      });
+      this.render();
+    } catch (e) { /* keep previous financials on failure */ }
   },
 
   async loadFilings() {
@@ -517,8 +536,8 @@ const vtx = {
       {label:'Day Low',value:this.fmt(lo),color:'var(--txt)'},
       {label:'Day High',value:this.fmt(hi),color:'var(--txt)'},
       {label:'Volume',value:f.vol+'M',color:'var(--txt)'},
-      {label:'Avg Vol',value:(f.vol*1.2).toFixed(0)+'M',color:'var(--mut)'},
-      {label:'Mkt Cap',value:this.mktCap(f),color:'var(--acc2)'}
+      {label:'Avg Vol',value:(f.fin && f.fin.avgVolume3M ? f.fin.avgVolume3M.toFixed(1) : (f.vol*1.2).toFixed(0))+'M',color:'var(--mut)'},
+      {label:'Mkt Cap',value:(f.fin && f.fin.marketCapitalization) ? this.mktCapFromFin(f.fin.marketCapitalization) : this.mktCap(f),color:'var(--acc2)'}
     ];
     document.getElementById('headStats').innerHTML = headStats.map(st => `
       <div style="background:rgba(10,13,22,.6);padding:9px 11px;">
@@ -540,14 +559,15 @@ const vtx = {
     document.getElementById('volBars').innerHTML = ch.bars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${b.fill}" rx="0.8"></rect>`).join('');
 
     // Key stats
+    const fin = f.fin || {};
     const metrics = [
-      {label:'Prev Close',value:this.fmt(f.open),color:'var(--txt)'},
-      {label:'P/E Ratio',value:f.pe+'x',color:'var(--txt)'},
-      {label:'52W High',value:this.fmt(hi*1.18),color:'var(--pos)'},
-      {label:'52W Low',value:this.fmt(lo*0.74),color:'var(--neg)'},
-      {label:'Beta',value:(0.7+this.hashN(f.sym,21)*1.1).toFixed(2),color:'var(--txt)'},
-      {label:'Div Yield',value:(this.hashN(f.sym,33)*1.6).toFixed(2)+'%',color:'var(--txt)'},
-      {label:'EPS (ttm)',value:'$'+(f.price/f.pe).toFixed(2),color:'var(--txt)'},
+      {label:'Prev Close',value:this.fmt(f.prevClose || f.open),color:'var(--txt)'},
+      {label:'P/E Ratio',value:fin.peTTM ? fin.peTTM.toFixed(1)+'x' : f.pe+'x',color:'var(--txt)'},
+      {label:'52W High',value:this.fmt(fin.week52High ?? hi*1.18),color:'var(--pos)'},
+      {label:'52W Low',value:this.fmt(fin.week52Low ?? lo*0.74),color:'var(--neg)'},
+      {label:'Beta',value:fin.beta ? fin.beta.toFixed(2) : (0.7+this.hashN(f.sym,21)*1.1).toFixed(2),color:'var(--txt)'},
+      {label:'Div Yield',value:(fin.dividendYield ?? this.hashN(f.sym,33)*1.6).toFixed(2)+'%',color:'var(--txt)'},
+      {label:'EPS (ttm)',value:'$'+(fin.epsTTM ?? (f.price/f.pe)).toFixed(2),color:'var(--txt)'},
       {label:'Short Int',value:(1+this.hashN(f.sym,44)*6).toFixed(1)+'%',color:'var(--warn)'}
     ];
     document.getElementById('keyStats').innerHTML = metrics.map(m => `
