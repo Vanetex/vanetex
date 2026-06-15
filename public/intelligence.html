@@ -33,18 +33,19 @@ a{color:inherit;text-decoration:none}
 button{font-family:var(--ui)}
 input{font-family:var(--ui)}
 .wlrow:hover{background:rgba(255,255,255,.05) !important}
+.wlrow:hover .wlremove{opacity:1 !important}
+.wlremove:hover{color:var(--neg) !important}
 .srchrow:hover{background:rgba(var(--glow),.14)}
 .newscard:hover{border-color:rgba(var(--glow),.3) !important;background:rgba(var(--glow),.05) !important}
 .movercard:hover{transform:translateY(-2px)}
 .qprompt:hover{background:rgba(52,211,255,.14) !important}
 .tapetrack:hover{animation-play-state:paused}
-.backlink{position:fixed;top:10px;right:14px;z-index:50;font-size:10px;color:var(--mut);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line);border-radius:6px;padding:5px 10px;background:rgba(6,8,14,.6);backdrop-filter:blur(10px);}
-.backlink:hover{color:var(--acc2);border-color:rgba(var(--glow),.3)}
+.logolink{transition:opacity .15s ease}
+.logolink:hover{opacity:.78}
+.gearbtn:hover{color:var(--acc2) !important;border-color:rgba(var(--glow),.3) !important}
 </style>
 </head>
 <body>
-
-<a class="backlink" href="index.html">← Back to platform</a>
 
 <div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:radial-gradient(120% 90% at 78% -10%,rgba(var(--glow),.16),transparent 48%),radial-gradient(90% 70% at 12% 4%,rgba(52,211,255,.06),transparent 50%),linear-gradient(180deg,#06080f 0%,#04050a 70%);">
 
@@ -57,7 +58,7 @@ input{font-family:var(--ui)}
 
     <!-- TOP BAR -->
     <header style="position:relative;z-index:50;display:flex;align-items:center;gap:16px;height:56px;flex-shrink:0;padding:0 16px;border-bottom:1px solid var(--line);background:rgba(7,9,16,.55);backdrop-filter:blur(18px);">
-      <div style="display:flex;align-items:center;gap:11px;">
+      <a href="index.html" class="logolink" style="display:flex;align-items:center;gap:11px;">
         <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(var(--glow),.5),inset 0 1px 0 rgba(255,255,255,.3);">
           <svg width="17" height="17" viewBox="0 0 14 14" fill="none"><polyline points="1,10 5,5 8,8 13,2" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
         </div>
@@ -65,7 +66,7 @@ input{font-family:var(--ui)}
           <div style="font-size:15px;font-weight:700;letter-spacing:.02em;">VANETEX</div>
           <div style="font-size:8.5px;font-weight:600;letter-spacing:.34em;color:var(--acc2);margin-top:3px;">INTELLIGENCE</div>
         </div>
-      </div>
+      </a>
 
       <!-- Search -->
       <div style="position:relative;width:340px;margin-left:6px;">
@@ -86,17 +87,52 @@ input{font-family:var(--ui)}
       </div>
 
       <!-- Market status -->
-      <div style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid rgba(31,209,151,.28);border-radius:8px;background:rgba(31,209,151,.08);">
-        <span style="width:7px;height:7px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos);animation:pulse 1.8s ease infinite;"></span>
-        <span style="font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--pos);">MKT OPEN</span>
+      <div id="mktStatus" style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid rgba(31,209,151,.28);border-radius:8px;background:rgba(31,209,151,.08);">
+        <span id="mktStatusDot" style="width:7px;height:7px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos);animation:pulse 1.8s ease infinite;"></span>
+        <span id="mktStatusLabel" style="font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--pos);">MKT OPEN</span>
       </div>
 
       <!-- Clock -->
       <div style="text-align:right;line-height:1.15;">
         <div id="clockEl" style="font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.02em;">00:00:00</div>
-        <div style="font-size:8.5px;letter-spacing:.16em;color:var(--mut);">EST · NYSE</div>
+        <div style="font-size:8.5px;letter-spacing:.16em;color:var(--mut);">ET · NYSE</div>
       </div>
+
+      <!-- Settings -->
+      <button class="gearbtn" onclick="vtx.openSettings()" title="Settings" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--mut);cursor:pointer;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M19.4 13a7.97 7.97 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a8 8 0 0 0-1.7-1L15 2.6h-4l-.3 2.3a8 8 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.97 7.97 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a8 8 0 0 0 1.7 1l.3 2.3h4l.3-2.3a8 8 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.6"></circle></svg>
+      </button>
     </header>
+
+    <!-- Settings panel -->
+    <div id="settingsOverlay" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(2,3,8,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center;" onclick="if(event.target===this) vtx.closeSettings()">
+      <div style="width:380px;background:linear-gradient(180deg,rgba(20,24,40,.97),rgba(9,12,21,.99));border:1px solid var(--line);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.6);padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span style="font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt);">Settings</span>
+          <button onclick="vtx.closeSettings()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:18px;line-height:1;">×</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:8px;">Accent Color</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input id="accentPicker" type="color" value="#2F7BFF" onchange="vtx.setAccent(this.value)" style="width:44px;height:34px;border:1px solid var(--line);border-radius:8px;background:transparent;cursor:pointer;padding:2px;">
+              <div style="display:flex;gap:6px;">
+                <button onclick="vtx.setAccent('#2F7BFF')" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;background:#2F7BFF;"></button>
+                <button onclick="vtx.setAccent('#9b6bff')" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;background:#9b6bff;"></button>
+                <button onclick="vtx.setAccent('#1fd397')" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;background:#1fd397;"></button>
+                <button onclick="vtx.setAccent('#f5a524')" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;background:#f5a524;"></button>
+                <button onclick="vtx.setAccent('#ff4d5e')" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;background:#ff4d5e;"></button>
+              </div>
+              <button onclick="vtx.resetAccent()" style="margin-left:auto;font-size:10px;color:var(--mut);background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;">Reset</button>
+            </div>
+          </div>
+          <div style="border-top:1px solid var(--line);padding-top:12px;">
+            <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:8px;">Watchlist</div>
+            <div style="font-size:11.5px;color:var(--mut);line-height:1.5;">Add tickers via search (top left), remove with the × that appears on hover over a watchlist row.</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- TICKER TAPE -->
     <div style="height:34px;flex-shrink:0;overflow:hidden;border-bottom:1px solid var(--line);background:rgba(6,8,14,.6);display:flex;align-items:center;">
@@ -147,6 +183,7 @@ input{font-family:var(--ui)}
             <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Charting</span>
             <span id="chartLabel" style="font-family:var(--mono);font-size:10px;color:var(--acc2);"></span>
             <div style="flex:1;"></div>
+            <div id="indicatorButtons" style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;margin-right:6px;"></div>
             <div id="tfButtons" style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;"></div>
           </div>
           <div style="padding:8px 6px 4px;position:relative;">
@@ -157,14 +194,17 @@ input{font-family:var(--ui)}
                   <stop offset="100%" stop-color="var(--acc)" stop-opacity="0"></stop>
                 </linearGradient>
               </defs>
-              <line x1="0" y1="38" x2="620" y2="38" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
-              <line x1="0" y1="78" x2="620" y2="78" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
-              <line x1="0" y1="118" x2="620" y2="118" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
+              <line x1="0" y1="38" x2="574" y2="38" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
+              <line x1="0" y1="78" x2="574" y2="78" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
+              <line x1="0" y1="118" x2="574" y2="118" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
               <g id="volBars"></g>
               <path id="chartAreaPath" fill="url(#vtxArea)"></path>
               <path id="chartLinePath" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>
+              <path id="chartSma9Path" fill="none" stroke="var(--warn)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0"></path>
+              <path id="chartSma20Path" fill="none" stroke="#9b6bff" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0"></path>
               <circle id="chartEndGlow" r="6.5" fill="var(--acc)" opacity="0.2"></circle>
               <circle id="chartEndDot" r="3.4" fill="var(--acc)"></circle>
+              <g id="priceAxis"></g>
             </svg>
           </div>
         </div>
@@ -210,9 +250,11 @@ input{font-family:var(--ui)}
 const vtx = {
   state: {
     variant: 'A', focus: 'NVDA', tab: 'news', tf: '1D',
-    query: '', searchOpen: false, tickers: [], tape: [],
-    chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol — fundamentals, dark-pool prints, options flow, or earnings risk.'}],
-    chatInput: '', aiTyping: false, latency: 12
+    query: '', searchOpen: false, remoteResults: [], tickers: [], tape: [],
+    chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
+    chatInput: '', aiTyping: false, latency: 12,
+    indicators: { sma9: false, sma20: false },
+    moversSector: null, marketOpen: true, customAccent: null
   },
 
   NEWS: [
@@ -239,14 +281,6 @@ const vtx = {
     {time:'3h',sym:'AMD',who:'L. Su',role:'CEO',act:'BUY',shares:'25,000',value:'$4.1M',tone:'var(--pos)',toneBorder:'rgba(31,209,151,.4)'},
     {time:'5h',sym:'AAPL',who:'K. Adams',role:'CFO',act:'SELL',shares:'30,000',value:'$6.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'}
   ],
-  OPT: [
-    {time:'09:41',sym:'NVDA',cp:'C',strike:'1200',exp:'07/19',prem:'$4.2M',size:'3,500',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'},
-    {time:'09:39',sym:'TSLA',cp:'P',strike:'280',exp:'07/05',prem:'$1.8M',size:'2,100',sent:'BEARISH',tone:'var(--neg)',cpBg:'rgba(255,77,94,.12)'},
-    {time:'09:35',sym:'AMD',cp:'C',strike:'175',exp:'08/16',prem:'$960K',size:'4,800',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'},
-    {time:'09:30',sym:'SPY',cp:'P',strike:'590',exp:'06/21',prem:'$3.1M',size:'5,000',sent:'HEDGE',tone:'var(--warn)',cpBg:'rgba(245,165,36,.12)'},
-    {time:'09:24',sym:'META',cp:'C',strike:'600',exp:'07/19',prem:'$2.4M',size:'1,900',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'},
-    {time:'09:19',sym:'COIN',cp:'C',strike:'260',exp:'07/12',prem:'$1.1M',size:'2,600',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'}
-  ],
   DARK: [
     {time:'09:42:11',sym:'NVDA',size:'248,500',notional:'$293.7M',venue:'UBS ATS',pct:'4.1%'},
     {time:'09:41:50',sym:'AAPL',size:'612,000',notional:'$139.9M',venue:'Sigma X',pct:'2.6%'},
@@ -261,20 +295,70 @@ const vtx = {
   hhmmss() { return new Date().toTimeString().slice(0, 8); },
   mkPrint(t) { const sizes = [100,100,200,200,300,400,500,800,1200,2000]; return {id:Math.random(), time:this.hhmmss(), sym:t.sym, price:t.price.toFixed(2), size:sizes[Math.floor(Math.random()*sizes.length)].toLocaleString(), side: Math.random()>0.5?'B':'S'}; },
   sparkPath(arr) { const w=104,h=30,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1; return 'M '+arr.map((v,i)=>((i/(arr.length-1))*w).toFixed(1)+' '+(h-((v-min)/r)*(h-5)-2.5).toFixed(1)).join(' L '); },
+  sma(arr, period) {
+    const out = [];
+    for (let i=0;i<arr.length;i++) {
+      if (i < period-1) { out.push(null); continue; }
+      let sum=0; for (let j=i-period+1;j<=i;j++) sum+=arr[j];
+      out.push(sum/period);
+    }
+    return out;
+  },
   buildChart(arr) {
-    const W=620,H=150,VB=46,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1;
-    const pts=arr.map((v,i)=>[(i/(arr.length-1))*W,(H-((v-min)/r)*(H-14)-7)]);
+    const W=574,H=150,VB=46,AX=46;
+    const s = this.state;
+    const sma9 = s.indicators.sma9 ? this.sma(arr,9) : null;
+    const sma20 = s.indicators.sma20 ? this.sma(arr,20) : null;
+    let min=Math.min(...arr), max=Math.max(...arr);
+    [sma9,sma20].forEach(sm => { if (sm) sm.forEach(v => { if (v!=null) { min=Math.min(min,v); max=Math.max(max,v); } }); });
+    const r=(max-min)||1;
+    const yOf = v => H-((v-min)/r)*(H-14)-7;
+    const pts=arr.map((v,i)=>[(i/(arr.length-1))*W,yOf(v)]);
     const line='M '+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L ');
     const area=line+` L ${W} ${H} L 0 ${H} Z`;
     const end=pts[pts.length-1];
     const bars=[]; const bw=W/arr.length*0.55;
     for (let i=1;i<arr.length;i++) { const up=arr[i]>=arr[i-1]; const mag=Math.abs(arr[i]-arr[i-1]); const h=Math.max(2,Math.min(VB,4+(mag/r)*VB*4)); bars.push({x:((i/(arr.length-1))*W-bw/2).toFixed(1),y:(H+VB-h).toFixed(1),w:bw.toFixed(1),h:h.toFixed(1),fill: up?'rgba(31,209,151,.45)':'rgba(255,77,94,.45)'}); }
-    return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars};
+    const pathFromSma = sm => {
+      if (!sm) return '';
+      const valid = sm.map((v,i)=>v==null?null:[(i/(arr.length-1))*W,yOf(v)]).filter(Boolean);
+      if (valid.length<2) return '';
+      return 'M '+valid.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L ');
+    };
+    const axisLabels = [38,78,118].map(y => ({ y, price: (min + r*(H-7-y)/(H-14)) }));
+    axisLabels.push({ y: 144, price: min });
+    return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars, sma9Path: pathFromSma(sma9), sma20Path: pathFromSma(sma20), axisLabels, W, AX};
   },
   mktCap(t) { const v = t.shares*1e9*t.price; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(0)+'B'; },
   mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
   pctOf(t) { return (t.price - t.open) / t.open * 100; },
   fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); },
+  isMarketOpen() {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'numeric', weekday:'short', hour12:false }).formatToParts(new Date());
+    const map = {}; parts.forEach(p => map[p.type]=p.value);
+    if (map.weekday==='Sat' || map.weekday==='Sun') return false;
+    const hour = parseInt(map.hour,10) % 24, minute = parseInt(map.minute,10);
+    const mins = hour*60+minute;
+    return mins >= 9*60+30 && mins < 16*60;
+  },
+  SECTOR_BUCKETS: [
+    { key:'Technology', match:/semi|software|hardware|electronic|technology/i },
+    { key:'Communication', match:/internet|media|entertainment|telecom|communication/i },
+    { key:'Consumer', match:/consumer|retail|e-commerce|auto/i },
+    { key:'Financials', match:/financ|fintech|bank|insur|capital markets/i },
+    { key:'Healthcare', match:/health|pharma|biotech/i },
+    { key:'Energy', match:/energy|oil|gas/i },
+    { key:'Industrials', match:/industrial|aerospace|defense/i },
+    { key:'ETFs / Index', match:/etf|index/i },
+  ],
+  sectorBucket(sector) {
+    if (!sector) return 'Other';
+    for (const b of this.SECTOR_BUCKETS) if (b.match.test(sector)) return b.key;
+    return 'Other';
+  },
+
+  WATCHLIST_KEY: 'vtx_watchlist',
+  ACCENT_KEY: 'vtx_accent',
 
   init() {
     const seed = [
@@ -286,16 +370,25 @@ const vtx = {
       ['PLTR','Palantir Tech','Software',62.44],['NFLX','Netflix Inc','Media',691.55],
       ['SPY','SPDR S&P 500','Index ETF',596.20],['QQQ','Invesco QQQ','Index ETF',511.83]
     ];
-    this.state.tickers = seed.map(a => ({
-      sym:a[0], name:a[1], sector:a[2], price:a[3],
-      open: a[3]*(1-(this.hashN(a[0],3)*0.032-0.013)),
-      hist: this.genHist(a[3],46),
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(this.WATCHLIST_KEY)); } catch(e) {}
+    const list = (saved && Array.isArray(saved) && saved.length) ? saved : seed.map(a=>[a[0],a[1],a[2],a[3]]);
+    this.state.tickers = list.map(a => ({
+      sym:a[0], name:a[1], sector:a[2], price:a[3] || 100,
+      open: (a[3]||100)*(1-(this.hashN(a[0],3)*0.032-0.013)),
+      hist: this.genHist(a[3]||100,46),
       vol: Math.round(this.hashN(a[0],5)*70+6),
       pe: Math.round(this.hashN(a[0],9)*44+12),
       shares: this.hashN(a[0],11)*3.6+0.5
     }));
+    if (!this.state.tickers.some(t=>t.sym===this.state.focus)) this.state.focus = this.state.tickers[0].sym;
     for (let i=0;i<16;i++) { this.state.tape.push(this.mkPrint(this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)])); }
 
+    let savedAccent = null;
+    try { savedAccent = localStorage.getItem(this.ACCENT_KEY); } catch(e) {}
+    if (savedAccent) this.state.customAccent = savedAccent;
+
+    this.state.marketOpen = this.isMarketOpen();
     this.applyVariant();
 
     document.getElementById('searchInput').addEventListener('input', e => this.onSearchInput(e.target.value));
@@ -329,6 +422,7 @@ const vtx = {
     setInterval(() => this.loadFinancials(), 30 * 60 * 1000);
 
     setInterval(() => {
+      if (!this.state.marketOpen) return;
       this.state.tickers = this.state.tickers.map(t => {
         const drift = (Math.random()-0.5)*t.price*0.0016;
         const np = Math.max(0.5, t.price+drift);
@@ -340,18 +434,28 @@ const vtx = {
     }, 1100);
 
     setInterval(() => {
+      if (!this.state.marketOpen) return;
       const t = this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)];
       this.state.tape = [this.mkPrint(t), ...this.state.tape].slice(0,26);
       this.renderTimeSales();
     }, 520);
 
     setInterval(() => { this.renderClock(); }, 1000);
+    setInterval(() => {
+      const open = this.isMarketOpen();
+      if (open !== this.state.marketOpen) {
+        this.state.marketOpen = open;
+        this.renderMarketStatus();
+        this.renderTimeSales();
+      }
+    }, 15000);
 
     this.loadFilings();
     this.loadDarkPool();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
     this.renderClock();
+    this.renderMarketStatus();
   },
 
   applyVariant() {
@@ -363,18 +467,105 @@ const vtx = {
     a.style.color = this.state.variant==='A' ? 'var(--acc2)' : 'var(--mut)';
     b.style.background = this.state.variant==='B' ? 'rgba(var(--glow),.2)' : 'transparent';
     b.style.color = this.state.variant==='B' ? 'var(--acc2)' : 'var(--mut)';
+    if (this.state.customAccent) this.applyAccent(this.state.customAccent);
   },
-  setVariant(v) { this.state.variant = v; this.applyVariant(); },
-  selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); },
-  setTab(id) { this.state.tab = id; this.renderRight(); },
+  setVariant(v) { this.state.variant = v; this.state.customAccent = null; try { localStorage.removeItem(this.ACCENT_KEY); } catch(e) {} this.applyVariant(); },
+  applyAccent(hex) {
+    const r = document.documentElement;
+    const m = hex.replace('#','').match(/.{2}/g);
+    const [rr,gg,bb] = m.map(x=>parseInt(x,16));
+    r.style.setProperty('--acc', hex);
+    r.style.setProperty('--acc2', hex);
+    r.style.setProperty('--glow', `${rr},${gg},${bb}`);
+    const picker = document.getElementById('accentPicker');
+    if (picker) picker.value = hex;
+  },
+  setAccent(hex) {
+    this.state.customAccent = hex;
+    try { localStorage.setItem(this.ACCENT_KEY, hex); } catch(e) {}
+    this.applyAccent(hex);
+  },
+  resetAccent() {
+    this.state.customAccent = null;
+    try { localStorage.removeItem(this.ACCENT_KEY); } catch(e) {}
+    this.applyVariant();
+  },
+  openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
+  closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
+  selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); },
+  setTab(id) { this.state.tab = id; this.state.moversSector = null; this.renderRight(); },
+  openSector(name) { this.state.moversSector = name; this.renderRight(); },
   setTf(tf) { this.state.tf = tf; this.render(); },
+  toggleIndicator(key) { this.state.indicators[key] = !this.state.indicators[key]; this.render(); },
+
+  saveWatchlist() {
+    const data = this.state.tickers.map(t => [t.sym, t.name, t.sector, t.price]);
+    try { localStorage.setItem(this.WATCHLIST_KEY, JSON.stringify(data)); } catch(e) {}
+  },
+  async addTicker(sym, name, sector) {
+    sym = sym.toUpperCase();
+    if (this.state.tickers.some(t=>t.sym===sym)) { this.selectTicker(sym); return; }
+    const t = {
+      sym, name: name || sym, sector: sector || '—', price: 100,
+      open: 100, hist: this.genHist(100,46),
+      vol: Math.round(this.hashN(sym,5)*70+6),
+      pe: Math.round(this.hashN(sym,9)*44+12),
+      shares: this.hashN(sym,11)*3.6+0.5
+    };
+    this.state.tickers.push(t);
+    this.saveWatchlist();
+    this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[];
+    document.getElementById('searchInput').value=''; this.closeSearch();
+    this.state.focus = sym;
+    this.render();
+    try {
+      const [q, fin] = await Promise.all([
+        fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+        fetch(`/api/stock/financials?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+      ]);
+      this.state.tickers = this.state.tickers.map(x => {
+        if (x.sym!==sym) return x;
+        let upd = {...x};
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, hist:this.genHist(q.price,46), name:q.name||upd.name, sector:q.industry||upd.sector}; }
+        if (fin && !fin.error) upd.fin = fin;
+        return upd;
+      });
+      this.saveWatchlist();
+      this.render();
+      this.loadDarkPool();
+    } catch(e) {}
+  },
+  removeTicker(sym) {
+    if (this.state.tickers.length<=1) return;
+    this.state.tickers = this.state.tickers.filter(t=>t.sym!==sym);
+    if (this.state.focus===sym) this.state.focus = this.state.tickers[0].sym;
+    this.saveWatchlist();
+    this.render();
+  },
 
   results() {
     const q = this.state.query.trim().toLowerCase();
     if (!q) return this.state.tickers.slice(0,6);
     return this.state.tickers.filter(t => t.sym.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)).slice(0,6);
   },
-  onSearchInput(v) { this.state.query=v; this.state.searchOpen=true; this.renderSearch(); },
+  onSearchInput(v) {
+    this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[];
+    this.renderSearch();
+    clearTimeout(this._searchTimer);
+    const q = v.trim();
+    if (q.length>=1) this._searchTimer = setTimeout(()=>this.fetchRemoteSearch(q), 250);
+  },
+  async fetchRemoteSearch(q) {
+    try {
+      const res = await fetch(`/api/stock/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (this.state.query.trim()!==q) return;
+      const have = new Set(this.state.tickers.map(t=>t.sym));
+      this.state.remoteResults = (data.results||[]).filter(r=>!have.has(r.symbol));
+      this.renderSearch();
+    } catch(e) {}
+  },
   onSearchFocus() { this.state.searchOpen=true; this.renderSearch(); },
   onSearchBlur() { setTimeout(()=>{ this.state.searchOpen=false; this.closeSearch(); },130); },
   onSearchKey(e) {
@@ -385,18 +576,44 @@ const vtx = {
   renderSearch() {
     const dd = document.getElementById('searchDropdown');
     const r = this.results();
-    if (!this.state.searchOpen || r.length===0) { dd.style.display='none'; return; }
+    const remote = this.state.remoteResults || [];
+    if (!this.state.searchOpen || (r.length===0 && remote.length===0)) { dd.style.display='none'; return; }
     dd.style.display='block';
-    dd.innerHTML = r.map(t => `
+    let html = r.map(t => `
       <div class="srchrow" onmousedown="vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
         <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.sym}</span>
         <span style="flex:1;font-size:12.5px;color:var(--txt);">${t.name}</span>
         <span style="font-size:10px;color:var(--mut);">${t.sector}</span>
       </div>`).join('');
+    if (remote.length) {
+      html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Add to watchlist</div>`;
+      html += remote.map(t => `
+        <div class="srchrow" onmousedown="vtx.addTicker('${t.symbol}',${JSON.stringify(t.name)})" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+          <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.symbol}</span>
+          <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
+          <span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--acc2);border:1px solid rgba(var(--glow),.35);border-radius:5px;padding:2px 6px;">+ ADD</span>
+        </div>`).join('');
+    }
+    dd.innerHTML = html;
   },
 
   renderClock() {
-    document.getElementById('clockEl').textContent = new Date().toTimeString().slice(0,8);
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).formatToParts(new Date());
+    const map = {}; parts.forEach(p=>map[p.type]=p.value);
+    document.getElementById('clockEl').textContent = `${map.hour}:${map.minute}:${map.second}`;
+  },
+  renderMarketStatus() {
+    const open = this.state.marketOpen;
+    const wrap = document.getElementById('mktStatus'), dot = document.getElementById('mktStatusDot'), label = document.getElementById('mktStatusLabel');
+    if (open) {
+      wrap.style.borderColor = 'rgba(31,209,151,.28)'; wrap.style.background = 'rgba(31,209,151,.08)';
+      dot.style.background = 'var(--pos)'; dot.style.boxShadow = '0 0 8px var(--pos)'; dot.style.animation = 'pulse 1.8s ease infinite';
+      label.style.color = 'var(--pos)'; label.textContent = 'MKT OPEN';
+    } else {
+      wrap.style.borderColor = 'rgba(124,132,153,.28)'; wrap.style.background = 'rgba(124,132,153,.08)';
+      dot.style.background = 'var(--mut)'; dot.style.boxShadow = 'none'; dot.style.animation = 'none';
+      label.style.color = 'var(--mut)'; label.textContent = 'MKT CLOSED';
+    }
   },
 
   async loadQuotes() {
@@ -493,7 +710,7 @@ const vtx = {
     document.getElementById('watchlistBody').innerHTML = T.map(t => {
       const p=this.pctOf(t), up=p>=0;
       const isFocus = t.sym===s.focus;
-      return `<div class="wlrow" onclick="vtx.selectTicker('${t.sym}')" style="position:relative;display:grid;grid-template-columns:1fr 58px auto;align-items:center;gap:7px;padding:7px 9px 7px 11px;border-radius:9px;cursor:pointer;background:${isFocus?'rgba(var(--glow),.12)':'transparent'};">
+      return `<div class="wlrow" onclick="vtx.selectTicker('${t.sym}')" style="position:relative;display:grid;grid-template-columns:1fr 58px auto 16px;align-items:center;gap:7px;padding:7px 9px 7px 11px;border-radius:9px;cursor:pointer;background:${isFocus?'rgba(var(--glow),.12)':'transparent'};">
         <span style="position:absolute;left:0;top:18%;bottom:18%;width:2.5px;border-radius:3px;background:${isFocus?'var(--acc)':'transparent'};"></span>
         <div style="min-width:0;">
           <div style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:${isFocus?'var(--acc2)':'var(--txt)'};">${t.sym}</div>
@@ -504,6 +721,7 @@ const vtx = {
           <div style="font-family:var(--mono);font-weight:600;font-size:11.5px;">${this.fmt(t.price)}</div>
           <div style="font-family:var(--mono);font-size:10px;font-weight:600;color:${up?cPos:cNeg};">${(up?'+':'')+p.toFixed(2)}%</div>
         </div>
+        <button class="wlremove" onclick="event.stopPropagation();vtx.removeTicker('${t.sym}')" title="Remove from watchlist" style="opacity:0;transition:opacity .15s ease;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--mut);cursor:pointer;font-size:13px;line-height:1;">×</button>
       </div>`;
     }).join('');
 
@@ -551,12 +769,21 @@ const vtx = {
     document.getElementById('tfButtons').innerHTML = tfList.map(l => `
       <button onclick="vtx.setTf('${l}')" style="font-family:var(--mono);font-size:10.5px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${l===s.tf?'rgba(var(--glow),.2)':'transparent'};color:${l===s.tf?'var(--acc2)':'var(--mut)'};">${l}</button>`).join('');
 
+    const indDefs = [['sma9','SMA 9','var(--warn)'],['sma20','SMA 20','#9b6bff']];
+    document.getElementById('indicatorButtons').innerHTML = indDefs.map(([key,label,color]) => `
+      <button onclick="vtx.toggleIndicator('${key}')" style="font-family:var(--mono);font-size:10.5px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${s.indicators[key]?'rgba(var(--glow),.2)':'transparent'};color:${s.indicators[key]?color:'var(--mut)'};">${label}</button>`).join('');
+
     const ch = this.buildChart(f.hist);
     document.getElementById('chartAreaPath').setAttribute('d', ch.area);
     document.getElementById('chartLinePath').setAttribute('d', ch.line);
     document.getElementById('chartEndGlow').setAttribute('cx', ch.endX); document.getElementById('chartEndGlow').setAttribute('cy', ch.endY);
     document.getElementById('chartEndDot').setAttribute('cx', ch.endX); document.getElementById('chartEndDot').setAttribute('cy', ch.endY);
     document.getElementById('volBars').innerHTML = ch.bars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${b.fill}" rx="0.8"></rect>`).join('');
+    const sma9El = document.getElementById('chartSma9Path'), sma20El = document.getElementById('chartSma20Path');
+    sma9El.setAttribute('d', ch.sma9Path); sma9El.setAttribute('opacity', ch.sma9Path ? '0.9' : '0');
+    sma20El.setAttribute('d', ch.sma20Path); sma20El.setAttribute('opacity', ch.sma20Path ? '0.9' : '0');
+    document.getElementById('priceAxis').innerHTML = ch.axisLabels.map(a => `
+      <text x="${ch.W+6}" y="${(a.y+3).toFixed(1)}" font-family="var(--mono)" font-size="9" fill="var(--mut)">${this.fmt(a.price)}</text>`).join('');
 
     // Key stats
     const fin = f.fin || {};
@@ -627,6 +854,13 @@ const vtx = {
 
   renderTimeSales() {
     const cPos='var(--pos)', cNeg='var(--neg)';
+    if (!this.state.marketOpen) {
+      document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">
+        Market is closed — live prints resume at the next open.<br>
+        <span style="color:var(--mut);opacity:.7;">Tape is simulated for demo purposes (see footer).</span>
+      </div>`;
+      return;
+    }
     document.getElementById('timeSalesBody').innerHTML = this.state.tape.map(p => `
       <div style="display:grid;grid-template-columns:64px 1fr auto auto;gap:8px;align-items:center;padding:5px 13px;border-left:2.5px solid ${p.side==='B'?cPos:cNeg};font-family:var(--mono);font-size:11px;animation:rowIn .25s ease;">
         <span style="color:var(--mut);font-size:10px;">${p.time}</span>
@@ -638,7 +872,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['dark','Dark Pools'],['options','Options'],['filings','Filings'],['calendar','Calendar'],['movers','Movers'],['ai','AI']];
+    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Calendar'],['movers','Sectors'],['ai','AI']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -697,21 +931,6 @@ const vtx = {
               </div>
             </div>`).join('') + `</div></div>`;
     }
-    else if (s.tab === 'options') {
-      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
-        this.OPT.map(o => `
-          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-left:2.5px solid ${o.tone};border-radius:10px;background:rgba(255,255,255,.02);">
-            <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:800;color:${o.tone};background:${o.cpBg};">${o.cp}</div>
-            <div>
-              <div style="font-family:var(--mono);font-size:12px;font-weight:700;">${o.sym} <span style="color:var(--mut);font-weight:500;">${o.strike}${o.cp}</span></div>
-              <div style="font-size:9.5px;color:var(--mut);">Exp ${o.exp} · ${o.size} ct · <span style="color:${o.tone};font-weight:600;">${o.sent}</span></div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${o.tone};">${o.prem}</div>
-              <div style="font-family:var(--mono);font-size:9px;color:var(--mut);">${o.time}</div>
-            </div>
-          </div>`).join('') + `</div>`;
-    }
     else if (s.tab === 'filings') {
       el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
         this.FIL.map(f => `
@@ -746,18 +965,46 @@ const vtx = {
     }
     else if (s.tab === 'movers') {
       const cPos='var(--pos)', cNeg='var(--neg)';
-      el.innerHTML = `<div style="padding:10px;">
-        <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:2px 2px 9px;">Market Heatmap · % Change</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">` +
-          T.map(t => {
-            const p=this.pctOf(t), up=p>=0, inten=Math.min(1,Math.abs(p)/1.8);
-            const bg = up ? `rgba(31,209,151,${(0.08+inten*0.42).toFixed(3)})` : `rgba(255,77,94,${(0.08+inten*0.42).toFixed(3)})`;
-            const border = up ? 'rgba(31,209,151,.25)' : 'rgba(255,77,94,.25)';
-            return `<div class="movercard" onclick="vtx.selectTicker('${t.sym}')" style="border-radius:10px;padding:12px 10px;cursor:pointer;background:${bg};border:1px solid ${border};transition:transform .15s ease;">
-              <div style="font-family:var(--mono);font-size:13px;font-weight:800;">${t.sym}</div>
-              <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:${up?cPos:cNeg};margin-top:4px;">${(up?'+':'')+p.toFixed(2)}%</div>
-            </div>`;
-          }).join('') + `</div></div>`;
+      const groups = {};
+      T.forEach(t => { const b = this.sectorBucket(t.sector); (groups[b] = groups[b] || []).push(t); });
+
+      if (!s.moversSector) {
+        const sectors = Object.keys(groups).map(name => {
+          const items = groups[name];
+          const avg = items.reduce((sum,t)=>sum+this.pctOf(t),0)/items.length;
+          return {name, items, avg};
+        }).sort((a,b)=>b.avg-a.avg);
+        el.innerHTML = `<div style="padding:10px;">
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:2px 2px 9px;">Sector Heatmap · Avg % Change</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">` +
+            sectors.map(g => {
+              const up = g.avg>=0, inten=Math.min(1,Math.abs(g.avg)/1.8);
+              const bg = up ? `rgba(31,209,151,${(0.08+inten*0.42).toFixed(3)})` : `rgba(255,77,94,${(0.08+inten*0.42).toFixed(3)})`;
+              const border = up ? 'rgba(31,209,151,.25)' : 'rgba(255,77,94,.25)';
+              return `<div class="movercard" onclick="vtx.openSector('${g.name}')" style="border-radius:11px;padding:14px 12px;cursor:pointer;background:${bg};border:1px solid ${border};transition:transform .15s ease;">
+                <div style="font-size:12px;font-weight:700;color:var(--txt);">${g.name}</div>
+                <div style="font-family:var(--mono);font-size:15px;font-weight:800;color:${up?cPos:cNeg};margin-top:6px;">${(up?'+':'')+g.avg.toFixed(2)}%</div>
+                <div style="font-size:9.5px;color:var(--mut);margin-top:3px;">${g.items.length} ticker${g.items.length===1?'':'s'}</div>
+              </div>`;
+            }).join('') + `</div></div>`;
+      } else {
+        const items = (groups[s.moversSector] || []).slice().sort((a,b)=>this.pctOf(b)-this.pctOf(a));
+        el.innerHTML = `<div style="padding:10px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <button onclick="vtx.openSector(null)" style="font-family:var(--mono);font-size:10px;color:var(--acc2);background:rgba(var(--glow),.1);border:1px solid rgba(var(--glow),.3);border-radius:7px;padding:5px 10px;cursor:pointer;">← Sectors</button>
+            <span style="font-size:11.5px;font-weight:700;color:var(--txt);">${s.moversSector}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">` +
+            items.map(t => {
+              const p=this.pctOf(t), up=p>=0, inten=Math.min(1,Math.abs(p)/1.8);
+              const bg = up ? `rgba(31,209,151,${(0.08+inten*0.42).toFixed(3)})` : `rgba(255,77,94,${(0.08+inten*0.42).toFixed(3)})`;
+              const border = up ? 'rgba(31,209,151,.25)' : 'rgba(255,77,94,.25)';
+              return `<div class="movercard" onclick="vtx.selectTicker('${t.sym}')" style="border-radius:10px;padding:12px 10px;cursor:pointer;background:${bg};border:1px solid ${border};transition:transform .15s ease;">
+                <div style="font-family:var(--mono);font-size:13px;font-weight:800;">${t.sym}</div>
+                <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:${up?cPos:cNeg};margin-top:4px;">${(up?'+':'')+p.toFixed(2)}%</div>
+              </div>`;
+            }).join('') + `</div></div>`;
+      }
     }
     else if (s.tab === 'ai') {
       el.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;min-height:0;">
@@ -793,9 +1040,10 @@ const vtx = {
     const qp = document.getElementById('quickPrompts');
     const prompts = [
       {label:'Summarize '+f.sym, msg:'Summarize '+f.sym},
+      {label:'Financials', msg:'Show me the financials'},
       {label:'Dark-pool read', msg:'What is the dark-pool activity?'},
-      {label:'Unusual options?', msg:'Any unusual options flow?'},
-      {label:'Earnings risk', msg:'What is the earnings risk?'}
+      {label:'Insider filings', msg:'Any recent insider filings?'},
+      {label:'Calendar', msg:'What is on the calendar?'}
     ];
     qp.innerHTML = prompts.map(p => `<button class="qprompt" onclick="vtx.sendChat(${JSON.stringify(p.msg)})" style="font-family:var(--ui);font-size:10.5px;color:var(--acc2);background:rgba(52,211,255,.07);border:1px solid rgba(52,211,255,.22);border-radius:99px;padding:5px 11px;cursor:pointer;">${p.label}</button>`).join('');
   },
@@ -804,7 +1052,56 @@ const vtx = {
     const f = this.state.tickers.find(t=>t.sym===this.state.focus) || this.state.tickers[0];
     const p = this.pctOf(f);
     const dir = p>=0 ? 'up' : 'down';
-    return `${f.sym} — ${f.name}\n\nTrading ${f.price.toFixed(2)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session. P/E sits near ${f.pe}x against ${f.sector.toLowerCase()} peers.\n\n• Tape reads ${p>=0?'buy-side heavy':'distribution'} into the open\n• Dark-pool index elevated — institutions accumulating off-exchange\n• Options skew leans ${p>=0?'calls':'protective puts'}\n\nNet: ${p>=0?'constructive, but size into strength rather than chasing.':'caution — wait for the tape to stabilize before adding.'}`;
+    const fin = f.fin || {};
+    const q = (msg||'').toLowerCase();
+    const lo = Math.min(...f.hist), hi = Math.max(...f.hist);
+
+    const dark = (this.DARK||[]).filter(d=>d.sym===f.sym);
+    const filings = (this.FIL||[]).filter(x=>x.sym===f.sym);
+    const allFilings = (this.FIL||[]).slice(0,5);
+
+    if (/dark.?pool|block print|off.?exchange/.test(q)) {
+      if (!dark.length) return `No recent dark-pool prints on file for ${f.sym} in our FINRA weekly summary (data has a ~6-8 week reporting lag, and not every symbol clears the threshold every week). Try checking ${(this.DARK||[]).map(d=>d.sym).join(', ')||'another symbol'} in the Dark Pools tab.`;
+      const d = dark[0];
+      return `${f.sym} — Dark Pool\n\nMost recent weekly off-exchange print: ${d.size} shares (${d.notional}) via ${d.venue}, ${d.pct} of that week's total off-exchange volume (${d.time}).\n\nNote: FINRA weekly summary data lags ~6-8 weeks, so this reflects historical positioning, not live flow.`;
+    }
+
+    if (/filing|insider|form ?4|buy|sell|sold|bought/.test(q)) {
+      const own = filings.length ? filings : allFilings;
+      if (!own.length) return `No recent Form 4 insider filings available right now — the SEC EDGAR feed may not have a filing for ${f.sym} in the latest batch.`;
+      const lines = own.slice(0,4).map(x=>`• ${x.who} (${x.role}) — ${x.act} ${x.shares} sh, ${x.value} (${x.time})`).join('\n');
+      return `${filings.length ? f.sym+' — ' : 'Latest market-wide '}Insider Filings\n\n${lines}`;
+    }
+
+    if (/earning|calendar|event/.test(q)) {
+      const own = (this.CAL||[]).filter(c=>c.sym===f.sym);
+      const upcoming = own.length ? own : (this.CAL||[]).slice(0,4);
+      const lines = upcoming.map(c=>`• ${c.day} ${c.date} — ${c.event} (${c.sym}, ${c.time} EST)`).join('\n');
+      return `${f.sym} — Calendar\n\n${lines || 'Nothing scheduled in the current calendar window.'}`;
+    }
+
+    if (/financ|fundamental|pe |p\/e|valuation|eps|dividend|beta|market cap/.test(q)) {
+      const peStr = fin.peTTM ? fin.peTTM.toFixed(1)+'x' : 'n/a';
+      const epsStr = fin.epsTTM != null ? '$'+fin.epsTTM.toFixed(2) : 'n/a';
+      const mcStr = fin.marketCapitalization ? this.mktCapFromFin(fin.marketCapitalization) : this.mktCap(f);
+      const divStr = fin.dividendYield != null ? fin.dividendYield.toFixed(2)+'%' : '0.00%';
+      const betaStr = fin.beta != null ? fin.beta.toFixed(2) : 'n/a';
+      const w52 = (fin.week52Low!=null && fin.week52High!=null) ? `$${this.fmt(fin.week52Low)} – $${this.fmt(fin.week52High)}` : `$${this.fmt(lo*0.74)} – $${this.fmt(hi*1.18)}`;
+      return `${f.sym} — ${f.name}\n\nPrice ${this.fmt(f.price)} (${(p>=0?'+':'')+p.toFixed(2)}% today)\nP/E (ttm): ${peStr}\nEPS (ttm): ${epsStr}\nBeta: ${betaStr}\nDividend yield: ${divStr}\nMarket cap: ${mcStr}\n52-week range: ${w52}`;
+    }
+
+    if (/summar|overview|how.+(doing|look)|what.+(happening|going on)/.test(q)) {
+      const peStr = fin.peTTM ? fin.peTTM.toFixed(1)+'x' : `${f.pe}x (estimated)`;
+      const darkLine = dark.length ? `• Last dark-pool print: ${dark[0].size} sh via ${dark[0].venue} (${dark[0].time})` : '• No recent dark-pool print on file';
+      const filLine = filings.length ? `• Recent insider activity: ${filings[0].who} ${filings[0].act} ${filings[0].shares} sh` : '• No recent insider filings on file';
+      return `${f.sym} — ${f.name}\n\nTrading ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session. Sector: ${f.sector}. P/E ${peStr}.\n\n${darkLine}\n${filLine}\n\nSession range: $${this.fmt(lo)} – $${this.fmt(hi)}.`;
+    }
+
+    if (/help|what can you|how.+work/.test(q)) {
+      return `I can answer questions about ${f.sym} (or whichever symbol you have focused) using the live data already loaded on this page:\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" / "calendar" — upcoming scheduled events\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
+    }
+
+    return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "dark pool" activity, "filings", or "earnings" — I'll pull from the live data on this page. Type "help" for the full list.`;
   },
   sendChat(text) {
     const input = document.getElementById('chatInputEl');
