@@ -56,7 +56,7 @@ input{font-family:var(--ui)}
   <div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100vh;width:100vw;">
 
     <!-- TOP BAR -->
-    <header style="display:flex;align-items:center;gap:16px;height:56px;flex-shrink:0;padding:0 16px;border-bottom:1px solid var(--line);background:rgba(7,9,16,.55);backdrop-filter:blur(18px);">
+    <header style="position:relative;z-index:50;display:flex;align-items:center;gap:16px;height:56px;flex-shrink:0;padding:0 16px;border-bottom:1px solid var(--line);background:rgba(7,9,16,.55);backdrop-filter:blur(18px);">
       <div style="display:flex;align-items:center;gap:11px;">
         <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(var(--glow),.5),inset 0 1px 0 rgba(255,255,255,.3);">
           <svg width="17" height="17" viewBox="0 0 14 14" fill="none"><polyline points="1,10 5,5 8,8 13,2" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
@@ -301,6 +301,10 @@ const vtx = {
     document.getElementById('searchInput').addEventListener('focus', () => this.onSearchFocus());
     document.getElementById('searchInput').addEventListener('blur', () => this.onSearchBlur());
     document.getElementById('searchInput').addEventListener('keydown', e => this.onSearchKey(e));
+    document.getElementById('searchDropdown').addEventListener('mouseleave', () => {
+      this.state.searchOpen = false;
+      this.closeSearch();
+    });
 
     window.addEventListener('keydown', e => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
