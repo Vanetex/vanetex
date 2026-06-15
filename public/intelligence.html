@@ -337,6 +337,11 @@ const vtx = {
     }, 520);
 
     setInterval(() => { this.renderClock(); }, 1000);
+
+    this.loadFilings();
+    this.loadDarkPool();
+    setInterval(() => this.loadFilings(), 5 * 60 * 1000);
+    setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
     this.renderClock();
   },
 
@@ -383,6 +388,38 @@ const vtx = {
 
   renderClock() {
     document.getElementById('clockEl').textContent = new Date().toTimeString().slice(0,8);
+  },
+
+  async loadFilings() {
+    try {
+      const res = await fetch('/api/intel/filings');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.filings || !data.filings.length) return;
+      const toneMap = {
+        BUY: { tone: 'var(--pos)', toneBorder: 'rgba(31,209,151,.4)' },
+        SELL: { tone: 'var(--neg)', toneBorder: 'rgba(255,77,94,.4)' },
+        OTHER: { tone: 'var(--warn)', toneBorder: 'rgba(245,165,36,.4)' },
+      };
+      this.FIL = data.filings.map(f => ({ ...f, ...toneMap[f.act] }));
+      if (this.state.tab === 'filings') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  async loadDarkPool() {
+    try {
+      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      const res = await fetch(`/api/intel/darkpool?symbols=${encodeURIComponent(symbols)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.rows || !data.rows.length) return;
+      this.DARK = data.rows.map(d => {
+        const dt = new Date(d.time + 'T00:00:00Z');
+        const label = isNaN(dt) ? d.time : `Week of ${dt.getMonth()+1}/${dt.getDate()}`;
+        return { ...d, time: label };
+      });
+      if (this.state.tab === 'dark') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
   },
 
   render() {
