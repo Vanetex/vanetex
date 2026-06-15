@@ -4,154 +4,743 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vanetex Intelligence</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:#04060f;color:#e8edf8;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.topbar{height:50px;background:rgba(4,6,15,.95);border-bottom:1px solid rgba(34,211,238,.1);display:flex;align-items:center;padding:0 20px;justify-content:space-between;flex-shrink:0;gap:20px}
-.logo{font-size:12px;font-weight:800;letter-spacing:.22em;flex-shrink:0}
-.logo em{color:#22d3ee;font-style:normal}
-.search-bar{flex:1;max-width:400px;display:flex;align-items:center;background:rgba(15,23,42,.6);border:1px solid rgba(34,211,238,.15);border-radius:6px;padding:0 12px;height:32px}
-.search-bar input{background:none;border:none;color:#e8edf8;font-size:12px;width:100%;outline:none}
-.search-bar input::placeholder{color:#4e6080}
-.status-bar{display:flex;align-items:center;gap:8px;font-size:11px;color:#4e6080;flex-shrink:0}
-.sdot{width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.back{font-size:11px;color:#4e6080;text-decoration:none;cursor:pointer;transition:color .2s;flex-shrink:0}
-.back:hover{color:#e8edf8}
-.main-container{flex:1;display:grid;grid-template-columns:220px 1fr 280px;grid-template-rows:1fr 200px;gap:8px;padding:8px;overflow:hidden}
-.sidebar-left{background:rgba(10,16,36,.6);border:1px solid rgba(34,211,238,.1);border-radius:8px;display:flex;flex-direction:column;overflow:hidden}
-.sidebar-title{font-size:11px;font-weight:700;color:#22d3ee;padding:12px;border-bottom:1px solid rgba(34,211,238,.1);text-transform:uppercase;letter-spacing:.1em}
-.watchlist-item{padding:10px 12px;font-size:11px;border-bottom:1px solid rgba(34,211,238,.05);cursor:pointer;transition:background .2s}
-.watchlist-item:hover{background:rgba(34,211,238,.1)}
-.watchlist-item.active{background:rgba(34,211,238,.2);border-left:2px solid #22d3ee;padding-left:10px}
-.watchlist-item-price{color:#10b981;margin-left:auto}
-.center-panel{background:rgba(10,16,36,.6);border:1px solid rgba(34,211,238,.1);border-radius:8px;display:flex;flex-direction:column}
-.panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid rgba(34,211,238,.1);min-height:42px}
-.panel-title{font-size:12px;font-weight:600;color:#22d3ee}
-.tabs{display:flex;gap:16px;padding:0 16px;border-bottom:1px solid rgba(34,211,238,.05);overflow-x:auto;height:38px;align-items:center}
-.tab{font-size:11px;color:#4e6080;cursor:pointer;white-space:nowrap;padding-bottom:10px;border-bottom:2px solid transparent;transition:all .2s}
-.tab:hover{color:#22d3ee}
-.tab.active{color:#22d3ee;border-bottom-color:#22d3ee}
-.panel-content{flex:1;padding:16px;overflow-y:auto;display:flex;align-items:center;justify-content:center;color:#4e6080;font-size:12px}
-.sidebar-right{background:rgba(10,16,36,.6);border:1px solid rgba(34,211,238,.1);border-radius:8px;display:flex;flex-direction:column;overflow:hidden}
-.ai-widget{padding:12px;border-bottom:1px solid rgba(34,211,238,.1)}
-.ai-label{font-size:10px;font-weight:700;color:#22d3ee;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
-.ai-input{background:rgba(4,6,15,.8);border:1px solid rgba(34,211,238,.15);border-radius:4px;padding:8px;font-size:11px;color:#e8edf8;width:100%;font-family:'JetBrains Mono',monospace}
-.ai-input::placeholder{color:#4e6080}
-.research-items{flex:1;overflow-y:auto;padding:8px}
-.research-item{padding:8px;margin-bottom:6px;background:rgba(15,23,42,.5);border-left:2px solid #f59e0b;border-radius:4px;font-size:10px;cursor:pointer;transition:background .2s}
-.research-item:hover{background:rgba(15,23,42,.8)}
-.research-title{font-weight:600;color:#e8edf8}
-.research-meta{color:#4e6080;font-size:9px;margin-top:3px}
-.bottom-panel{grid-column:1/-1;background:rgba(10,16,36,.6);border:1px solid rgba(34,211,238,.1);border-radius:8px;display:flex;flex-direction:column}
-.news-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(34,211,238,.1);min-height:40px}
-.news-title{font-size:12px;font-weight:600;color:#22d3ee}
-.news-feed{flex:1;overflow-x:auto;display:flex;gap:12px;padding:10px 16px}
-.news-card{min-width:280px;background:rgba(4,6,15,.8);border:1px solid rgba(34,211,238,.1);border-radius:6px;padding:10px;font-size:10px;cursor:pointer;transition:border-color .2s}
-.news-card:hover{border-color:rgba(34,211,238,.3)}
-.news-source{color:#4e6080;font-size:9px;margin-bottom:4px}
-.news-headline{color:#e8edf8;font-weight:600;margin-bottom:4px;line-height:1.3}
-.dev-badge{display:inline-block;background:rgba(245,158,11,.2);color:#f59e0b;padding:2px 6px;border-radius:3px;font-size:9px;margin-top:4px}
+:root{
+  --bg0:#04050a; --bg1:#0a0d17;
+  --acc:#2F7BFF; --acc2:#34d3ff; --glow:47,123,255;
+  --pos:#1fd397; --neg:#ff4d5e; --warn:#f5a524;
+  --txt:#eef1f8; --mut:#7c8499; --line:rgba(255,255,255,.07);
+  --tapeDur:34s;
+  --ui:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#04050a;}
+body{font-family:var(--ui);color:var(--txt);-webkit-font-smoothing:antialiased;overflow:hidden;height:100vh;}
+a{color:inherit;text-decoration:none}
 ::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:rgba(34,211,238,.05)}
-::-webkit-scrollbar-thumb{background:rgba(34,211,238,.2);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:rgba(34,211,238,.3)}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.13);border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+@keyframes tapeScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes auroraDrift{0%{transform:translate(-4%,-2%) scale(1)}50%{transform:translate(5%,4%) scale(1.18)}100%{transform:translate(-4%,-2%) scale(1)}}
+@keyframes scanMove{0%{transform:translateY(-10vh)}100%{transform:translateY(110vh)}}
+@keyframes pulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.4)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes rowIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+button{font-family:var(--ui)}
+input{font-family:var(--ui)}
+.wlrow:hover{background:rgba(255,255,255,.05) !important}
+.srchrow:hover{background:rgba(var(--glow),.14)}
+.newscard:hover{border-color:rgba(var(--glow),.3) !important;background:rgba(var(--glow),.05) !important}
+.movercard:hover{transform:translateY(-2px)}
+.qprompt:hover{background:rgba(52,211,255,.14) !important}
+.tapetrack:hover{animation-play-state:paused}
+.backlink{position:fixed;top:10px;right:14px;z-index:50;font-size:10px;color:var(--mut);letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--line);border-radius:6px;padding:5px 10px;background:rgba(6,8,14,.6);backdrop-filter:blur(10px);}
+.backlink:hover{color:var(--acc2);border-color:rgba(var(--glow),.3)}
 </style>
 </head>
 <body>
-<div class="topbar">
-  <div class="logo"><em>VANETEX</em> INTELLIGENCE</div>
-  <div class="search-bar">
-    <input type="text" placeholder="Search symbols, tickers, research...">
+
+<a class="backlink" href="index.html">← Back to platform</a>
+
+<div style="position:relative;width:100vw;height:100vh;overflow:hidden;background:radial-gradient(120% 90% at 78% -10%,rgba(var(--glow),.16),transparent 48%),radial-gradient(90% 70% at 12% 4%,rgba(52,211,255,.06),transparent 50%),linear-gradient(180deg,#06080f 0%,#04050a 70%);">
+
+  <!-- Ambient FX -->
+  <div aria-hidden="true" style="position:absolute;top:-22%;left:18%;width:760px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(var(--glow),.34),transparent 62%);filter:blur(46px);animation:auroraDrift 19s ease-in-out infinite;pointer-events:none;z-index:0;"></div>
+  <div aria-hidden="true" style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);background-size:46px 46px;-webkit-mask-image:radial-gradient(130% 100% at 50% 0%,#000 35%,transparent 78%);mask-image:radial-gradient(130% 100% at 50% 0%,#000 35%,transparent 78%);pointer-events:none;z-index:0;"></div>
+  <div aria-hidden="true" style="position:absolute;left:0;right:0;height:130px;background:linear-gradient(180deg,transparent,rgba(var(--glow),.05),transparent);animation:scanMove 8.5s linear infinite;pointer-events:none;z-index:0;"></div>
+
+  <div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100vh;width:100vw;">
+
+    <!-- TOP BAR -->
+    <header style="display:flex;align-items:center;gap:16px;height:56px;flex-shrink:0;padding:0 16px;border-bottom:1px solid var(--line);background:rgba(7,9,16,.55);backdrop-filter:blur(18px);">
+      <div style="display:flex;align-items:center;gap:11px;">
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(var(--glow),.5),inset 0 1px 0 rgba(255,255,255,.3);">
+          <svg width="17" height="17" viewBox="0 0 14 14" fill="none"><polyline points="1,10 5,5 8,8 13,2" stroke="white" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>
+        </div>
+        <div style="line-height:1;">
+          <div style="font-size:15px;font-weight:700;letter-spacing:.02em;">VANETEX</div>
+          <div style="font-size:8.5px;font-weight:600;letter-spacing:.34em;color:var(--acc2);margin-top:3px;">INTELLIGENCE</div>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div style="position:relative;width:340px;margin-left:6px;">
+        <div style="display:flex;align-items:center;gap:9px;height:36px;padding:0 13px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.04);">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--mut)" stroke-width="1.5"></circle><path d="M11 11l3 3" stroke="var(--mut)" stroke-width="1.5" stroke-linecap="round"></path></svg>
+          <input id="searchInput" placeholder="Search ticker or company…" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:var(--ui);font-size:13px;">
+          <kbd style="font-family:var(--mono);font-size:9.5px;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:2px 5px;">⌘K</kbd>
+        </div>
+        <div id="searchDropdown" style="display:none;position:absolute;top:44px;left:0;right:0;z-index:40;background:rgba(12,15,26,.97);border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.6);backdrop-filter:blur(20px);overflow:hidden;padding:6px;"></div>
+      </div>
+
+      <div style="flex:1;"></div>
+
+      <!-- Variant toggle -->
+      <div style="display:flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.03);">
+        <button id="btnCinematic" onclick="vtx.setVariant('A')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:5px 11px;border-radius:6px;border:none;cursor:pointer;">CINEMATIC</button>
+        <button id="btnAurora" onclick="vtx.setVariant('B')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:5px 11px;border-radius:6px;border:none;cursor:pointer;">AURORA</button>
+      </div>
+
+      <!-- Market status -->
+      <div style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid rgba(31,209,151,.28);border-radius:8px;background:rgba(31,209,151,.08);">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos);animation:pulse 1.8s ease infinite;"></span>
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--pos);">MKT OPEN</span>
+      </div>
+
+      <!-- Clock -->
+      <div style="text-align:right;line-height:1.15;">
+        <div id="clockEl" style="font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.02em;">00:00:00</div>
+        <div style="font-size:8.5px;letter-spacing:.16em;color:var(--mut);">EST · NYSE</div>
+      </div>
+    </header>
+
+    <!-- TICKER TAPE -->
+    <div style="height:34px;flex-shrink:0;overflow:hidden;border-bottom:1px solid var(--line);background:rgba(6,8,14,.6);display:flex;align-items:center;">
+      <div id="tickerTape" class="tapetrack" style="display:flex;gap:34px;width:max-content;animation:tapeScroll var(--tapeDur) linear infinite;padding-left:34px;"></div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:268px 1fr 384px;gap:10px;padding:10px;">
+
+      <!-- LEFT COLUMN -->
+      <div style="display:flex;flex-direction:column;gap:10px;min-height:0;">
+
+        <!-- Watchlist -->
+        <div style="display:flex;flex-direction:column;min-height:0;flex:1.25;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
+          <div style="display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);flex-shrink:0;">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pulse 1.8s ease infinite;"></span>
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Watchlist</span>
+            <span id="watchCount" style="font-family:var(--mono);font-size:10px;color:var(--mut);margin-left:auto;">0 SYM</span>
+          </div>
+          <div id="watchlistBody" style="overflow-y:auto;flex:1;padding:5px;"></div>
+        </div>
+
+        <!-- Time & Sales -->
+        <div style="display:flex;flex-direction:column;min-height:0;flex:1;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
+          <div style="display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);flex-shrink:0;">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos);animation:pulse 1.4s ease infinite;"></span>
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Live Tape · Time &amp; Sales</span>
+          </div>
+          <div style="display:grid;grid-template-columns:64px 1fr auto auto;gap:8px;padding:6px 13px;font-size:8.5px;letter-spacing:.1em;color:var(--mut);text-transform:uppercase;border-bottom:1px solid var(--line);flex-shrink:0;">
+            <span>Time</span><span>Sym</span><span style="text-align:right;">Price</span><span style="text-align:right;">Size</span>
+          </div>
+          <div id="timeSalesBody" style="overflow-y:auto;flex:1;"></div>
+        </div>
+      </div>
+
+      <!-- CENTER COLUMN -->
+      <div style="display:flex;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;padding-right:2px;">
+
+        <!-- Focus header -->
+        <div id="vtx-focus" style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);transition:transform .25s ease;transform-style:preserve-3d;">
+          <div id="focusHeader"></div>
+          <div id="headStats" style="display:grid;grid-template-columns:repeat(6,1fr);gap:1px;margin-top:16px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;"></div>
+        </div>
+
+        <!-- Chart -->
+        <div style="flex-shrink:0;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
+          <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Charting</span>
+            <span id="chartLabel" style="font-family:var(--mono);font-size:10px;color:var(--acc2);"></span>
+            <div style="flex:1;"></div>
+            <div id="tfButtons" style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;"></div>
+          </div>
+          <div style="padding:8px 6px 4px;position:relative;">
+            <svg id="chartSvg" width="100%" height="210" viewBox="0 0 620 200" preserveAspectRatio="none" fill="none" style="display:block;">
+              <defs>
+                <linearGradient id="vtxArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--acc)" stop-opacity="0.32"></stop>
+                  <stop offset="100%" stop-color="var(--acc)" stop-opacity="0"></stop>
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="38" x2="620" y2="38" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
+              <line x1="0" y1="78" x2="620" y2="78" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
+              <line x1="0" y1="118" x2="620" y2="118" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
+              <g id="volBars"></g>
+              <path id="chartAreaPath" fill="url(#vtxArea)"></path>
+              <path id="chartLinePath" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>
+              <circle id="chartEndGlow" r="6.5" fill="var(--acc)" opacity="0.2"></circle>
+              <circle id="chartEndDot" r="3.4" fill="var(--acc)"></circle>
+            </svg>
+          </div>
+        </div>
+
+        <!-- stats + depth -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0;">
+          <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+            <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Key Statistics</div>
+            <div id="keyStats" style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);"></div>
+          </div>
+
+          <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+            <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
+              <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Depth of Market</span>
+              <span id="depthDpi" style="font-family:var(--mono);font-size:9.5px;color:var(--acc2);margin-left:auto;"></span>
+            </div>
+            <div id="depthBody" style="padding:8px 12px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div style="display:flex;flex-direction:column;min-height:0;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
+        <div id="tabsBar" style="display:flex;gap:2px;padding:8px;border-bottom:1px solid var(--line);overflow-x:auto;flex-shrink:0;"></div>
+        <div id="tabContent" style="flex:1;min-height:0;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <footer style="height:28px;flex-shrink:0;display:flex;align-items:center;gap:18px;padding:0 16px;border-top:1px solid var(--line);background:rgba(6,8,14,.6);font-family:var(--mono);font-size:10.5px;color:var(--mut);">
+      <span style="display:flex;align-items:center;gap:6px;color:var(--pos);"><span style="width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.6s ease infinite;"></span>LIVE FEED</span>
+      <span>LATENCY <span id="latencyVal">12</span>ms</span>
+      <span style="color:var(--warn);">◆ SIMULATED DEMO DATA</span>
+      <div style="flex:1;"></div>
+      <span id="indicesBar" style="display:flex;gap:18px;"></span>
+      <div style="flex:1;"></div>
+      <span style="color:var(--acc2);">VANETEX INTELLIGENCE v1.0</span>
+    </footer>
   </div>
-  <div class="status-bar"><span class="sdot"></span><span>Live</span></div>
-  <a class="back" href="index.html">← Back</a>
 </div>
 
-<div class="main-container">
-  <!-- Left Sidebar: Watchlist -->
-  <div class="sidebar-left">
-    <div class="sidebar-title">Watchlist</div>
-    <div style="flex:1;overflow-y:auto">
-      <div class="watchlist-item active">NVDA <span class="watchlist-item-price">$142.50</span></div>
-      <div class="watchlist-item">TSLA <span class="watchlist-item-price">$178.20</span></div>
-      <div class="watchlist-item">AAPL <span class="watchlist-item-price">$195.80</span></div>
-      <div class="watchlist-item">SPY <span class="watchlist-item-price">$598.40</span></div>
-      <div class="watchlist-item">QQQ <span class="watchlist-item-price">$421.30</span></div>
-    </div>
-  </div>
+<script>
+const vtx = {
+  state: {
+    variant: 'A', focus: 'NVDA', tab: 'news', tf: '1D',
+    query: '', searchOpen: false, tickers: [], tape: [],
+    chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol — fundamentals, dark-pool prints, options flow, or earnings risk.'}],
+    chatInput: '', aiTyping: false, latency: 12
+  },
 
-  <!-- Center Panel: Charts & Market Data -->
-  <div class="center-panel">
-    <div class="panel-header">
-      <div class="panel-title">NVDA — Chart View</div>
-    </div>
-    <div class="tabs">
-      <div class="tab active">1D</div>
-      <div class="tab">5D</div>
-      <div class="tab">1M</div>
-      <div class="tab">3M</div>
-      <div class="tab">1Y</div>
-      <div class="tab">All</div>
-    </div>
-    <div class="panel-content">
-      [Chart rendering — Interactive candle chart with technical indicators]
-    </div>
-  </div>
+  NEWS: [
+    {time:'09:42',src:'Bloomberg',sym:'NVDA',headline:'NVIDIA unveils next-gen Rubin accelerators; cloud demand called "insatiable"',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'},
+    {time:'09:31',src:'Reuters',sym:'AAPL',headline:'Apple readies AI-server push as supplier orders jump 18% QoQ',dot:'var(--acc2)',dotBorder:'rgba(52,211,255,.4)',tag:'FLOW'},
+    {time:'09:18',src:'WSJ',sym:'TSLA',headline:'Tesla robotaxi permit stalls in California — regulator cites data gaps',dot:'var(--neg)',dotBorder:'rgba(255,77,94,.4)',tag:'BEARISH'},
+    {time:'08:55',src:'CNBC',sym:'META',headline:'Meta lifts capex guide to $72B as AI buildout accelerates',dot:'var(--warn)',dotBorder:'rgba(245,165,36,.4)',tag:'CAPEX'},
+    {time:'08:40',src:'FT',sym:'AVGO',headline:'Broadcom lands second hyperscaler custom-silicon contract',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'},
+    {time:'08:12',src:'Bloomberg',sym:'COIN',headline:'Coinbase derivatives volume hits record as ETF inflows surge',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'}
+  ],
+  CAL: [
+    {day:'MON',date:'16',sym:'Macro',event:'US Retail Sales (MoM)',time:'08:30',imp:'HIGH',tone:'var(--warn)',toneBorder:'rgba(245,165,36,.4)'},
+    {day:'TUE',date:'17',sym:'NFLX',event:'Q2 Earnings — After Close',time:'16:05',imp:'EARN',tone:'var(--acc2)',toneBorder:'rgba(52,211,255,.4)'},
+    {day:'WED',date:'18',sym:'Macro',event:'FOMC Rate Decision',time:'14:00',imp:'HIGH',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
+    {day:'WED',date:'18',sym:'TSLA',event:'Q2 Earnings — After Close',time:'16:30',imp:'EARN',tone:'var(--acc2)',toneBorder:'rgba(52,211,255,.4)'},
+    {day:'THU',date:'19',sym:'Macro',event:'Initial Jobless Claims',time:'08:30',imp:'MED',tone:'var(--mut)',toneBorder:'rgba(255,255,255,.18)'},
+    {day:'FRI',date:'20',sym:'AVGO',event:'Q3 Earnings — Before Open',time:'07:00',imp:'EARN',tone:'var(--acc2)',toneBorder:'rgba(52,211,255,.4)'}
+  ],
+  FIL: [
+    {time:'2m',sym:'NVDA',who:'J. Huang',role:'CEO',act:'SELL',shares:'120,000',value:'$141.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
+    {time:'18m',sym:'PLTR',who:'S. Cohen',role:'President',act:'SELL',shares:'2.4M',value:'$149.8M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
+    {time:'1h',sym:'COIN',who:'B. Armstrong',role:'CEO',act:'BUY',shares:'50,000',value:'$12.2M',tone:'var(--pos)',toneBorder:'rgba(31,209,151,.4)'},
+    {time:'2h',sym:'META',who:'M. Zuckerberg',role:'CEO',act:'SELL',shares:'90,000',value:'$52.6M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
+    {time:'3h',sym:'AMD',who:'L. Su',role:'CEO',act:'BUY',shares:'25,000',value:'$4.1M',tone:'var(--pos)',toneBorder:'rgba(31,209,151,.4)'},
+    {time:'5h',sym:'AAPL',who:'K. Adams',role:'CFO',act:'SELL',shares:'30,000',value:'$6.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'}
+  ],
+  OPT: [
+    {time:'09:41',sym:'NVDA',cp:'C',strike:'1200',exp:'07/19',prem:'$4.2M',size:'3,500',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'},
+    {time:'09:39',sym:'TSLA',cp:'P',strike:'280',exp:'07/05',prem:'$1.8M',size:'2,100',sent:'BEARISH',tone:'var(--neg)',cpBg:'rgba(255,77,94,.12)'},
+    {time:'09:35',sym:'AMD',cp:'C',strike:'175',exp:'08/16',prem:'$960K',size:'4,800',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'},
+    {time:'09:30',sym:'SPY',cp:'P',strike:'590',exp:'06/21',prem:'$3.1M',size:'5,000',sent:'HEDGE',tone:'var(--warn)',cpBg:'rgba(245,165,36,.12)'},
+    {time:'09:24',sym:'META',cp:'C',strike:'600',exp:'07/19',prem:'$2.4M',size:'1,900',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'},
+    {time:'09:19',sym:'COIN',cp:'C',strike:'260',exp:'07/12',prem:'$1.1M',size:'2,600',sent:'BULLISH',tone:'var(--pos)',cpBg:'rgba(31,209,151,.12)'}
+  ],
+  DARK: [
+    {time:'09:42:11',sym:'NVDA',size:'248,500',notional:'$293.7M',venue:'UBS ATS',pct:'4.1%'},
+    {time:'09:41:50',sym:'AAPL',size:'612,000',notional:'$139.9M',venue:'Sigma X',pct:'2.6%'},
+    {time:'09:41:08',sym:'MSFT',size:'180,300',notional:'$84.9M',venue:'JPM-X',pct:'1.9%'},
+    {time:'09:40:33',sym:'TSLA',size:'420,750',notional:'$124.1M',venue:'IEX D-Peg',pct:'3.4%'},
+    {time:'09:39:55',sym:'AVGO',size:'66,200',notional:'$114.1M',venue:'MS Pool',pct:'5.2%'},
+    {time:'09:39:12',sym:'META',size:'95,400',notional:'$55.7M',venue:'CrossFinder',pct:'2.1%'}
+  ],
 
-  <!-- Right Sidebar: Dark Pools & Research -->
-  <div class="sidebar-right">
-    <div class="ai-widget">
-      <div class="ai-label">AI Research</div>
-      <input type="text" class="ai-input" placeholder="Ask about NVDA, earnings, technicals...">
-    </div>
-    <div class="sidebar-title" style="margin:0;padding:10px 12px">Dark Pools</div>
-    <div class="research-items">
-      <div class="research-item">
-        <div class="research-title">Block Trade Alert</div>
-        <div class="research-meta">$8.2M NVDA • 2m ago</div>
-      </div>
-      <div class="research-item">
-        <div class="research-title">Unusual Volume</div>
-        <div class="research-meta">+340% vs 30-day avg</div>
-      </div>
-      <div class="research-item">
-        <div class="research-title">Deep Dive</div>
-        <div class="research-meta">Institutional positioning</div>
-      </div>
-    </div>
-  </div>
+  hashN(str, salt) { let h = salt || 0; for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return (h % 1000) / 1000; },
+  genHist(price, n) { const a = []; let p = price * 0.962; for (let i = 0; i < n - 1; i++) { p += (Math.random() - 0.47) * price * 0.0065; a.push(p); } a.push(price); return a; },
+  hhmmss() { return new Date().toTimeString().slice(0, 8); },
+  mkPrint(t) { const sizes = [100,100,200,200,300,400,500,800,1200,2000]; return {id:Math.random(), time:this.hhmmss(), sym:t.sym, price:t.price.toFixed(2), size:sizes[Math.floor(Math.random()*sizes.length)].toLocaleString(), side: Math.random()>0.5?'B':'S'}; },
+  sparkPath(arr) { const w=104,h=30,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1; return 'M '+arr.map((v,i)=>((i/(arr.length-1))*w).toFixed(1)+' '+(h-((v-min)/r)*(h-5)-2.5).toFixed(1)).join(' L '); },
+  buildChart(arr) {
+    const W=620,H=150,VB=46,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1;
+    const pts=arr.map((v,i)=>[(i/(arr.length-1))*W,(H-((v-min)/r)*(H-14)-7)]);
+    const line='M '+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L ');
+    const area=line+` L ${W} ${H} L 0 ${H} Z`;
+    const end=pts[pts.length-1];
+    const bars=[]; const bw=W/arr.length*0.55;
+    for (let i=1;i<arr.length;i++) { const up=arr[i]>=arr[i-1]; const mag=Math.abs(arr[i]-arr[i-1]); const h=Math.max(2,Math.min(VB,4+(mag/r)*VB*4)); bars.push({x:((i/(arr.length-1))*W-bw/2).toFixed(1),y:(H+VB-h).toFixed(1),w:bw.toFixed(1),h:h.toFixed(1),fill: up?'rgba(31,209,151,.45)':'rgba(255,77,94,.45)'}); }
+    return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars};
+  },
+  mktCap(t) { const v = t.shares*1e9*t.price; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(0)+'B'; },
+  pctOf(t) { return (t.price - t.open) / t.open * 100; },
+  fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); },
 
-  <!-- Bottom Panel: News Feed & Alerts -->
-  <div class="bottom-panel">
-    <div class="news-header">
-      <div class="news-title">Market Feed</div>
-    </div>
-    <div class="news-feed">
-      <div class="news-card">
-        <div class="news-source">Reuters</div>
-        <div class="news-headline">NVDA earnings beat analyst expectations</div>
-        <div class="dev-badge">In development</div>
-      </div>
-      <div class="news-card">
-        <div class="news-source">MarketWatch</div>
-        <div class="news-headline">Fed signals possible rate cuts in Q3</div>
-        <div class="dev-badge">In development</div>
-      </div>
-      <div class="news-card">
-        <div class="news-source">Bloomberg</div>
-        <div class="news-headline">Tech sector rotation accelerating</div>
-        <div class="dev-badge">In development</div>
-      </div>
-      <div class="news-card">
-        <div class="news-source">CNBC</div>
-        <div class="news-headline">Chip shortage concerns ease Q2</div>
-        <div class="dev-badge">In development</div>
-      </div>
-    </div>
-  </div>
-</div>
+  init() {
+    const seed = [
+      ['NVDA','NVIDIA Corp','Semis',1182.40],['AAPL','Apple Inc','Consumer',228.66],
+      ['TSLA','Tesla Inc','Auto / EV',295.10],['MSFT','Microsoft','Software',471.22],
+      ['AMZN','Amazon.com','E-Commerce',205.61],['META','Meta Platforms','Internet',583.94],
+      ['GOOGL','Alphabet Inc','Internet',178.30],['AMD','Adv Micro Dev','Semis',164.83],
+      ['AVGO','Broadcom Inc','Semis',1724.05],['COIN','Coinbase Global','Fintech',244.72],
+      ['PLTR','Palantir Tech','Software',62.44],['NFLX','Netflix Inc','Media',691.55],
+      ['SPY','SPDR S&P 500','Index ETF',596.20],['QQQ','Invesco QQQ','Index ETF',511.83]
+    ];
+    this.state.tickers = seed.map(a => ({
+      sym:a[0], name:a[1], sector:a[2], price:a[3],
+      open: a[3]*(1-(this.hashN(a[0],3)*0.032-0.013)),
+      hist: this.genHist(a[3],46),
+      vol: Math.round(this.hashN(a[0],5)*70+6),
+      pe: Math.round(this.hashN(a[0],9)*44+12),
+      shares: this.hashN(a[0],11)*3.6+0.5
+    }));
+    for (let i=0;i<16;i++) { this.state.tape.push(this.mkPrint(this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)])); }
+
+    this.applyVariant();
+
+    document.getElementById('searchInput').addEventListener('input', e => this.onSearchInput(e.target.value));
+    document.getElementById('searchInput').addEventListener('focus', () => this.onSearchFocus());
+    document.getElementById('searchInput').addEventListener('blur', () => this.onSearchBlur());
+    document.getElementById('searchInput').addEventListener('keydown', e => this.onSearchKey(e));
+
+    window.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        document.getElementById('searchInput').focus();
+      }
+    });
+
+    const card = document.getElementById('vtx-focus');
+    card.addEventListener('mousemove', e => {
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX-r.left)/r.width-0.5, py=(e.clientY-r.top)/r.height-0.5;
+      card.style.transform = `perspective(1100px) rotateX(${(-py*3.2).toFixed(2)}deg) rotateY(${(px*4.2).toFixed(2)}deg)`;
+    });
+    card.addEventListener('mouseleave', () => { card.style.transform = 'perspective(1100px) rotateX(0deg) rotateY(0deg)'; });
+
+    this.render();
+
+    setInterval(() => {
+      this.state.tickers = this.state.tickers.map(t => {
+        const drift = (Math.random()-0.5)*t.price*0.0016;
+        const np = Math.max(0.5, t.price+drift);
+        const hist = t.hist.concat(np); if (hist.length>46) hist.shift();
+        return {...t, price:np, hist};
+      });
+      this.state.latency = 8+Math.floor(Math.random()*14);
+      this.render();
+    }, 1100);
+
+    setInterval(() => {
+      const t = this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)];
+      this.state.tape = [this.mkPrint(t), ...this.state.tape].slice(0,26);
+      this.renderTimeSales();
+    }, 520);
+
+    setInterval(() => { this.renderClock(); }, 1000);
+    this.renderClock();
+  },
+
+  applyVariant() {
+    const r = document.documentElement;
+    if (this.state.variant === 'B') { r.style.setProperty('--acc','#9b6bff'); r.style.setProperty('--acc2','#22d3ee'); r.style.setProperty('--glow','155,107,255'); }
+    else { r.style.setProperty('--acc','#2F7BFF'); r.style.setProperty('--acc2','#34d3ff'); r.style.setProperty('--glow','47,123,255'); }
+    const a = document.getElementById('btnCinematic'), b = document.getElementById('btnAurora');
+    a.style.background = this.state.variant==='A' ? 'rgba(var(--glow),.2)' : 'transparent';
+    a.style.color = this.state.variant==='A' ? 'var(--acc2)' : 'var(--mut)';
+    b.style.background = this.state.variant==='B' ? 'rgba(var(--glow),.2)' : 'transparent';
+    b.style.color = this.state.variant==='B' ? 'var(--acc2)' : 'var(--mut)';
+  },
+  setVariant(v) { this.state.variant = v; this.applyVariant(); },
+  selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); },
+  setTab(id) { this.state.tab = id; this.renderRight(); },
+  setTf(tf) { this.state.tf = tf; this.render(); },
+
+  results() {
+    const q = this.state.query.trim().toLowerCase();
+    if (!q) return this.state.tickers.slice(0,6);
+    return this.state.tickers.filter(t => t.sym.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)).slice(0,6);
+  },
+  onSearchInput(v) { this.state.query=v; this.state.searchOpen=true; this.renderSearch(); },
+  onSearchFocus() { this.state.searchOpen=true; this.renderSearch(); },
+  onSearchBlur() { setTimeout(()=>{ this.state.searchOpen=false; this.closeSearch(); },130); },
+  onSearchKey(e) {
+    if (e.key==='Enter') { const r=this.results(); if (r[0]) { this.selectTicker(r[0].sym); e.target.blur(); } }
+    else if (e.key==='Escape') { this.state.searchOpen=false; this.state.query=''; e.target.value=''; this.closeSearch(); }
+  },
+  closeSearch() { document.getElementById('searchDropdown').style.display='none'; },
+  renderSearch() {
+    const dd = document.getElementById('searchDropdown');
+    const r = this.results();
+    if (!this.state.searchOpen || r.length===0) { dd.style.display='none'; return; }
+    dd.style.display='block';
+    dd.innerHTML = r.map(t => `
+      <div class="srchrow" onmousedown="vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+        <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.sym}</span>
+        <span style="flex:1;font-size:12.5px;color:var(--txt);">${t.name}</span>
+        <span style="font-size:10px;color:var(--mut);">${t.sector}</span>
+      </div>`).join('');
+  },
+
+  renderClock() {
+    document.getElementById('clockEl').textContent = new Date().toTimeString().slice(0,8);
+  },
+
+  render() {
+    const s = this.state, T = s.tickers;
+    const f = T.find(t=>t.sym===s.focus) || T[0];
+    const cPos='var(--pos)', cNeg='var(--neg)';
+
+    // Ticker tape
+    const tapeItems = T.concat(T).map(t => {
+      const p = this.pctOf(t), up = p>=0;
+      return `<div style="display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px;">
+        <span style="font-family:var(--mono);font-weight:700;color:var(--txt);">${t.sym}</span>
+        <span style="font-family:var(--mono);color:var(--mut);">${this.fmt(t.price)}</span>
+        <span style="font-family:var(--mono);font-weight:600;color:${up?cPos:cNeg};">${(up?'+':'')+p.toFixed(2)}%</span>
+        <span style="color:${up?cPos:cNeg};font-size:9px;">${up?'▲':'▼'}</span>
+      </div>`;
+    }).join('');
+    document.getElementById('tickerTape').innerHTML = tapeItems;
+
+    // Watchlist
+    document.getElementById('watchCount').textContent = T.length+' SYM';
+    document.getElementById('watchlistBody').innerHTML = T.map(t => {
+      const p=this.pctOf(t), up=p>=0;
+      const isFocus = t.sym===s.focus;
+      return `<div class="wlrow" onclick="vtx.selectTicker('${t.sym}')" style="position:relative;display:grid;grid-template-columns:1fr 58px auto;align-items:center;gap:7px;padding:7px 9px 7px 11px;border-radius:9px;cursor:pointer;background:${isFocus?'rgba(var(--glow),.12)':'transparent'};">
+        <span style="position:absolute;left:0;top:18%;bottom:18%;width:2.5px;border-radius:3px;background:${isFocus?'var(--acc)':'transparent'};"></span>
+        <div style="min-width:0;">
+          <div style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:${isFocus?'var(--acc2)':'var(--txt)'};">${t.sym}</div>
+          <div style="font-size:9.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div>
+        </div>
+        <svg width="58" height="22" viewBox="0 0 104 30" preserveAspectRatio="none" fill="none"><path d="${this.sparkPath(t.hist)}" stroke="${up?cPos:cNeg}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path></svg>
+        <div style="text-align:right;">
+          <div style="font-family:var(--mono);font-weight:600;font-size:11.5px;">${this.fmt(t.price)}</div>
+          <div style="font-family:var(--mono);font-size:10px;font-weight:600;color:${up?cPos:cNeg};">${(up?'+':'')+p.toFixed(2)}%</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    this.renderTimeSales();
+
+    // Focus header
+    const fp=this.pctOf(f), fup=fp>=0;
+    const lo=Math.min(...f.hist), hi=Math.max(...f.hist);
+    document.getElementById('focusHeader').innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+            <span style="font-family:var(--mono);font-size:30px;font-weight:800;letter-spacing:-.01em;">${f.sym}</span>
+            <span style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);border:1px solid rgba(52,211,255,.3);background:rgba(52,211,255,.08);border-radius:99px;padding:3px 10px;">${f.sector}</span>
+            <span style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--pos);"><span style="width:5px;height:5px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.5s ease infinite;"></span>LIVE</span>
+          </div>
+          <div style="font-size:13px;color:var(--mut);">${f.name} · NASDAQ</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${this.fmt(f.price)}</div>
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:7px;">
+            <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${fup?cPos:cNeg};">${(fup?'+':'')+(f.price-f.open).toFixed(2)}</span>
+            <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${fup?cPos:cNeg};background:${fup?'rgba(31,209,151,.1)':'rgba(255,77,94,.1)'};border:1px solid ${fup?'rgba(31,209,151,.3)':'rgba(255,77,94,.3)'};border-radius:99px;padding:3px 9px;">${(fup?'+':'')+fp.toFixed(2)}% ${fup?'▲':'▼'}</span>
+          </div>
+        </div>
+      </div>`;
+
+    const headStats = [
+      {label:'Open',value:this.fmt(f.open),color:'var(--txt)'},
+      {label:'Day Low',value:this.fmt(lo),color:'var(--txt)'},
+      {label:'Day High',value:this.fmt(hi),color:'var(--txt)'},
+      {label:'Volume',value:f.vol+'M',color:'var(--txt)'},
+      {label:'Avg Vol',value:(f.vol*1.2).toFixed(0)+'M',color:'var(--mut)'},
+      {label:'Mkt Cap',value:this.mktCap(f),color:'var(--acc2)'}
+    ];
+    document.getElementById('headStats').innerHTML = headStats.map(st => `
+      <div style="background:rgba(10,13,22,.6);padding:9px 11px;">
+        <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:3px;">${st.label}</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${st.color};">${st.value}</div>
+      </div>`).join('');
+
+    // Chart
+    document.getElementById('chartLabel').textContent = `${f.sym} · ${s.tf}`;
+    const tfList = ['1D','5D','1M','6M','1Y','MAX'];
+    document.getElementById('tfButtons').innerHTML = tfList.map(l => `
+      <button onclick="vtx.setTf('${l}')" style="font-family:var(--mono);font-size:10.5px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${l===s.tf?'rgba(var(--glow),.2)':'transparent'};color:${l===s.tf?'var(--acc2)':'var(--mut)'};">${l}</button>`).join('');
+
+    const ch = this.buildChart(f.hist);
+    document.getElementById('chartAreaPath').setAttribute('d', ch.area);
+    document.getElementById('chartLinePath').setAttribute('d', ch.line);
+    document.getElementById('chartEndGlow').setAttribute('cx', ch.endX); document.getElementById('chartEndGlow').setAttribute('cy', ch.endY);
+    document.getElementById('chartEndDot').setAttribute('cx', ch.endX); document.getElementById('chartEndDot').setAttribute('cy', ch.endY);
+    document.getElementById('volBars').innerHTML = ch.bars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${b.fill}" rx="0.8"></rect>`).join('');
+
+    // Key stats
+    const metrics = [
+      {label:'Prev Close',value:this.fmt(f.open),color:'var(--txt)'},
+      {label:'P/E Ratio',value:f.pe+'x',color:'var(--txt)'},
+      {label:'52W High',value:this.fmt(hi*1.18),color:'var(--pos)'},
+      {label:'52W Low',value:this.fmt(lo*0.74),color:'var(--neg)'},
+      {label:'Beta',value:(0.7+this.hashN(f.sym,21)*1.1).toFixed(2),color:'var(--txt)'},
+      {label:'Div Yield',value:(this.hashN(f.sym,33)*1.6).toFixed(2)+'%',color:'var(--txt)'},
+      {label:'EPS (ttm)',value:'$'+(f.price/f.pe).toFixed(2),color:'var(--txt)'},
+      {label:'Short Int',value:(1+this.hashN(f.sym,44)*6).toFixed(1)+'%',color:'var(--warn)'}
+    ];
+    document.getElementById('keyStats').innerHTML = metrics.map(m => `
+      <div style="background:rgba(10,13,22,.55);padding:10px 13px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:10.5px;color:var(--mut);">${m.label}</span>
+        <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${m.color};">${m.value}</span>
+      </div>`).join('');
+
+    // Depth ladder
+    const step = Math.max(0.01, f.price*0.0007);
+    const asks=[], bids=[]; let maxz=1;
+    for (let i=1;i<=6;i++) {
+      const az=Math.round((this.hashN(f.sym,i)*0.85+0.15)*4200);
+      const bz=Math.round((this.hashN(f.sym,i+40)*0.85+0.15)*4200);
+      maxz=Math.max(maxz,az,bz);
+      asks.push({price:this.fmt(f.price+step*i), raw:az});
+      bids.push({price:this.fmt(f.price-step*i), raw:bz});
+    }
+    const dpi = (38+this.hashN(f.sym,7)*16).toFixed(1)+'%';
+    const litPct = (62-this.hashN(f.sym,7)*16).toFixed(1)+'%';
+    document.getElementById('depthDpi').textContent = 'DPI '+dpi;
+    const asksHtml = asks.slice().reverse().map(a => `
+      <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 6px;font-family:var(--mono);font-size:10.5px;">
+        <div style="position:absolute;right:0;top:1px;bottom:1px;width:${(a.raw/maxz*100).toFixed(0)}%;background:rgba(255,77,94,.16);border-radius:3px;"></div>
+        <span style="position:relative;color:var(--neg);font-weight:600;">${a.price}</span>
+        <span style="position:relative;color:var(--mut);">${a.raw.toLocaleString()}</span>
+      </div>`).join('');
+    const bidsHtml = bids.map(b => `
+      <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 6px;font-family:var(--mono);font-size:10.5px;">
+        <div style="position:absolute;right:0;top:1px;bottom:1px;width:${(b.raw/maxz*100).toFixed(0)}%;background:rgba(31,209,151,.16);border-radius:3px;"></div>
+        <span style="position:relative;color:var(--pos);font-weight:600;">${b.price}</span>
+        <span style="position:relative;color:var(--mut);">${b.raw.toLocaleString()}</span>
+      </div>`).join('');
+    document.getElementById('depthBody').innerHTML = asksHtml +
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 6px;margin:4px 0;border-top:1px dashed rgba(255,255,255,.12);border-bottom:1px dashed rgba(255,255,255,.12);">
+        <span style="font-family:var(--mono);font-size:11px;font-weight:800;color:var(--acc2);">${this.fmt(f.price)}</span>
+        <span style="font-size:8.5px;letter-spacing:.1em;color:var(--mut);">SPREAD $${step.toFixed(2)}</span>
+      </div>` + bidsHtml;
+
+    // Right panel
+    this.renderTabs();
+    this.renderRight();
+
+    // Status bar
+    document.getElementById('latencyVal').textContent = s.latency;
+    const spy = T.find(t=>t.sym==='SPY'), qqq = T.find(t=>t.sym==='QQQ');
+    const indices = [
+      {label:'S&P', value:this.fmt(spy.price), color:cPos},
+      {label:'NDX', value:this.fmt(qqq.price), color:cPos},
+      {label:'VIX', value:(13+this.hashN('VIX',(Date.now()/3000|0))*0.4).toFixed(2), color:'var(--warn)'},
+      {label:'10Y', value:'4.21%', color:'var(--mut)'}
+    ];
+    document.getElementById('indicesBar').innerHTML = indices.map(i => `<span>${i.label} <span style="color:${i.color};font-weight:600;">${i.value}</span></span>`).join('');
+
+    this.renderSearch();
+  },
+
+  renderTimeSales() {
+    const cPos='var(--pos)', cNeg='var(--neg)';
+    document.getElementById('timeSalesBody').innerHTML = this.state.tape.map(p => `
+      <div style="display:grid;grid-template-columns:64px 1fr auto auto;gap:8px;align-items:center;padding:5px 13px;border-left:2.5px solid ${p.side==='B'?cPos:cNeg};font-family:var(--mono);font-size:11px;animation:rowIn .25s ease;">
+        <span style="color:var(--mut);font-size:10px;">${p.time}</span>
+        <span style="font-weight:700;color:var(--txt);">${p.sym}</span>
+        <span style="text-align:right;color:${p.side==='B'?cPos:cNeg};font-weight:600;">${p.price}</span>
+        <span style="text-align:right;color:var(--mut);">${p.size}</span>
+      </div>`).join('');
+  },
+
+  renderTabs() {
+    const s = this.state;
+    const tabDefs = [['news','News'],['dark','Dark Pools'],['options','Options'],['filings','Filings'],['calendar','Calendar'],['movers','Movers'],['ai','AI']];
+    document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
+      <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
+  },
+
+  renderRight() {
+    const s = this.state, T = s.tickers;
+    const el = document.getElementById('tabContent');
+    this.renderTabs();
+
+    if (s.tab === 'news') {
+      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:7px;">` +
+        this.NEWS.map(n => `
+          <div class="newscard" style="padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.02);cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="width:6px;height:6px;border-radius:50%;background:${n.dot};box-shadow:0 0 7px ${n.dot};"></span>
+              <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);">${n.sym}</span>
+              <span style="font-size:10px;color:var(--mut);">${n.src}</span>
+              <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;color:${n.dot};border:1px solid ${n.dotBorder};border-radius:5px;padding:1px 6px;margin-left:auto;">${n.tag}</span>
+            </div>
+            <div style="font-size:12.5px;line-height:1.45;color:var(--txt);">${n.headline}</div>
+            <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:6px;">${n.time} EST</div>
+          </div>`).join('') + `</div>`;
+    }
+    else if (s.tab === 'dark') {
+      const f = T.find(t=>t.sym===s.focus) || T[0];
+      const dpi = (38+this.hashN(f.sym,7)*16).toFixed(1)+'%';
+      const litPct = (62-this.hashN(f.sym,7)*16).toFixed(1)+'%';
+      el.innerHTML = `<div style="padding:10px;">
+        <div style="display:flex;gap:9px;margin-bottom:10px;">
+          <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:rgba(52,211,255,.05);">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:5px;">Dark Pool Index</div>
+            <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--acc2);">${dpi}</div>
+            <div style="font-size:9.5px;color:var(--mut);margin-top:2px;">of consolidated volume off-exchange</div>
+          </div>
+          <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;">
+            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:7px;">Lit / Dark Split</div>
+            <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.05);">
+              <div style="width:${litPct};background:var(--acc);"></div>
+              <div style="flex:1;background:var(--acc2);opacity:.6;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:6px;"><span>LIT ${litPct}</span><span>DARK ${dpi}</span></div>
+          </div>
+        </div>
+        <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:4px 2px 8px;">Recent Block Prints</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">` +
+          this.DARK.map(d => `
+            <div style="display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+              <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);">${d.sym}</span>
+              <div>
+                <div style="font-family:var(--mono);font-size:11.5px;font-weight:600;">${d.size} <span style="color:var(--mut);font-weight:400;">sh</span></div>
+                <div style="font-size:9.5px;color:var(--mut);">${d.venue} · ${d.pct} ADV</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-family:var(--mono);font-size:11.5px;font-weight:700;">${d.notional}</div>
+                <div style="font-family:var(--mono);font-size:9px;color:var(--mut);">${d.time}</div>
+              </div>
+            </div>`).join('') + `</div></div>`;
+    }
+    else if (s.tab === 'options') {
+      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
+        this.OPT.map(o => `
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-left:2.5px solid ${o.tone};border-radius:10px;background:rgba(255,255,255,.02);">
+            <div style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;font-weight:800;color:${o.tone};background:${o.cpBg};">${o.cp}</div>
+            <div>
+              <div style="font-family:var(--mono);font-size:12px;font-weight:700;">${o.sym} <span style="color:var(--mut);font-weight:500;">${o.strike}${o.cp}</span></div>
+              <div style="font-size:9.5px;color:var(--mut);">Exp ${o.exp} · ${o.size} ct · <span style="color:${o.tone};font-weight:600;">${o.sent}</span></div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${o.tone};">${o.prem}</div>
+              <div style="font-family:var(--mono);font-size:9px;color:var(--mut);">${o.time}</div>
+            </div>
+          </div>`).join('') + `</div>`;
+    }
+    else if (s.tab === 'filings') {
+      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
+        this.FIL.map(f => `
+          <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+            <div>
+              <div style="display:flex;align-items:center;gap:7px;">
+                <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--acc2);">${f.sym}</span>
+                <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${f.tone};border:1px solid ${f.toneBorder};border-radius:5px;padding:1px 6px;">${f.act}</span>
+              </div>
+              <div style="font-size:11px;color:var(--txt);margin-top:4px;">${f.who} <span style="color:var(--mut);">· ${f.role}</span></div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${f.tone};">${f.value}</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);">${f.shares} sh · ${f.time}</div>
+            </div>
+          </div>`).join('') + `</div>`;
+    }
+    else if (s.tab === 'calendar') {
+      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
+        this.CAL.map(c => `
+          <div style="display:grid;grid-template-columns:46px 1fr auto;gap:11px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+            <div style="text-align:center;border-right:1px solid var(--line);padding-right:8px;">
+              <div style="font-size:8.5px;letter-spacing:.1em;color:var(--mut);">${c.day}</div>
+              <div style="font-family:var(--mono);font-size:17px;font-weight:800;">${c.date}</div>
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${c.sym} · ${c.time} EST</div>
+            </div>
+            <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
+          </div>`).join('') + `</div>`;
+    }
+    else if (s.tab === 'movers') {
+      const cPos='var(--pos)', cNeg='var(--neg)';
+      el.innerHTML = `<div style="padding:10px;">
+        <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:2px 2px 9px;">Market Heatmap · % Change</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">` +
+          T.map(t => {
+            const p=this.pctOf(t), up=p>=0, inten=Math.min(1,Math.abs(p)/1.8);
+            const bg = up ? `rgba(31,209,151,${(0.08+inten*0.42).toFixed(3)})` : `rgba(255,77,94,${(0.08+inten*0.42).toFixed(3)})`;
+            const border = up ? 'rgba(31,209,151,.25)' : 'rgba(255,77,94,.25)';
+            return `<div class="movercard" onclick="vtx.selectTicker('${t.sym}')" style="border-radius:10px;padding:12px 10px;cursor:pointer;background:${bg};border:1px solid ${border};transition:transform .15s ease;">
+              <div style="font-family:var(--mono);font-size:13px;font-weight:800;">${t.sym}</div>
+              <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:${up?cPos:cNeg};margin-top:4px;">${(up?'+':'')+p.toFixed(2)}%</div>
+            </div>`;
+          }).join('') + `</div></div>`;
+    }
+    else if (s.tab === 'ai') {
+      el.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;min-height:0;">
+        <div id="chatMessages" style="flex:1;min-height:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;"></div>
+        <div style="flex-shrink:0;padding:10px 12px;border-top:1px solid var(--line);">
+          <div id="quickPrompts" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:11px;padding:6px 6px 6px 13px;background:rgba(255,255,255,.04);">
+            <input id="chatInputEl" placeholder="Ask Vanetex Intelligence…" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:var(--ui);font-size:12.5px;">
+            <button onclick="vtx.sendChat()" style="width:32px;height:32px;border-radius:8px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--acc),#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(var(--glow),.5);">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2 8h10M8 4l4 4-4 4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;
+      document.getElementById('chatInputEl').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); this.sendChat(); } });
+      this.renderChat();
+    }
+  },
+
+  renderChat() {
+    const f = this.state.tickers.find(t=>t.sym===this.state.focus) || this.state.tickers[0];
+    const cm = document.getElementById('chatMessages');
+    if (!cm) return;
+    cm.innerHTML = this.state.chat.map(m => {
+      const mine = m.role==='user';
+      return `<div style="display:flex;flex-direction:column;align-items:${mine?'flex-end':'flex-start'};">
+        <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">${mine?'You':'Vanetex AI'}</div>
+        <div style="max-width:90%;background:${mine?'rgba(var(--glow),.14)':'rgba(255,255,255,.04)'};border:1px solid ${mine?'rgba(var(--glow),.3)':'var(--line)'};color:${mine?'var(--txt)':'rgba(238,241,248,.92)'};padding:10px 13px;border-radius:13px;font-size:12.5px;line-height:1.55;white-space:pre-wrap;">${m.text}</div>
+      </div>`;
+    }).join('') + (this.state.aiTyping ? `<div style="display:flex;align-items:center;gap:6px;color:var(--acc2);font-size:11px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--acc2);animation:blink 1s ease infinite;"></span>analyzing…</div>` : '');
+    cm.scrollTop = cm.scrollHeight;
+
+    const qp = document.getElementById('quickPrompts');
+    const prompts = [
+      {label:'Summarize '+f.sym, msg:'Summarize '+f.sym},
+      {label:'Dark-pool read', msg:'What is the dark-pool activity?'},
+      {label:'Unusual options?', msg:'Any unusual options flow?'},
+      {label:'Earnings risk', msg:'What is the earnings risk?'}
+    ];
+    qp.innerHTML = prompts.map(p => `<button class="qprompt" onclick="vtx.sendChat(${JSON.stringify(p.msg)})" style="font-family:var(--ui);font-size:10.5px;color:var(--acc2);background:rgba(52,211,255,.07);border:1px solid rgba(52,211,255,.22);border-radius:99px;padding:5px 11px;cursor:pointer;">${p.label}</button>`).join('');
+  },
+
+  composeReply(msg) {
+    const f = this.state.tickers.find(t=>t.sym===this.state.focus) || this.state.tickers[0];
+    const p = this.pctOf(f);
+    const dir = p>=0 ? 'up' : 'down';
+    return `${f.sym} — ${f.name}\n\nTrading ${f.price.toFixed(2)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session. P/E sits near ${f.pe}x against ${f.sector.toLowerCase()} peers.\n\n• Tape reads ${p>=0?'buy-side heavy':'distribution'} into the open\n• Dark-pool index elevated — institutions accumulating off-exchange\n• Options skew leans ${p>=0?'calls':'protective puts'}\n\nNet: ${p>=0?'constructive, but size into strength rather than chasing.':'caution — wait for the tape to stabilize before adding.'}`;
+  },
+  sendChat(text) {
+    const input = document.getElementById('chatInputEl');
+    const msg = (text!==undefined ? text : (input?input.value:'')).trim();
+    if (!msg || this.state.aiTyping) return;
+    const reply = this.composeReply(msg);
+    this.state.chat.push({role:'user',text:msg}, {role:'ai',text:''});
+    this.state.aiTyping = true;
+    if (input) input.value='';
+    this.renderChat();
+    let i=0; const step = Math.max(2, Math.round(reply.length/80));
+    clearInterval(this._typeTimer);
+    this._typeTimer = setInterval(() => {
+      i += step;
+      this.state.chat[this.state.chat.length-1] = {role:'ai', text:reply.slice(0,i)};
+      this.renderChat();
+      if (i >= reply.length) { clearInterval(this._typeTimer); this.state.aiTyping=false; this.renderChat(); }
+    }, 26);
+  }
+};
+
+vtx.init();
+</script>
 
 </body>
 </html>
