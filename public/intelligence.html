@@ -277,11 +277,11 @@ const vtx = {
 
   init() {
     const seed = [
-      ['NVDA','NVIDIA Corp','Semis',1182.40],['AAPL','Apple Inc','Consumer',228.66],
+      ['NVDA','NVIDIA Corp','Semis',141.40],['AAPL','Apple Inc','Consumer',228.66],
       ['TSLA','Tesla Inc','Auto / EV',295.10],['MSFT','Microsoft','Software',471.22],
       ['AMZN','Amazon.com','E-Commerce',205.61],['META','Meta Platforms','Internet',583.94],
       ['GOOGL','Alphabet Inc','Internet',178.30],['AMD','Adv Micro Dev','Semis',164.83],
-      ['AVGO','Broadcom Inc','Semis',1724.05],['COIN','Coinbase Global','Fintech',244.72],
+      ['AVGO','Broadcom Inc','Semis',172.40],['COIN','Coinbase Global','Fintech',244.72],
       ['PLTR','Palantir Tech','Software',62.44],['NFLX','Netflix Inc','Media',691.55],
       ['SPY','SPDR S&P 500','Index ETF',596.20],['QQQ','Invesco QQQ','Index ETF',511.83]
     ];
@@ -318,6 +318,8 @@ const vtx = {
     card.addEventListener('mouseleave', () => { card.style.transform = 'perspective(1100px) rotateX(0deg) rotateY(0deg)'; });
 
     this.render();
+    this.loadQuotes();
+    setInterval(() => this.loadQuotes(), 60 * 1000);
 
     setInterval(() => {
       this.state.tickers = this.state.tickers.map(t => {
@@ -388,6 +390,30 @@ const vtx = {
 
   renderClock() {
     document.getElementById('clockEl').textContent = new Date().toTimeString().slice(0,8);
+  },
+
+  async loadQuotes() {
+    try {
+      const results = await Promise.all(this.state.tickers.map(t =>
+        fetch(`/api/stock/quote?symbol=${encodeURIComponent(t.sym)}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      ));
+      this.state.tickers = this.state.tickers.map((t, i) => {
+        const q = results[i];
+        if (!q || !q.price) return t;
+        return {
+          ...t,
+          price: q.price,
+          open: q.open || q.prevClose || q.price,
+          prevClose: q.prevClose,
+          hist: this.genHist(q.price, 46),
+          name: q.name || t.name,
+          sector: q.industry || t.sector,
+        };
+      });
+      this.render();
+    } catch (e) { /* keep previous prices on failure */ }
   },
 
   async loadFilings() {
