@@ -974,11 +974,11 @@ const vtx = {
 
   renderTimeSales() {
     const cPos='var(--pos)', cNeg='var(--neg)';
-    if (!this.state.marketOpen && !this.state.feedLive) {
-      document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">
-        Market is closed — live prints resume at the next open.<br>
-        <span style="color:var(--mut);opacity:.7;">Tape is simulated for demo purposes (see footer).</span>
-      </div>`;
+    if (!this.state.marketOpen && this.state.tape.length === 0) {
+      const msg = this.state.feedLive
+        ? 'Market is closed — waiting for the next live print.'
+        : 'Market is closed — live prints resume at the next open.<br><span style="color:var(--mut);opacity:.7;">Tape is simulated for demo purposes (see footer).</span>';
+      document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">${msg}</div>`;
       return;
     }
     document.getElementById('timeSalesBody').innerHTML = this.state.tape.map(p => `
