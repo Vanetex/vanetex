@@ -62,7 +62,9 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 /* Hero */
 .hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px;flex-shrink:0;min-height:600px}
 .hero-left{flex:1;max-width:500px}
-.hero-right{flex:0 0 490px;height:480px;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
+.hero-right{flex:1;height:480px;display:flex;gap:24px;align-items:center;justify-content:flex-start;position:relative;overflow:visible}
+.globe-wrapper{flex:0 0 420px;height:100%;display:flex;align-items:center;justify-content:center}
+.insights-wrapper{flex:1;display:flex;flex-direction:column;gap:16px;height:100%;overflow-y:auto;padding-right:12px}
 
 .eyebrow{font-size:9.5px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:rgba(59,130,246,.7);margin-bottom:16px;display:flex;align-items:center;gap:9px;opacity:0;animation:riseIn .7s .2s ease forwards}
 .eyebrow::before{content:'';display:block;width:22px;height:1px;background:currentColor}
@@ -90,8 +92,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .timer-open{color:#10b981}.timer-closed{color:#ef4444}
 
 /* Asset class and indices section */
-.market-insights{display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:22px 50px 18px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.05);opacity:0;animation:riseIn .7s .8s ease forwards}
-.insight-panel{background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:20px;backdrop-filter:blur(20px)}
+.insight-panel{background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;backdrop-filter:blur(20px);flex:1}
 .insight-title{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:14px}
 .asset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .asset-item{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05)}
@@ -280,65 +281,66 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       </div>
     </div>
     <div class="hero-right">
-      <canvas id="globe-canvas"></canvas>
-    </div>
-  </div>
-
-  <div class="market-insights">
-    <div class="insight-panel">
-      <div class="insight-title">Asset Classes</div>
-      <div class="asset-grid">
-        <div class="asset-item">
-          <div class="asset-label">Equities</div>
-          <div class="asset-value" id="ac-equities">—</div>
-          <div class="asset-change" id="ac-equities-chg">—</div>
-        </div>
-        <div class="asset-item">
-          <div class="asset-label">Bonds</div>
-          <div class="asset-value" id="ac-bonds">—</div>
-          <div class="asset-change" id="ac-bonds-chg">—</div>
-        </div>
-        <div class="asset-item">
-          <div class="asset-label">Commodities</div>
-          <div class="asset-value" id="ac-commodities">—</div>
-          <div class="asset-change" id="ac-commodities-chg">—</div>
-        </div>
-        <div class="asset-item">
-          <div class="asset-label">Crypto</div>
-          <div class="asset-value" id="ac-crypto">—</div>
-          <div class="asset-change" id="ac-crypto-chg">—</div>
-        </div>
+      <div class="globe-wrapper">
+        <canvas id="globe-canvas"></canvas>
       </div>
-    </div>
-    <div class="insight-panel">
-      <div class="insight-title">Major Indices</div>
-      <div class="indices-list">
-        <div class="index-row">
-          <div class="index-name">S&amp;P 500</div>
-          <div class="index-data">
-            <div class="index-value" id="idx-spx">—</div>
-            <div class="index-change" id="idx-spx-chg">—</div>
+      <div class="insights-wrapper">
+        <div class="insight-panel">
+          <div class="insight-title">Asset Classes</div>
+          <div class="asset-grid">
+            <div class="asset-item">
+              <div class="asset-label">Equities</div>
+              <div class="asset-value" id="ac-equities">—</div>
+              <div class="asset-change" id="ac-equities-chg">—</div>
+            </div>
+            <div class="asset-item">
+              <div class="asset-label">Bonds</div>
+              <div class="asset-value" id="ac-bonds">—</div>
+              <div class="asset-change" id="ac-bonds-chg">—</div>
+            </div>
+            <div class="asset-item">
+              <div class="asset-label">Commodities</div>
+              <div class="asset-value" id="ac-commodities">—</div>
+              <div class="asset-change" id="ac-commodities-chg">—</div>
+            </div>
+            <div class="asset-item">
+              <div class="asset-label">Crypto</div>
+              <div class="asset-value" id="ac-crypto">—</div>
+              <div class="asset-change" id="ac-crypto-chg">—</div>
+            </div>
           </div>
         </div>
-        <div class="index-row">
-          <div class="index-name">FTSE 100</div>
-          <div class="index-data">
-            <div class="index-value" id="idx-ftse">—</div>
-            <div class="index-change" id="idx-ftse-chg">—</div>
-          </div>
-        </div>
-        <div class="index-row">
-          <div class="index-name">Nikkei 225</div>
-          <div class="index-data">
-            <div class="index-value" id="idx-nikkei">—</div>
-            <div class="index-change" id="idx-nikkei-chg">—</div>
-          </div>
-        </div>
-        <div class="index-row">
-          <div class="index-name">Hang Seng</div>
-          <div class="index-data">
-            <div class="index-value" id="idx-hsi">—</div>
-            <div class="index-change" id="idx-hsi-chg">—</div>
+        <div class="insight-panel">
+          <div class="insight-title">Major Indices</div>
+          <div class="indices-list">
+            <div class="index-row">
+              <div class="index-name">S&amp;P 500</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-spx">—</div>
+                <div class="index-change" id="idx-spx-chg">—</div>
+              </div>
+            </div>
+            <div class="index-row">
+              <div class="index-name">FTSE 100</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-ftse">—</div>
+                <div class="index-change" id="idx-ftse-chg">—</div>
+              </div>
+            </div>
+            <div class="index-row">
+              <div class="index-name">Nikkei 225</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-nikkei">—</div>
+                <div class="index-change" id="idx-nikkei-chg">—</div>
+              </div>
+            </div>
+            <div class="index-row">
+              <div class="index-name">Hang Seng</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-hsi">—</div>
+                <div class="index-change" id="idx-hsi-chg">—</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -592,13 +594,15 @@ window.closeModal=closeModal;
     return{px:CX+rx*sc, py:CY+y*sc, pz:rz};
   }
 
-  // Draw one polygon ring, completely skipping back hemisphere points
+  // Draw one polygon ring, skipping back hemisphere with edge tolerance
   function drawRing(ring){
     let inFront=false;
+    const EDGE_TOLERANCE=0.1*R;  // small margin to prevent edge artifacts
     ring.forEach(([lon,lat],i)=>{
       const {x,y,z}=ll2xyz(lat,lon);
       const {px,py,pz}=proj3d(x,y,z);
-      if(pz<=0){inFront=false;return}  // skip back hemisphere entirely
+      const visible=pz>EDGE_TOLERANCE;
+      if(!visible){inFront=false;return}
       if(!inFront){ctx.moveTo(px,py);inFront=true}
       else{ctx.lineTo(px,py)}
     });
@@ -760,21 +764,22 @@ setInterval(loadMarket,30000);
 // ── Ticker ────────────────────────────────────
 const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
 const MOCK_TICKER={SPY:{c:737.45,p:-0.29},QQQ:{c:515.22,p:0.45},DIA:{c:421.30,p:-0.15},IWM:{c:234.56,p:0.82},NVDA:{c:142.30,p:1.22},AAPL:{c:234.56,p:-0.45},MSFT:{c:441.20,p:0.78},AMZN:{c:198.75,p:-0.34},META:{c:612.45,p:1.12},TSLA:{c:312.22,p:2.34},GOOGL:{c:168.90,p:0.56},GLD:{c:195.68,p:-0.12},TLT:{c:98.45,p:-0.78},AMD:{c:198.34,p:1.45},PLTR:{c:45.67,p:2.12},"BRK.B":{c:424.56,p:0.23},COIN:{c:156.78,p:3.45},SOFI:{c:8.92,p:1.23}};
-function buildTickerHtml(data){
-  return data.map(s=>{const d=MOCK_TICKER[s];const p=d?.p||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+function setTickerHtml(data){
+  const tape=document.getElementById('ttape');
+  if(!tape)return;
+  const html=data.map((s,i)=>{const d=data[i];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=(d.p||d.dp)||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+  tape.innerHTML=html+html;
+  tape.style.animationDuration=(TSYMS.length*4.5)+'s';
+  tape.classList.add('go');
 }
+// Load immediately with fallback
+setTickerHtml(TSYMS.map(s=>MOCK_TICKER[s]));
 async function loadTicker(){
   try{
     const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>MOCK_TICKER[s])));
-    const tape=document.getElementById('ttape');
-    if(!tape)return;
-    const html=TSYMS.map((s,i)=>{const d=r[i];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=d.dp||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
-    tape.innerHTML=html+html;
-    tape.style.animationDuration=(TSYMS.length*4.5)+'s';
-    tape.classList.add('go');
+    setTickerHtml(r);
   }catch(e){console.error('Ticker error:',e);}
 }
-loadTicker();
 setInterval(loadTicker,30000);
 
 // ── Intelligence preview ──────────────────────
