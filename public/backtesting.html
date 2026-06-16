@@ -82,7 +82,11 @@ input:focus,select:focus{border-color:#555}
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="db-status db-loading" id="db-status">Connecting...</span>
-    <span style="font-size:12px;color:var(--muted)">Vanetex Investing · Supabase</span>
+    <span style="font-size:11px;color:var(--muted)">Not financial advice · Past performance ≠ future results</span>
+    <span style="font-size:11px;color:var(--muted);opacity:.4">·</span>
+    <a href="/terms" style="font-size:11px;color:var(--muted);opacity:.5;text-decoration:none;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">Terms</a>
+    <span style="font-size:11px;color:var(--muted);opacity:.4">·</span>
+    <a href="/privacy" style="font-size:11px;color:var(--muted);opacity:.5;text-decoration:none;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">Privacy</a>
   </div>
 </div>
 
@@ -162,6 +166,7 @@ create policy "public_rw" on backtest_portfolios
         <div style="font-size:13px">Configure your portfolio and hit Run backtest.</div>
       </div>
       <div id="results-content" style="display:none">
+        <div style="padding:7px 14px;margin-bottom:10px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.12);border-radius:7px;font-size:10.5px;color:rgba(245,158,11,.65);line-height:1.5;">Hypothetical results only. Simulated performance has inherent limitations and does not reflect actual trading. Past performance is not indicative of future results. Not financial advice.</div>
         <div class="metric-grid" id="metric-grid"></div>
         <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
