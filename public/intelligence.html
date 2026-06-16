@@ -344,7 +344,7 @@ const vtx = {
   },
   mktCap(t) { const v = t.shares*1e9*t.price; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(0)+'B'; },
   mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
-  pctOf(t) { return (t.price - t.open) / t.open * 100; },
+  pctOf(t) { if (t.changePct != null) return t.changePct; const base = t.prevClose || t.open; return base ? (t.price - base) / base * 100 : 0; },
   fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); },
   isMarketOpen() {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'numeric', weekday:'short', hour12:false }).formatToParts(new Date());
@@ -544,7 +544,7 @@ const vtx = {
       this.state.tickers = this.state.tickers.map(x => {
         if (x.sym!==sym) return x;
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, hist:this.genHist(q.price,46), name:q.name||upd.name, sector:q.industry||upd.sector}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, hist:this.genHist(q.price,46), name:q.name||upd.name, sector:q.industry||upd.sector}; }
         if (fin && !fin.error) upd.fin = fin;
         return upd;
       });
@@ -680,6 +680,7 @@ const vtx = {
           open: q.open || q.prevClose || q.price,
           prevClose: q.prevClose,
           hist: this.genHist(q.price, 46),
+          changePct: q.changePct,
           name: q.name || t.name,
           sector: q.industry || t.sector,
         };
