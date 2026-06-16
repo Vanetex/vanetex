@@ -42,6 +42,11 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .logo-name{font-family:'Raleway',sans-serif;font-weight:200;font-size:14px;letter-spacing:.38em;color:#d0daf0;text-transform:uppercase}
 .logo-name em{color:#6db3f2;font-style:normal}
 .topbar-right{display:flex;align-items:center;gap:18px}
+.auth-divider{width:1px;height:16px;background:rgba(255,255,255,.08)}
+.btn-signin{font-size:11px;font-weight:600;color:rgba(180,200,230,.6);background:none;border:none;cursor:pointer;letter-spacing:.04em;font-family:inherit;text-decoration:none;transition:color .2s}
+.btn-signin:hover{color:#e8edf8}
+.btn-signup{font-size:11px;font-weight:700;letter-spacing:.06em;color:#e8edf8;background:rgba(59,130,246,.18);border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:5px 14px;cursor:pointer;font-family:inherit;text-decoration:none;transition:background .2s,border-color .2s;white-space:nowrap}
+.btn-signup:hover{background:rgba(59,130,246,.3);border-color:rgba(59,130,246,.5)}
 .mkt-live{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--green);font-weight:600;letter-spacing:.04em}
 .ldot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:blink 1.8s ease-in-out infinite}
 .clock{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.05em}
@@ -325,6 +330,9 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
   <div class="topbar-right">
     <div class="mkt-live" id="mkt-live-el"><span class="ldot" id="mkt-ldot"></span><span id="mkt-live-txt">Markets Live</span></div>
     <div class="clock" id="clock"></div>
+    <div class="auth-divider"></div>
+    <a class="btn-signin" href="/auth/sign-in">Sign in</a>
+    <a class="btn-signup" href="/auth/sign-up">Get started</a>
   </div>
 </header>
 
