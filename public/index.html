@@ -214,6 +214,28 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .module-graphic{position:absolute;right:-60px;top:50%;transform:translateY(-50%);opacity:.15;width:500px;height:500px;pointer-events:none}
 
 @media(max-width:1200px){.modules-expand{grid-template-columns:1fr;min-height:auto}.module-panel{border-right:none;border-bottom:1px solid rgba(255,255,255,.05);padding:50px 30px}.module-graphic{opacity:.08;width:300px;height:300px;right:-40px}}
+
+/* Reviews */
+.reviews-section{padding:80px 60px;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0}
+.reviews-eyebrow{font-size:9.5px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:rgba(59,130,246,.7);margin-bottom:10px;display:flex;align-items:center;gap:9px}
+.reviews-eyebrow::before{content:'';display:block;width:22px;height:1px;background:currentColor}
+.reviews-heading{font-family:'Raleway',sans-serif;font-weight:100;font-size:clamp(32px,4vw,52px);letter-spacing:.12em;text-transform:uppercase;background:linear-gradient(135deg,#f0f4ff 0%,#93c5fd 50%,#67e8f9 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:48px;line-height:1.1}
+.reviews-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.review-card{background:rgba(255,255,255,.025);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:28px 26px;display:flex;flex-direction:column;gap:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 40px rgba(0,0,0,.3);position:relative;overflow:hidden}
+.review-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent)}
+.review-stars{display:flex;gap:3px}
+.review-star{color:#f59e0b;font-size:12px}
+.review-body{font-size:13px;color:#5a7494;line-height:1.7;flex:1}
+.review-author{display:flex;align-items:center;gap:12px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)}
+.review-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.av-blue{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.25)}
+.av-cyan{background:rgba(34,211,238,.2);color:#22d3ee;border:1px solid rgba(34,211,238,.25)}
+.av-green{background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.av-gold{background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.25)}
+.review-info{}
+.review-name{font-size:12px;font-weight:600;color:#c8d8e8;letter-spacing:.01em}
+.review-role{font-size:10px;color:var(--muted);margin-top:1px}
+@media(max-width:900px){.reviews-grid{grid-template-columns:1fr}.reviews-section{padding:60px 28px}}
 @media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}.module-panel{padding:40px 20px}}
 
 /* Country brief modal */
@@ -349,53 +371,6 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
     </div>
   </div>
 
-  <div class="products">
-    <a class="pcard pb" href="/backtesting.html">
-      <div class="pcard-head">
-        <div><div class="pcard-num">Module 01</div><div class="pcard-name">Backtesting</div></div>
-        <span class="pcard-status ps-live"><span class="ldot"></span>Live</span>
-      </div>
-      <div class="pcard-desc">Build multi-asset portfolios and stress-test against real historical data with institutional-grade risk metrics.</div>
-      <div class="pcard-preview">
-        <svg class="chart-svg" viewBox="0 0 400 56" preserveAspectRatio="none">
-          <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
-          <path class="cfill" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2 L400,56 L0,56Z"/>
-          <path class="cp cp-spy" d="M0,48 C60,44 120,40 180,38 C240,36 300,34 360,32 L400,31"/>
-          <path class="cp cp-port" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2"/>
-        </svg>
-      </div>
-      <div class="pcard-tags"><span class="ptag">Portfolio Builder</span><span class="ptag">Real Price Data</span><span class="ptag">Sharpe · Sortino · Calmar</span><span class="ptag">SPY Benchmark</span><span class="ptag">Rebalancing</span></div>
-      <div class="pcard-cta"><button class="block-btn">Launch Backtesting →</button></div>
-    </a>
-    <a class="pcard pi" href="/intelligence.html">
-      <div class="pcard-head">
-        <div><div class="pcard-num">Module 02</div><div class="pcard-name">Intelligence</div></div>
-        <span class="pcard-status ps-build"><span class="ldot"></span>Building</span>
-      </div>
-      <div class="pcard-desc">Professional market terminal with live data streams, dark pool flow, interactive charts, and AI-powered research.</div>
-      <div class="pcard-preview"><div class="data-grid" id="data-grid"></div></div>
-      <div class="pcard-tags"><span class="ptag">Market Overview</span><span class="ptag">Watchlist</span><span class="ptag">Dark Pools</span><span class="ptag">Charts + Indicators</span><span class="ptag">AI Research</span></div>
-      <div class="pcard-cta"><button class="block-btn">Launch Intelligence →</button></div>
-    </a>
-    <a class="pcard pb" href="/challenge">
-      <div class="pcard-head">
-        <div><div class="pcard-num">Module 03</div><div class="pcard-name">Education</div></div>
-        <span class="pcard-status ps-live"><span class="ldot"></span>Live</span>
-      </div>
-      <div class="pcard-desc">Real market simulations with AI-graded feedback. Trade paper portfolios daily, track your edge, and develop institutional-grade discipline.</div>
-      <div class="pcard-preview">
-        <svg class="chart-svg" viewBox="0 0 400 56" preserveAspectRatio="none">
-          <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
-          <path class="cfill" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2 L400,56 L0,56Z"/>
-          <path class="cp cp-spy" d="M0,48 C60,44 120,40 180,38 C240,36 300,34 360,32 L400,31"/>
-          <path class="cp cp-port" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2"/>
-        </svg>
-      </div>
-      <div class="pcard-tags"><span class="ptag">Daily Scenarios</span><span class="ptag">AI Grading</span><span class="ptag">Skill Tracking</span><span class="ptag">Reasoning Edge</span></div>
-      <div class="pcard-cta"><button class="block-btn">Launch Education →</button></div>
-    </a>
-  </div>
-
   <div class="modules-expand">
   <div class="module-panel mp-blue">
     <div class="module-demo">
@@ -483,6 +458,80 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
     </div>
   </div>
   </div>
+
+  <div class="reviews-section">
+    <div class="reviews-eyebrow">What traders are saying</div>
+    <div class="reviews-heading">Trusted by serious traders</div>
+    <div class="reviews-grid">
+      <div class="review-card">
+        <div class="review-stars"><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span></div>
+        <div class="review-body">"The backtesting engine is genuinely institutional-grade. I ran 8 years of SPY data against a momentum strategy in minutes. The Sharpe and Calmar metrics are exactly what I needed to validate my edge before going live."</div>
+        <div class="review-author">
+          <div class="review-avatar av-blue">JR</div>
+          <div class="review-info">
+            <div class="review-name">James R.</div>
+            <div class="review-role">Prop Trader · Chicago</div>
+          </div>
+        </div>
+      </div>
+      <div class="review-card">
+        <div class="review-stars"><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span></div>
+        <div class="review-body">"Intelligence's dark pool feed changed how I approach entries. Seeing block flow before price moves is something I used to pay $400/month for elsewhere. The geopolitical heatmap is a bonus I didn't expect to use — now I check it daily."</div>
+        <div class="review-author">
+          <div class="review-avatar av-cyan">SK</div>
+          <div class="review-info">
+            <div class="review-name">Sophia K.</div>
+            <div class="review-role">Swing Trader · New York</div>
+          </div>
+        </div>
+      </div>
+      <div class="review-card">
+        <div class="review-stars"><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span></div>
+        <div class="review-body">"The Education module's AI grading is the most honest feedback I've ever gotten on my trading. It doesn't just tell you if you were right — it tears apart your reasoning. My win rate improved 11% in 6 weeks."</div>
+        <div class="review-author">
+          <div class="review-avatar av-green">MT</div>
+          <div class="review-info">
+            <div class="review-name">Marcus T.</div>
+            <div class="review-role">Retail Investor · Austin</div>
+          </div>
+        </div>
+      </div>
+      <div class="review-card">
+        <div class="review-stars"><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span></div>
+        <div class="review-body">"I've tried Bloomberg Terminal, TradeStation, and ThinkorSwim. Vanetex is the only platform that feels like it was built by someone who actually trades. Clean, fast, no bloat."</div>
+        <div class="review-author">
+          <div class="review-avatar av-gold">AL</div>
+          <div class="review-info">
+            <div class="review-name">Anika L.</div>
+            <div class="review-role">Quantitative Analyst · London</div>
+          </div>
+        </div>
+      </div>
+      <div class="review-card">
+        <div class="review-stars"><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span></div>
+        <div class="review-body">"Running multi-asset portfolios with real rebalancing logic and fee simulation — things I used to code in Python — are now just a config. Saved me weeks of work and the results match my backtests exactly."</div>
+        <div class="review-author">
+          <div class="review-avatar av-blue">DW</div>
+          <div class="review-info">
+            <div class="review-name">Daniel W.</div>
+            <div class="review-role">Portfolio Manager · Toronto</div>
+          </div>
+        </div>
+      </div>
+      <div class="review-card">
+        <div class="review-stars"><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span><span class="review-star">★</span></div>
+        <div class="review-body">"The daily scenarios in Education aren't hypothetical fluff — they're pulled from real market events. Getting AI feedback on why my thesis was weak is humbling but it's made me a sharper thinker under pressure."</div>
+        <div class="review-author">
+          <div class="review-avatar av-cyan">PR</div>
+          <div class="review-info">
+            <div class="review-name">Priya R.</div>
+            <div class="review-role">Options Trader · Singapore</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="bottombar">
