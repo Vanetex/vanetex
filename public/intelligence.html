@@ -606,7 +606,7 @@ const vtx = {
         const results = (data.results||[]).filter(r=>!have.has(r.symbol));
         if (!results.length) { resEl.innerHTML = `<div style="padding:8px 7px;font-size:11px;color:var(--mut);">No matches${have.has(q.toUpperCase())?' — already in your watchlist.':'.'}</div>`; return; }
         resEl.innerHTML = results.map(t => `
-          <div class="srchrow" onclick="vtx.addTicker('${t.symbol}',${JSON.stringify(t.name)});vtx.toggleAddPanel();" style="display:flex;align-items:center;gap:9px;padding:7px 7px;border-radius:7px;cursor:pointer;">
+          <div class="srchrow" onclick="vtx.addTicker('${t.symbol}',${JSON.stringify(t.name).replace(/"/g,'&quot;')});vtx.toggleAddPanel();" style="display:flex;align-items:center;gap:9px;padding:7px 7px;border-radius:7px;cursor:pointer;">
             <span style="font-family:var(--mono);font-weight:700;font-size:11.5px;color:var(--acc2);min-width:48px;">${t.symbol}</span>
             <span style="flex:1;font-size:11.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
             <span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--acc2);border:1px solid rgba(var(--glow),.35);border-radius:5px;padding:2px 6px;">+ ADD</span>
