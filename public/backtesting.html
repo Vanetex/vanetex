@@ -11,7 +11,8 @@
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between}
 .topbar-left{display:flex;align-items:center;gap:12px}
-.logo{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo-mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#1F6FEB,#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(31,111,235,.35);flex-shrink:0}
 .logo span{color:#185FA5}
 .db-status{font-size:11px;padding:3px 8px;border-radius:10px;font-weight:500}
 .db-ok{background:#eaf3de;color:#27500A}.db-err{background:#fcebeb;color:#a33}.db-loading{background:#f0efeb;color:#888}
@@ -78,7 +79,7 @@ input:focus,select:focus{border-color:#555}
 
 <div class="topbar">
   <div class="topbar-left">
-    <div class="logo"><span>VANETEX</span> BACKTEST</div>
+    <div class="logo"><div class="logo-mark"><svg width="15" height="15" viewBox="0 0 22 22" fill="none"><path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span>VANETEX</span> BACKTEST</div>
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="db-status db-loading" id="db-status">Connecting...</span>
