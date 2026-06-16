@@ -174,7 +174,12 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 
 /* Expanded modules section */
 .modules-expand{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05);width:100%;flex-shrink:0;height:auto}
-.module-panel{padding:40px 30px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:visible;min-height:100vh;width:100%}
+.module-panel{padding:32px 30px 40px;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:visible;min-height:100vh;width:100%}
+.module-launch{display:inline-flex;align-items:center;gap:8px;margin-top:auto;padding-top:24px;padding:12px 20px;border-radius:7px;border:1px solid;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;transition:opacity .2s,transform .15s;flex-shrink:0}
+.module-launch:hover{opacity:.8;transform:translateX(2px)}
+.mp-blue .module-launch{background:rgba(59,130,246,.12);color:#6db3f2;border-color:rgba(59,130,246,.25)}
+.mp-cyan .module-launch{background:rgba(34,211,238,.12);color:#22d3ee;border-color:rgba(34,211,238,.25)}
+.mp-green .module-launch{background:rgba(16,185,129,.12);color:#10b981;border-color:rgba(16,185,129,.25)}
 .module-panel:last-child{border-right:none}
 .module-panel::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}
 .module-panel:hover::before{opacity:1}
@@ -436,6 +441,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
         <div class="mf-item"><div class="mf-check">✓</div><div>Rebalancing & fee simulation</div></div>
         <div class="mf-item"><div class="mf-check">✓</div><div>SPY benchmarking</div></div>
       </div>
+      <a class="module-launch" href="/backtesting.html">Launch Backtesting →</a>
     </div>
   </div>
 
@@ -465,6 +471,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
         <div class="mf-item"><div class="mf-check">✓</div><div>Geopolitical risk heatmap</div></div>
         <div class="mf-item"><div class="mf-check">✓</div><div>AI research synthesis</div></div>
       </div>
+      <a class="module-launch" href="/intelligence.html">Launch Intelligence →</a>
     </div>
   </div>
 
@@ -494,6 +501,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
         <div class="mf-item"><div class="mf-check">✓</div><div>Skill progression tracking</div></div>
         <div class="mf-item"><div class="mf-check">✓</div><div>Paper trading with real data</div></div>
       </div>
+      <a class="module-launch" href="/challenge">Launch Education →</a>
     </div>
   </div>
   </div>
