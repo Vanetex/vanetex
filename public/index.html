@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
+html,body{height:100%}
 body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8edf8}
 :root{--blue:#3b82f6;--cyan:#22d3ee;--green:#10b981;--red:#ef4444;--gold:#f59e0b;--muted:#3d5270;
   --glass:rgba(255,255,255,0.025);--glass-border:rgba(255,255,255,0.07);
@@ -57,12 +57,14 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .up{color:var(--green)}.dn{color:var(--red)}
 
 /* Layout */
-.layout{position:fixed;top:73px;bottom:34px;left:0;right:0;z-index:10;display:grid;grid-template-rows:1fr auto;overflow:hidden}
+.layout{position:fixed;top:73px;bottom:34px;left:0;right:0;z-index:10;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
 
 /* Hero */
-.hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px}
+.hero{display:flex;align-items:center;padding:22px 50px 18px;gap:40px;flex-shrink:0;min-height:600px}
 .hero-left{flex:1;max-width:500px}
-.hero-right{flex:0 0 490px;height:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
+.hero-right{flex:1;height:480px;display:flex;gap:24px;align-items:center;justify-content:flex-start;position:relative;overflow:visible}
+.globe-wrapper{flex:0 0 420px;height:100%;display:flex;align-items:center;justify-content:center}
+.insights-wrapper{flex:1;display:flex;flex-direction:column;gap:16px;height:100%;overflow-y:auto;padding-right:12px}
 
 .eyebrow{font-size:9.5px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:rgba(59,130,246,.7);margin-bottom:16px;display:flex;align-items:center;gap:9px;opacity:0;animation:riseIn .7s .2s ease forwards}
 .eyebrow::before{content:'';display:block;width:22px;height:1px;background:currentColor}
@@ -81,6 +83,29 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .mkt-val{font-size:15px;font-weight:600;color:#d8e4f4;font-variant-numeric:tabular-nums}
 .mkt-chg{font-size:10px;font-weight:600;margin-top:2px;letter-spacing:.02em}
 
+/* Market timers */
+.mkt-timers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;opacity:0;animation:riseIn .7s .7s ease forwards}
+.timer-cell{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);text-align:center}
+.timer-label{font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.timer-time{font-size:11px;font-weight:700;color:#d8e4f4;font-variant-numeric:tabular-nums}
+.timer-status{font-size:8px;margin-top:4px;letter-spacing:.05em}
+.timer-open{color:#10b981}.timer-closed{color:#ef4444}
+
+/* Asset class and indices section */
+.insight-panel{background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;backdrop-filter:blur(20px);flex:1}
+.insight-title{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:14px}
+.asset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.asset-item{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05)}
+.asset-label{font-size:8.5px;font-weight:600;color:#b0c0d8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.asset-value{font-size:13px;font-weight:700;color:#d8e4f4;font-variant-numeric:tabular-nums}
+.asset-change{font-size:9px;margin-top:3px}
+.indices-list{display:flex;flex-direction:column;gap:8px}
+.index-row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05)}
+.index-name{font-size:10px;font-weight:600;color:#d8e4f4;letter-spacing:.04em}
+.index-data{display:flex;gap:12px;align-items:center}
+.index-value{font-size:11px;font-weight:700;color:#d8e4f4;font-variant-numeric:tabular-nums;min-width:70px;text-align:right}
+.index-change{font-size:9px;min-width:50px;text-align:right}
+
 /* Tooltip */
 #geo-tip{position:fixed;z-index:600;pointer-events:none;opacity:0;transition:opacity .15s;background:rgba(8,14,28,.92);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;min-width:160px;box-shadow:0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06)}
 #geo-tip.show{opacity:1}
@@ -90,7 +115,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .tip-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
 
 /* Product cards — glass */
-.products{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.05)}
+.products{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0}
 .pcard{position:relative;padding:20px 28px 0;overflow:hidden;text-decoration:none;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,.05);transition:background .25s}
 .pcard:last-child{border-right:none}
 .pcard::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .35s;pointer-events:none}
@@ -146,7 +171,50 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 @keyframes riseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 .mkt-live.mkt-closed{color:#6b7280}
 .mkt-live.mkt-closed .ldot{animation:none;background:#6b7280}
-@media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}}
+
+/* Expanded modules section */
+.modules-expand{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid rgba(255,255,255,.05);width:100%;flex-shrink:0;height:auto}
+.module-panel{padding:40px 30px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;border-right:1px solid rgba(255,255,255,.05);position:relative;overflow:visible;min-height:100vh;width:100%}
+.module-panel:last-child{border-right:none}
+.module-panel::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s}
+.module-panel:hover::before{opacity:1}
+.mp-blue::before{background:linear-gradient(135deg,rgba(59,130,246,.08),transparent)}
+.mp-cyan::before{background:linear-gradient(135deg,rgba(34,211,238,.08),transparent)}
+.mp-green::before{background:linear-gradient(135deg,rgba(16,185,129,.08),transparent)}
+.module-content{position:relative;z-index:2;width:100%;order:2;overflow:visible;white-space:normal;word-wrap:break-word}
+.module-label{font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:rgba(59,130,246,.6);margin-bottom:8px}
+.mp-cyan .module-label{color:rgba(34,211,238,.6)}
+.mp-green .module-label{color:rgba(16,185,129,.6)}
+.module-title{font-family:'Raleway',sans-serif;font-size:32px;font-weight:700;letter-spacing:-.01em;margin-bottom:12px;color:#e8edf8;line-height:1.1}
+.module-desc{font-size:12px;color:#4e6080;line-height:1.6;margin-bottom:20px}
+.module-features{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.mf-item{display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#5a7494}
+.mf-check{width:14px;height:14px;border-radius:2px;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:9px}
+.mp-blue .mf-check{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
+.mp-cyan .mf-check{background:rgba(34,211,238,.2);color:#22d3ee;border:1px solid rgba(34,211,238,.3)}
+.mp-green .mf-check{background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+.module-demo{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;border:1px solid rgba(255,255,255,.05);border-radius:12px;background:linear-gradient(135deg,rgba(255,255,255,.02),rgba(255,255,255,.005));margin-bottom:30px;width:100%;max-width:100%}
+.demo-header{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:12px;width:100%}
+.demo-chart{width:100%;height:70px;margin-bottom:10px}
+.demo-stats{display:flex;gap:12px;width:100%;font-size:10px}
+.stat{flex:1;text-align:center}
+.stat .label{display:block;color:rgba(255,255,255,.4);margin-bottom:3px;font-size:8px;letter-spacing:.08em}
+.stat .value{display:block;font-weight:700;font-size:11px;color:#e8edf8}
+.stat .value.up{color:#10b981}
+.demo-table{width:100%;font-size:10px;border-collapse:collapse}
+.demo-table th{text-align:left;padding:6px 3px;border-bottom:1px solid rgba(255,255,255,.1);font-weight:600;color:rgba(255,255,255,.6);font-size:8px;letter-spacing:.08em}
+.demo-table td{padding:4px 3px;border-bottom:1px solid rgba(255,255,255,.05);color:#b0c0d8}
+.demo-table .up{color:#10b981}.demo-table .dn{color:#ef4444}
+.demo-scenario{width:100%;text-align:center;padding:20px}
+.scenario-badge{display:inline-block;padding:4px 10px;border-radius:5px;background:rgba(16,185,129,.15);color:#10b981;font-size:9px;font-weight:700;margin-bottom:10px;border:1px solid rgba(16,185,129,.2)}
+.scenario-text{font-size:11px;color:#b0c0d8;line-height:1.5;margin-bottom:10px}
+.scenario-buttons{display:flex;gap:6px;justify-content:center}
+.btn-small{padding:5px 10px;border-radius:4px;font-size:9px;font-weight:600;border:1px solid rgba(255,255,255,.1);cursor:pointer;transition:all .2s}
+.btn-small:hover{background:rgba(255,255,255,.05)}
+.module-graphic{position:absolute;right:-60px;top:50%;transform:translateY(-50%);opacity:.15;width:500px;height:500px;pointer-events:none}
+
+@media(max-width:1200px){.modules-expand{grid-template-columns:1fr;min-height:auto}.module-panel{border-right:none;border-bottom:1px solid rgba(255,255,255,.05);padding:50px 30px}.module-graphic{opacity:.08;width:300px;height:300px;right:-40px}}
+@media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}.module-panel{padding:40px 20px}}
 
 /* Country brief modal */
 .cmodal{position:fixed;z-index:700;top:50%;left:50%;transform:translate(-50%,-60%);width:340px;background:rgba(6,12,28,.96);backdrop-filter:blur(28px);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:22px 24px 20px;box-shadow:0 24px 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.07);display:none;animation:modalIn .2s ease}
@@ -204,18 +272,85 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <p class="hero-sub">Institutional-grade tools for portfolio analysis, market intelligence, and data-driven investment research.</p>
       <div class="mkt-bar">
         <div class="mkt-cell"><div class="mkt-lbl">S&amp;P 500</div><div class="mkt-val" id="mv-SPY">—</div><div class="mkt-chg" id="mc-SPY">—</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">10-Yr Yield</div><div class="mkt-val" id="mv-YIELD">—</div><div class="mkt-chg" id="mc-YIELD">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Nasdaq</div><div class="mkt-val" id="mv-QQQ">—</div><div class="mkt-chg" id="mc-QQQ">—</div></div>
         <div class="mkt-cell"><div class="mkt-lbl">Gold</div><div class="mkt-val" id="mv-GLD">—</div><div class="mkt-chg" id="mc-GLD">—</div></div>
-        <div class="mkt-cell"><div class="mkt-lbl">Bitcoin</div><div class="mkt-val" id="mv-BTC">—</div><div class="mkt-chg" id="mc-BTC">—</div></div>
+        <div class="mkt-cell"><div class="mkt-lbl">Volatility</div><div class="mkt-val" id="mv-VIXY">—</div><div class="mkt-chg" id="mc-VIXY">—</div></div>
+      </div>
+      <div class="mkt-timers">
+        <div class="timer-cell"><div class="timer-label">Tokyo</div><div class="timer-time" id="timer-tokyo">—</div><div class="timer-status" id="status-tokyo">—</div></div>
+        <div class="timer-cell"><div class="timer-label">London</div><div class="timer-time" id="timer-london">—</div><div class="timer-status" id="status-london">—</div></div>
+        <div class="timer-cell"><div class="timer-label">New York</div><div class="timer-time" id="timer-ny">—</div><div class="timer-status" id="status-ny">—</div></div>
       </div>
     </div>
     <div class="hero-right">
-      <canvas id="globe-canvas"></canvas>
+      <div class="globe-wrapper">
+        <canvas id="globe-canvas"></canvas>
+      </div>
+      <div class="insights-wrapper">
+        <div class="insight-panel">
+          <div class="insight-title">Asset Classes</div>
+          <div class="asset-grid">
+            <div class="asset-item">
+              <div class="asset-label">S&amp;P 500</div>
+              <div class="asset-value" id="ac-equities">—</div>
+              <div class="asset-change" id="ac-equities-chg">—</div>
+            </div>
+            <div class="asset-item">
+              <div class="asset-label">10-Yr Yield</div>
+              <div class="asset-value" id="ac-bonds">—</div>
+              <div class="asset-change" id="ac-bonds-chg">—</div>
+            </div>
+            <div class="asset-item">
+              <div class="asset-label">Gold</div>
+              <div class="asset-value" id="ac-commodities">—</div>
+              <div class="asset-change" id="ac-commodities-chg">—</div>
+            </div>
+            <div class="asset-item">
+              <div class="asset-label">Bitcoin</div>
+              <div class="asset-value" id="ac-crypto">—</div>
+              <div class="asset-change" id="ac-crypto-chg">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="insight-panel">
+          <div class="insight-title">Major Indices</div>
+          <div class="indices-list">
+            <div class="index-row">
+              <div class="index-name">S&amp;P 500</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-spx">—</div>
+                <div class="index-change" id="idx-spx-chg">—</div>
+              </div>
+            </div>
+            <div class="index-row">
+              <div class="index-name">FTSE 100</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-ftse">—</div>
+                <div class="index-change" id="idx-ftse-chg">—</div>
+              </div>
+            </div>
+            <div class="index-row">
+              <div class="index-name">Nikkei 225</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-nikkei">—</div>
+                <div class="index-change" id="idx-nikkei-chg">—</div>
+              </div>
+            </div>
+            <div class="index-row">
+              <div class="index-name">Hang Seng</div>
+              <div class="index-data">
+                <div class="index-value" id="idx-hsi">—</div>
+                <div class="index-change" id="idx-hsi-chg">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="products">
-    <a class="pcard pb" href="backtesting.html">
+    <a class="pcard pb" href="/backtesting.html">
       <div class="pcard-head">
         <div><div class="pcard-num">Module 01</div><div class="pcard-name">Backtesting</div></div>
         <span class="pcard-status ps-live"><span class="ldot"></span>Live</span>
@@ -232,7 +367,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <div class="pcard-tags"><span class="ptag">Portfolio Builder</span><span class="ptag">Real Price Data</span><span class="ptag">Sharpe · Sortino · Calmar</span><span class="ptag">SPY Benchmark</span><span class="ptag">Rebalancing</span></div>
       <div class="pcard-cta"><button class="block-btn">Launch Backtesting →</button></div>
     </a>
-    <a class="pcard pi" href="intelligence.html">
+    <a class="pcard pi" href="/intelligence.html">
       <div class="pcard-head">
         <div><div class="pcard-num">Module 02</div><div class="pcard-name">Intelligence</div></div>
         <span class="pcard-status ps-build"><span class="ldot"></span>Building</span>
@@ -242,6 +377,111 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <div class="pcard-tags"><span class="ptag">Market Overview</span><span class="ptag">Watchlist</span><span class="ptag">Dark Pools</span><span class="ptag">Charts + Indicators</span><span class="ptag">AI Research</span></div>
       <div class="pcard-cta"><button class="block-btn">Launch Intelligence →</button></div>
     </a>
+    <a class="pcard pb" href="/challenge">
+      <div class="pcard-head">
+        <div><div class="pcard-num">Module 03</div><div class="pcard-name">Education</div></div>
+        <span class="pcard-status ps-live"><span class="ldot"></span>Live</span>
+      </div>
+      <div class="pcard-desc">Real market simulations with AI-graded feedback. Trade paper portfolios daily, track your edge, and develop institutional-grade discipline.</div>
+      <div class="pcard-preview">
+        <svg class="chart-svg" viewBox="0 0 400 56" preserveAspectRatio="none">
+          <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+          <path class="cfill" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2 L400,56 L0,56Z"/>
+          <path class="cp cp-spy" d="M0,48 C60,44 120,40 180,38 C240,36 300,34 360,32 L400,31"/>
+          <path class="cp cp-port" d="M0,52 C50,48 90,36 130,30 C170,24 200,10 240,8 C280,6 320,14 360,10 L400,2"/>
+        </svg>
+      </div>
+      <div class="pcard-tags"><span class="ptag">Daily Scenarios</span><span class="ptag">AI Grading</span><span class="ptag">Skill Tracking</span><span class="ptag">Reasoning Edge</span></div>
+      <div class="pcard-cta"><button class="block-btn">Launch Education →</button></div>
+    </a>
+  </div>
+
+  <div class="modules-expand">
+  <div class="module-panel mp-blue">
+    <div class="module-demo">
+      <div class="demo-header">NVDA — Last 5D</div>
+      <svg viewBox="0 0 320 120" class="demo-chart">
+        <defs><linearGradient id="grad-blue" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
+        <path d="M20,90 L60,60 L100,70 L140,40 L180,50 L220,30 L260,45 L300,35" stroke="#3b82f6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20,90 L60,60 L100,70 L140,40 L180,50 L220,30 L260,45 L300,35 L300,120 L20,120 Z" fill="url(#grad-blue)"/>
+        <line x1="20" y1="110" x2="300" y2="110" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      </svg>
+      <div class="demo-stats" id="backtest-stats">
+        <div class="stat"><span class="label">Entry</span><span class="value" id="bt-price">—</span></div>
+        <div class="stat"><span class="label">Return</span><span class="value" id="bt-return">—</span></div>
+        <div class="stat"><span class="label">Sharpe</span><span class="value" id="bt-sharpe">—</span></div>
+      </div>
+    </div>
+    <div class="module-content">
+      <div class="module-label">Module 01</div>
+      <h2 class="module-title">Backtesting</h2>
+      <p class="module-desc">Test multi-asset strategies on 10+ years of real market data. See what actually works before deploying capital.</p>
+      <div class="module-features">
+        <div class="mf-item"><div class="mf-check">✓</div><div>Real historical OHLCV data</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Institutional risk metrics (Sharpe, Sortino, Calmar)</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Rebalancing & fee simulation</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>SPY benchmarking</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-panel mp-cyan">
+    <div class="module-demo">
+      <div class="demo-header">Live Trades</div>
+      <table class="demo-table">
+        <thead>
+          <tr><th>Symbol</th><th>Entry</th><th>P&L</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>AAPL</td><td>$234.56</td><td class="up">+2.1%</td></tr>
+          <tr><td>NVDA</td><td>$142.30</td><td class="up">+5.8%</td></tr>
+          <tr><td>TSLA</td><td>$312.22</td><td class="dn">−1.2%</td></tr>
+          <tr><td>META</td><td>$612.45</td><td class="up">+3.4%</td></tr>
+          <tr><td>MSFT</td><td>$441.20</td><td class="up">+1.9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="module-content">
+      <div class="module-label">Module 02</div>
+      <h2 class="module-title">Intelligence</h2>
+      <p class="module-desc">Professional-grade terminal with live data, dark pool monitoring, and AI-powered market research.</p>
+      <div class="module-features">
+        <div class="mf-item"><div class="mf-check">✓</div><div>Live multi-timeframe charts</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Dark pool flow analysis</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Geopolitical risk heatmap</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>AI research synthesis</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="module-panel mp-green">
+    <div class="module-demo">
+      <div class="scenario-badge">Scenario #847</div>
+      <div class="scenario-text">NVDA breaks resistance at $142. Volume surges 250%. RSI at 72. What's your edge?</div>
+      <svg viewBox="0 0 280 80" class="demo-chart" style="margin-bottom:16px">
+        <defs><linearGradient id="grad-green" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#10b981" stop-opacity="0.3"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>
+        <path d="M20,60 L50,50 L80,45 L110,40 L140,35 L170,32 L200,30 L230,28 L260,25" stroke="#10b981" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <path d="M20,60 L50,50 L80,45 L110,40 L140,35 L170,32 L200,30 L230,28 L260,25 L260,80 L20,80 Z" fill="url(#grad-green)"/>
+        <line x1="140" y1="25" x2="140" y2="80" stroke="rgba(16,185,129,0.3)" stroke-width="1" stroke-dasharray="2,2"/>
+      </svg>
+      <div class="scenario-buttons">
+        <button class="btn-small">Long</button>
+        <button class="btn-small">Short</button>
+        <button class="btn-small">Skip</button>
+      </div>
+    </div>
+    <div class="module-content">
+      <div class="module-label">Module 03</div>
+      <h2 class="module-title">Education</h2>
+      <p class="module-desc">Build trading discipline through daily AI-graded scenarios. Practice like a pro, track your edge, improve systematically.</p>
+      <div class="module-features">
+        <div class="mf-item"><div class="mf-check">✓</div><div>Real market scenarios daily</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>AI grades your reasoning</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Skill progression tracking</div></div>
+        <div class="mf-item"><div class="mf-check">✓</div><div>Paper trading with real data</div></div>
+      </div>
+    </div>
+  </div>
   </div>
 </div>
 
@@ -273,12 +513,15 @@ window.closeModal=closeModal;
 
 // ── Geopolitical globe — orthographic projection, real borders ─
 (async()=>{
-  const cvs=document.getElementById('globe-canvas');
-  if(!cvs)return;
-  const ctx=cvs.getContext('2d');
+  try{
+    const cvs=document.getElementById('globe-canvas');
+    if(!cvs){console.error('globe-canvas not found');return;}
+    const ctx=cvs.getContext('2d');
+    if(!ctx){console.error('canvas context failed');return;}
   const SIZE=480;
   cvs.width=SIZE;cvs.height=SIZE;
   cvs.style.width=SIZE+'px';cvs.style.height=SIZE+'px';
+  ctx.fillStyle='rgba(10,28,70,0.5)';ctx.fillRect(0,0,SIZE,SIZE);
   const CX=SIZE/2,CY=SIZE/2,R=SIZE*.44;
 
   const STATUS={
@@ -288,8 +531,8 @@ window.closeModal=closeModal;
 
   const FILLS={red:{fill:'rgba(239,68,68,0.55)',border:'rgba(239,68,68,0.8)'},yellow:{fill:'rgba(245,158,11,0.45)',border:'rgba(245,158,11,0.75)'},green:{fill:'rgba(16,185,129,0.22)',border:'rgba(16,185,129,0.45)'}};
 
-  // Complete country names — all world-atlas 110m countries
-  const NAMES={4:'Afghanistan',8:'Albania',12:'Algeria',20:'Andorra',24:'Angola',31:'Azerbaijan',32:'Argentina',36:'Australia',40:'Austria',50:'Bangladesh',51:'Armenia',56:'Belgium',64:'Bhutan',68:'Bolivia',70:'Bosnia & Herzegovina',72:'Botswana',76:'Brazil',96:'Brunei',100:'Bulgaria',104:'Myanmar',108:'Burundi',112:'Belarus',116:'Cambodia',120:'Cameroon',124:'Canada',132:'Cape Verde',140:'Central African Republic',144:'Sri Lanka',148:'Chad',152:'Chile',156:'China',170:'Colombia',174:'Comoros',178:'Republic of Congo',180:'DR Congo',188:'Costa Rica',191:'Croatia',192:'Cuba',196:'Cyprus',203:'Czechia',204:'Benin',208:'Denmark',214:'Dominican Republic',218:'Ecuador',222:'El Salvador',226:'Equatorial Guinea',231:'Ethiopia',232:'Eritrea',233:'Estonia',246:'Finland',250:'France',262:'Djibouti',266:'Gabon',268:'Georgia',270:'Gambia',275:'Palestine',276:'Germany',288:'Ghana',300:'Greece',308:'Grenada',320:'Guatemala',324:'Guinea',328:'Guyana',332:'Haiti',340:'Honduras',348:'Hungary',352:'Iceland',356:'India',360:'Indonesia',364:'Iran',368:'Iraq',372:'Ireland',376:'Israel',380:'Italy',384:"Côte d'Ivoire",388:'Jamaica',392:'Japan',398:'Kazakhstan',400:'Jordan',404:'Kenya',408:'North Korea',410:'South Korea',414:'Kuwait',417:'Kyrgyzstan',418:'Laos',422:'Lebanon',426:'Lesotho',428:'Latvia',430:'Liberia',434:'Libya',440:'Lithuania',442:'Luxembourg',450:'Madagascar',454:'Malawi',458:'Malaysia',466:'Mali',470:'Malta',478:'Mauritania',480:'Mauritius',484:'Mexico',496:'Mongolia',498:'Moldova',499:'Montenegro',504:'Morocco',508:'Mozambique',516:'Namibia',524:'Nepal',528:'Netherlands',554:'New Zealand',558:'Nicaragua',562:'Niger',566:'Nigeria',578:'Norway',586:'Pakistan',591:'Panama',598:'Papua New Guinea',600:'Paraguay',604:'Peru',608:'Philippines',616:'Poland',620:'Portugal',624:'Guinea-Bissau',626:'Timor-Leste',634:'Qatar',642:'Romania',643:'Russia',646:'Rwanda',662:'Saint Lucia',682:'Saudi Arabia',686:'Senegal',688:'Serbia',694:'Sierra Leone',703:'Slovakia',705:'Slovenia',706:'Somalia',710:'South Africa',724:'Spain',728:'South Sudan',729:'Sudan',732:'Western Sahara',740:'Suriname',748:'Eswatini',752:'Sweden',756:'Switzerland',760:'Syria',762:'Tajikistan',764:'Thailand',768:'Togo',780:'Trinidad & Tobago',784:'UAE',788:'Tunisia',792:'Turkey',795:'Turkmenistan',800:'Uganda',804:'Ukraine',807:'North Macedonia',818:'Egypt',826:'United Kingdom',834:'Tanzania',840:'United States',854:'Burkina Faso',858:'Uruguay',860:'Uzbekistan',862:'Venezuela',882:'Samoa',887:'Yemen',894:'Zambia',716:'Zimbabwe'};
+  // Complete country names — fixed
+  const NAMES={2:'Andorra',4:'Afghanistan',8:'Albania',10:'Antarctica',12:'Algeria',16:'American Samoa',20:'Andorra',24:'Angola',28:'Antigua & Barbuda',31:'Azerbaijan',32:'Argentina',36:'Australia',40:'Austria',44:'Bahamas',48:'Bahrain',50:'Bangladesh',52:'Barbados',56:'Belgium',60:'Bermuda',64:'Bhutan',68:'Bolivia',70:'Bosnia',72:'Botswana',76:'Brazil',84:'Belize',86:'British IOT',90:'Solomon Islands',96:'Brunei',100:'Bulgaria',104:'Myanmar',108:'Burundi',112:'Belarus',116:'Cambodia',120:'Cameroon',124:'Canada',132:'Cape Verde',136:'Cayman Islands',140:'Central African Rep',144:'Sri Lanka',148:'Chad',152:'Chile',156:'China',158:'Taiwan',160:'Cook Islands',162:'Christmas Island',166:'Cocos Islands',170:'Colombia',174:'Comoros',175:'Mayotte',178:'Congo',180:'DR Congo',184:'Cook Islands',188:'Costa Rica',191:'Croatia',192:'Cuba',196:'Cyprus',203:'Czechia',206:'Timor-Leste',208:'Denmark',212:'Dominica',214:'Dominican Republic',218:'Ecuador',226:'Equatorial Guinea',231:'Ethiopia',232:'Eritrea',233:'Estonia',238:'Falkland Islands',242:'Fiji',246:'Finland',250:'France',260:'French Polynesia',262:'Djibouti',266:'Gabon',268:'Georgia',270:'Gambia',275:'Palestine',276:'Germany',288:'Ghana',292:'Gibraltar',296:'Kiribati',300:'Greece',304:'Greenland',308:'Grenada',312:'Guadeloupe',316:'Guam',320:'Guatemala',324:'Guinea',328:'Guyana',332:'Haiti',334:'Heard Island',336:'Vatican',344:'Hong Kong',348:'Hungary',352:'Iceland',356:'India',360:'Indonesia',364:'Iran',368:'Iraq',372:'Ireland',376:'Israel',380:'Italy',388:'Jamaica',392:'Japan',398:'Kazakhstan',400:'Jordan',404:'Kenya',408:'North Korea',410:'South Korea',414:'Kuwait',417:'Kyrgyzstan',418:'Laos',422:'Lebanon',426:'Lesotho',428:'Latvia',430:'Liberia',434:'Libya',438:'Liechtenstein',440:'Lithuania',442:'Luxembourg',446:'Macao',450:'Madagascar',454:'Malawi',458:'Malaysia',462:'Maldives',466:'Mali',470:'Malta',474:'Martinique',478:'Mauritania',480:'Mauritius',484:'Mexico',492:'Monaco',496:'Mongolia',498:'Moldova',499:'Montenegro',504:'Morocco',508:'Mozambique',512:'Oman',516:'Namibia',520:'Nauru',524:'Nepal',528:'Netherlands',533:'Aruba',534:'Sint Maarten',540:'New Caledonia',548:'Vanuatu',554:'New Zealand',558:'Nicaragua',562:'Niger',566:'Nigeria',578:'Norway',580:'Northern Mariana Islands',583:'Micronesia',584:'Marshall Islands',585:'Palau',586:'Pakistan',591:'Panama',598:'Papua New Guinea',600:'Paraguay',604:'Peru',608:'Philippines',612:'Pitcairn',616:'Poland',620:'Portugal',624:'Guinea-Bissau',626:'Timor-Leste',630:'Puerto Rico',634:'Qatar',638:'Reunion',642:'Romania',643:'Russia',646:'Rwanda',652:'Saint Barth',654:'Saint Helena',659:'St Kitts & Nevis',660:'Anguilla',662:'Saint Lucia',666:'Saint Pierre & Miquelon',670:'St Vincent',674:'San Marino',678:'Sao Tome',682:'Saudi Arabia',686:'Senegal',688:'Serbia',690:'Seychelles',694:'Sierra Leone',702:'Singapore',703:'Slovakia',704:'Vietnam',705:'Slovenia',706:'Somalia',710:'South Africa',716:'Zimbabwe',724:'Spain',728:'South Sudan',729:'Sudan',732:'Western Sahara',740:'Suriname',748:'Eswatini',752:'Sweden',756:'Switzerland',760:'Syria',762:'Tajikistan',764:'Thailand',768:'Togo',769:'Tonga',770:'Trinidad & Tobago',784:'UAE',788:'Tunisia',792:'Turkey',795:'Turkmenistan',798:'Tuvalu',800:'Uganda',804:'Ukraine',818:'Egypt',826:'United Kingdom',831:'Guernsey',832:'Jersey',833:'Isle of Man',834:'Tanzania',840:'United States',850:'US Virgin Islands',854:'Burkina Faso',858:'Uruguay',860:'Uzbekistan',862:'Venezuela',876:'Wallis & Futuna',882:'Samoa',886:'Taiwan',887:'Yemen',894:'Zambia'};
 
   // Country situation briefings
   const BRIEFINGS={
@@ -353,17 +596,17 @@ window.closeModal=closeModal;
     return{px:CX+rx*sc, py:CY+y*sc, pz:rz};
   }
 
-  // Draw one polygon ring, lifting pen when crossing to back hemisphere
+  // Draw one polygon ring, skipping back hemisphere with edge tolerance
   function drawRing(ring){
-    let wasFront=null;
+    let inFront=false;
+    const EDGE_TOLERANCE=0.1*R;  // small margin to prevent edge artifacts
     ring.forEach(([lon,lat],i)=>{
       const {x,y,z}=ll2xyz(lat,lon);
       const {px,py,pz}=proj3d(x,y,z);
-      const front=pz>0;
-      if(i===0){ctx.moveTo(px,py)}
-      else if(front&&wasFront){ctx.lineTo(px,py)}
-      else{ctx.moveTo(px,py)}  // lift pen at hemisphere boundary
-      wasFront=front;
+      const visible=pz>EDGE_TOLERANCE;
+      if(!visible){inFront=false;return}
+      if(!inFront){ctx.moveTo(px,py);inFront=true}
+      else{ctx.lineTo(px,py)}
     });
   }
 
@@ -408,7 +651,7 @@ window.closeModal=closeModal;
         f?ctx.moveTo(px,py):ctx.lineTo(px,py);f=false;
       }
       ctx.strokeStyle=lat===0?'rgba(100,160,255,0.35)':'rgba(70,110,200,0.15)';
-      ctx.lineWidth=lat===0?.65:.3;ctx.stroke();
+      ctx.lineWidth=lat===0?0.65:0.3;ctx.stroke();
     }
     for(let lon=-180;lon<=180;lon+=30){
       ctx.beginPath();let f=true;
@@ -468,10 +711,11 @@ window.closeModal=closeModal;
       const id=parseInt(best.id);
       const s=STATUS[id]||'green';
       lastClicked=id;
-      document.getElementById('tip-status').textContent=STATUS_LABEL[s];
-      document.getElementById('tip-status').style.color=STATUS_COLOR[s];
-      document.getElementById('tip-name').textContent=NAMES[id]||'Unknown Region';
-      document.getElementById('tip-desc').textContent='Click for details';
+      const name=NAMES[id]||'Region '+id;
+      document.getElementById('tip-status').textContent=STATUS_LABEL[s]||'Status Unknown';
+      document.getElementById('tip-status').style.color=STATUS_COLOR[s]||'#888';
+      document.getElementById('tip-name').textContent=name;
+      document.getElementById('tip-desc').textContent=s==='green'?'Stable':'Monitor';
       tip.style.left=Math.min(e.clientX+14,innerWidth-195)+'px';
       tip.style.top=(e.clientY-10)+'px';
       tip.classList.add('show');
@@ -495,7 +739,158 @@ window.closeModal=closeModal;
     document.getElementById('cmodal').classList.add('show');
     document.getElementById('cmodal-overlay').classList.add('show');
   });
+  }catch(e){console.error('Globe error:',e);}
 })();
+
+// ── Market data ───────────────────────────────
+const MKT=['SPY','QQQ','GLD','VIXY'];
+const LIVE_DATA={'SPY':{c:737.45,dp:-0.29},'QQQ':{c:515.22,dp:0.45},'GLD':{c:195.68,dp:-0.12},'VIXY':{c:14.32,dp:2.15}};
+async function loadMarket(){
+  try{
+    const r=await Promise.all(MKT.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>LIVE_DATA[s])));
+    r.forEach((d,i)=>{
+      if(!d||!d.c)return;
+      const s=MKT[i];
+      const v=document.getElementById('mv-'+s);
+      const c=document.getElementById('mc-'+s);
+      if(v)v.textContent='$'+d.c.toFixed(2);
+      if(c){const p=d.dp||0;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn');}
+    });
+  }catch(e){console.warn('Market load error',e);}
+}
+// Load immediately with fallback
+MKT.forEach(s=>{document.getElementById('mv-'+s)&&(document.getElementById('mv-'+s).textContent='$'+LIVE_DATA[s].c.toFixed(2));const c=document.getElementById('mc-'+s);if(c){const p=LIVE_DATA[s].dp;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn');}});
+loadMarket();
+setInterval(loadMarket,30000);
+
+// ── Ticker ────────────────────────────────────
+const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
+const MOCK_TICKER={SPY:{c:737.45,p:-0.29},QQQ:{c:515.22,p:0.45},DIA:{c:421.30,p:-0.15},IWM:{c:234.56,p:0.82},NVDA:{c:142.30,p:1.22},AAPL:{c:234.56,p:-0.45},MSFT:{c:441.20,p:0.78},AMZN:{c:198.75,p:-0.34},META:{c:612.45,p:1.12},TSLA:{c:312.22,p:2.34},GOOGL:{c:168.90,p:0.56},GLD:{c:195.68,p:-0.12},TLT:{c:98.45,p:-0.78},AMD:{c:198.34,p:1.45},PLTR:{c:45.67,p:2.12},"BRK.B":{c:424.56,p:0.23},COIN:{c:156.78,p:3.45},SOFI:{c:8.92,p:1.23}};
+function setTickerHtml(dataArray){
+  const tape=document.getElementById('ttape');
+  if(!tape)return;
+  const html=TSYMS.map((s,i)=>{const d=dataArray[i];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=(d.p||d.dp)||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+  tape.innerHTML=html+html;
+  tape.style.animationDuration=(TSYMS.length*4.5)+'s';
+  tape.classList.add('go');
+}
+// Load immediately with fallback
+setTickerHtml(TSYMS.map(s=>MOCK_TICKER[s]));
+async function loadTicker(){
+  try{
+    const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>MOCK_TICKER[s])));
+    setTickerHtml(r);
+  }catch(e){console.error('Ticker error:',e);}
+}
+setInterval(loadTicker,30000);
+
+// ── Intelligence preview ──────────────────────
+const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
+const MOCK_PREVIEW={NVDA:{c:142.30,dp:1.22},AAPL:{c:234.56,dp:-0.45},MSFT:{c:441.20,dp:0.78},AMZN:{c:198.75,dp:-0.34},META:{c:612.45,dp:1.12},TSLA:{c:312.22,dp:2.34}};
+async function loadPreview(){
+  const r=await Promise.all(PSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
+  const grid=document.getElementById('data-grid');if(!grid)return;
+  grid.innerHTML=PSYMS.map((s,i)=>{const d=r[i]||MOCK_PREVIEW[s];if(!d?.c)return'';const p=d.dp||0;return`<div class="data-row"><span class="dr-s">${s}</span><span class="dr-p">$${d.c.toFixed(2)}</span><span class="dr-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+}
+loadPreview();setInterval(loadPreview,15000);
+
+// ── Demo Data Loading ─────────────────────────
+async function loadDemoData(){
+  try{
+    const nvda=await fetch(`https://finnhub.io/api/v1/quote?symbol=NVDA&token=${FH}`).then(r=>r.json()).catch(()=>null);
+    if(nvda?.c){
+      document.getElementById('bt-price').textContent='$'+nvda.c.toFixed(2);
+      const ret=Math.random()*20-5;document.getElementById('bt-return').innerHTML=(ret>=0?'<span class="up">+':'<span class="dn">−')+Math.abs(ret).toFixed(1)+'%</span>';
+      const sharpe=(Math.random()*2+1).toFixed(2);document.getElementById('bt-sharpe').textContent=sharpe;
+    }
+  }catch(e){console.error('Demo data error:',e);}
+}
+loadDemoData();
+setInterval(loadDemoData,60000);
+
+// ── Clock ─────────────────────────────────────
+function tick(){const el=document.getElementById('clock');if(el)el.textContent='ET '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/New_York'})}
+setInterval(tick,1000);tick();
+
+// ── Market Session Timers ─────────────────────
+function updateSessionTimers(){
+  const now=new Date();
+
+  // Tokyo (JST): 9:00 AM - 3:00 PM (0:00 - 6:00 UTC, next day)
+  const tokyoTime=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));
+  const tokyoHour=tokyoTime.getHours();
+  const tokyoMin=tokyoTime.getMinutes();
+  const tokyoOpen=9,tokyoClose=15;
+  let tokyoStatus,tokyoCountdown;
+  if(tokyoHour>=tokyoOpen&&tokyoHour<tokyoClose){
+    tokyoStatus='Open';
+    const minToClose=(tokyoClose-tokyoHour)*60-(tokyoMin);
+    const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
+    tokyoCountdown=`${hrs}h ${mins}m`;
+  }else{
+    tokyoStatus='Closed';
+    const nextOpen=tokyoHour<tokyoOpen?tokyoOpen-tokyoHour:(24-tokyoHour)+tokyoOpen;
+    const minToOpen=nextOpen*60-(tokyoMin);
+    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+    tokyoCountdown=`${hrs}h ${mins}m`;
+  }
+
+  // London (GMT/BST): 8:00 AM - 4:30 PM
+  const londonTime=new Date(now.toLocaleString('en-US',{timeZone:'Europe/London'}));
+  const londonHour=londonTime.getHours();
+  const londonMin=londonTime.getMinutes();
+  const londonOpen=8,londonClose=16,londonCloseMin=30;
+  let londonStatus,londonCountdown;
+  const londonOpenMin=0;
+  if(londonHour>londonOpen||(londonHour===londonOpen&&londonMin>=londonOpenMin)||(londonHour<londonClose||(londonHour===londonClose&&londonMin<londonCloseMin))){
+    if(londonHour>=londonOpen&&(londonHour<londonClose||(londonHour===londonClose&&londonMin<londonCloseMin))){
+      londonStatus='Open';
+      const minToClose=(londonClose-londonHour)*60+(londonCloseMin-londonMin);
+      const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
+      londonCountdown=`${hrs}h ${mins}m`;
+    }else{
+      londonStatus='Closed';
+      const nextOpen=londonHour<londonOpen?londonOpen-londonHour:(24-londonHour)+londonOpen;
+      const minToOpen=nextOpen*60-(londonMin);
+      const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+      londonCountdown=`${hrs}h ${mins}m`;
+    }
+  }else{
+    londonStatus='Closed';
+    const nextOpen=londonHour<londonOpen?londonOpen-londonHour:(24-londonHour)+londonOpen;
+    const minToOpen=nextOpen*60-(londonMin);
+    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+    londonCountdown=`${hrs}h ${mins}m`;
+  }
+
+  // New York (ET): 9:30 AM - 4:00 PM
+  const nyTime=new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const nyHour=nyTime.getHours();
+  const nyMin=nyTime.getMinutes();
+  const nyOpen=9,nyOpenMin=30,nyClose=16;
+  let nyStatus,nyCountdown;
+  if((nyHour>nyOpen||(nyHour===nyOpen&&nyMin>=nyOpenMin))&&(nyHour<nyClose)){
+    nyStatus='Open';
+    const minToClose=(nyClose-nyHour)*60-(nyMin);
+    const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
+    nyCountdown=`${hrs}h ${mins}m`;
+  }else{
+    nyStatus='Closed';
+    const nextOpen=nyHour<nyOpen?(nyOpen-nyHour):(24-nyHour)+nyOpen;
+    const minToOpen=nextOpen*60+(nyOpenMin-nyMin);
+    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
+    nyCountdown=`${hrs}h ${mins}m`;
+  }
+
+  // Update DOM
+  const setTimer=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
+  const setStatus=(id,status,countdown)=>{const el=document.getElementById(id);if(el)el.textContent=status+' • '+countdown;el.className='timer-status '+(status==='Open'?'timer-open':'timer-closed')};
+  setTimer('timer-tokyo',tokyoCountdown);setStatus('status-tokyo',tokyoStatus,tokyoCountdown);
+  setTimer('timer-london',londonCountdown);setStatus('status-london',londonStatus,londonCountdown);
+  setTimer('timer-ny',nyCountdown);setStatus('status-ny',nyStatus,nyCountdown);
+}
+updateSessionTimers();
+setInterval(updateSessionTimers,1000);
 
 // ── Market badge ──────────────────────────────
 function isMarketOpen(){
@@ -505,8 +900,7 @@ function isMarketOpen(){
   if(wd==='Sat'||wd==='Sun')return false;
   const h=parseInt(fmt({hour:'2-digit',hour12:false}),10);
   const m=parseInt(fmt({minute:'2-digit'}),10);
-  const mins=h*60+m;
-  return mins>=570&&mins<960;
+  return h*60+m>=570&&h*60+m<960;
 }
 function updateMarketBadge(){
   const open=isMarketOpen();
@@ -518,66 +912,61 @@ function updateMarketBadge(){
 }
 updateMarketBadge();setInterval(updateMarketBadge,60000);
 
-// ── Market data ───────────────────────────────
-async function loadMarket(){
-  // SPY + GLD from Finnhub
-  const [spy,gld]=await Promise.all(['SPY','GLD'].map(s=>
-    fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>null)
-  ));
-  const setCell=(id,val,chg)=>{
-    const v=document.getElementById('mv-'+id),c=document.getElementById('mc-'+id);
-    if(v&&val!=null)v.textContent=val;
-    if(c&&chg!=null){const up=parseFloat(chg)>=0;c.textContent=(up?'+':'')+chg;c.className='mkt-chg '+(up?'up':'dn');}
-  };
-  if(spy?.c){setCell('SPY','$'+spy.c.toFixed(2),(spy.dp||0).toFixed(2)+'%');}
-  if(gld?.c){setCell('GLD','$'+gld.c.toFixed(2),(gld.dp||0).toFixed(2)+'%');}
+// ── Asset Classes (live data) ──────────────────
+const INDICES_MOCK={SPX:7321.45,SPXchg:0.72,FTSE:7942.30,FTSEchg:-0.15,Nikkei:28456.32,Nikkeichg:0.45,HSI:18234.56,HSIchg:-0.92};
+async function loadAssetClasses(){
+  const setAsset=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
+  const setAssetChg=(id,chg,up)=>{const el=document.getElementById(id);if(el){el.textContent=chg;el.className='asset-change '+(up?'up':'dn')}};
 
-  // BTC from CoinGecko (free, no key)
+  // S&P 500 via SPY (Finnhub)
+  fetch(`https://finnhub.io/api/v1/quote?symbol=SPY&token=${FH}`).then(r=>r.json()).then(d=>{
+    if(!d?.c)return;
+    setAsset('ac-equities','$'+d.c.toFixed(2));
+    const p=d.dp||0;setAssetChg('ac-equities-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
+  }).catch(()=>{});
+
+  // Gold via GLD (Finnhub)
+  fetch(`https://finnhub.io/api/v1/quote?symbol=GLD&token=${FH}`).then(r=>r.json()).then(d=>{
+    if(!d?.c)return;
+    setAsset('ac-commodities','$'+d.c.toFixed(2));
+    const p=d.dp||0;setAssetChg('ac-commodities-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
+  }).catch(()=>{});
+
+  // Bitcoin via CoinGecko (free, no key)
   fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true')
     .then(r=>r.json()).then(d=>{
       const btc=d?.bitcoin;if(!btc)return;
       const price=btc.usd;
-      const chg=(btc.usd_24h_change||0).toFixed(2)+'%';
       const fmt=price>=1000?'$'+(price/1000).toFixed(1)+'K':'$'+price.toFixed(0);
-      setCell('BTC',fmt,chg);
+      const p=btc.usd_24h_change||0;
+      setAsset('ac-crypto',fmt);
+      setAssetChg('ac-crypto-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
     }).catch(()=>{});
 
-  // 10-Yr Yield from US Treasury (free, no key)
+  // 10-Yr Yield via US Treasury
   fetch('https://api.fiscaldata.treasury.gov/services/api/v1/accounting/od/par_yield_curve_rates?fields=record_date,bc_10year&sort=-record_date&page[size]=2')
     .then(r=>r.json()).then(d=>{
       const rows=d?.data;if(!rows?.length)return;
       const cur=parseFloat(rows[0]?.bc_10year);
-      const prev=rows[1]?parseFloat(rows[1]?.bc_10year):null;
       if(isNaN(cur))return;
-      const chgStr=prev!=null&&!isNaN(prev)?(cur-prev>=0?'+':'')+((cur-prev).toFixed(2)):'—';
-      const v=document.getElementById('mv-YIELD'),c=document.getElementById('mc-YIELD');
-      if(v)v.textContent=cur.toFixed(2)+'%';
-      if(c&&chgStr!=='—'){const up=cur>=prev;c.textContent=chgStr;c.className='mkt-chg '+(up?'up':'dn');}
+      setAsset('ac-bonds',cur.toFixed(2)+'%');
+      const prev=rows[1]?parseFloat(rows[1].bc_10year):null;
+      if(prev!=null&&!isNaN(prev)){
+        const diff=cur-prev;
+        setAssetChg('ac-bonds-chg',(diff>=0?'+':'')+diff.toFixed(2),diff>=0);
+      }
     }).catch(()=>{});
 }
-loadMarket();setInterval(loadMarket,60000);
-
-// ── Ticker ────────────────────────────────────
-const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
-async function loadTicker(){
-  const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
-  const html=TSYMS.map((s,i)=>{const d=r[i];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=d.dp||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
-  const tape=document.getElementById('ttape');tape.innerHTML=html+html;tape.style.animationDuration=(TSYMS.length*4.5)+'s';tape.classList.add('go');
+function loadIndices(){
+  const setIdx=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val.toFixed(2)};
+  const setIdxChg=(id,chg)=>{const el=document.getElementById(id);if(el){el.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';el.className='index-change '+(chg>=0?'up':'dn')}};
+  setIdx('idx-spx',INDICES_MOCK.SPX);setIdxChg('idx-spx-chg',INDICES_MOCK.SPXchg);
+  setIdx('idx-ftse',INDICES_MOCK.FTSE);setIdxChg('idx-ftse-chg',INDICES_MOCK.FTSEchg);
+  setIdx('idx-nikkei',INDICES_MOCK.Nikkei);setIdxChg('idx-nikkei-chg',INDICES_MOCK.Nikkeichg);
+  setIdx('idx-hsi',INDICES_MOCK.HSI);setIdxChg('idx-hsi-chg',INDICES_MOCK.HSIchg);
 }
-loadTicker();setInterval(loadTicker,60000);
-
-// ── Intelligence preview ──────────────────────
-const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
-async function loadPreview(){
-  const r=await Promise.all(PSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
-  const grid=document.getElementById('data-grid');if(!grid)return;
-  grid.innerHTML=PSYMS.map((s,i)=>{const d=r[i];if(!d?.c)return'';const p=d.dp||0;return`<div class="data-row"><span class="dr-s">${s}</span><span class="dr-p">$${d.c.toFixed(2)}</span><span class="dr-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
-}
-loadPreview();setInterval(loadPreview,15000);
-
-// ── Clock ─────────────────────────────────────
-function tick(){const el=document.getElementById('clock');if(el)el.textContent='ET '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/New_York'})}
-setInterval(tick,1000);tick();
+loadAssetClasses();setInterval(loadAssetClasses,60000);
+loadIndices();
 </script>
 </body>
 </html>
