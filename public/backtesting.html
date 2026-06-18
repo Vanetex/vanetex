@@ -298,28 +298,26 @@ document.addEventListener('DOMContentLoaded', async function() {
   </script>
 
 
+
 <script>
 (function() {
   var TOPBAR_H = 52;
   var injected = false;
 
   function hideBundleTopbar() {
-    // Find the bundle's native topbar by locating text "Market data live" or "VANETEX"
-    // then walking up to the nearest fixed/sticky ancestor
-    var allEls = document.querySelectorAll('*');
-    for (var i = 0; i < allEls.length; i++) {
-      var el = allEls[i];
-      if (el.id === '__vx-topbar') continue;
-      if (el.childElementCount === 0 && el.textContent && el.textContent.trim() === 'Market data live') {
-        // Walk up to find the fixed container
-        var node = el;
-        while (node && node !== document.body) {
-          var cs = window.getComputedStyle(node);
-          if (cs.position === 'fixed' || cs.position === 'sticky') {
-            node.style.setProperty('display', 'none', 'important');
-            break;
+    // Walk text nodes to find "Market data live", then hide its wide block ancestor
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (node.textContent.indexOf('Market data live') !== -1) {
+        var el = node.parentElement;
+        while (el && el !== document.body) {
+          var rect = el.getBoundingClientRect();
+          if (rect.width > window.innerWidth * 0.5 && rect.height > 20 && rect.height < 200) {
+            el.style.setProperty('display', 'none', 'important');
+            return;
           }
-          node = node.parentElement;
+          el = el.parentElement;
         }
         break;
       }
@@ -349,33 +347,34 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.body.insertBefore(bar, document.body.firstChild);
     document.body.style.paddingTop = TOPBAR_H + 'px';
 
-    // Allocation check only fires when Run backtest button is clicked
     var errEl = document.getElementById('__vx-alloc-err');
+    var errTimer = null;
+
     function getAllocTotal() {
       var inputs = document.querySelectorAll('input[type="number"]');
       var total = 0;
       inputs.forEach(function(inp) { total += parseFloat(inp.value) || 0; });
       return Math.round(total * 100) / 100;
     }
+
+    // Only intercept clicks on actual <button> elements whose own text contains "run"
     document.addEventListener('click', function(e) {
-      var target = e.target;
-      // Walk up to find if a Run button was clicked
-      var node = target;
-      while (node && node !== document.body) {
-        var txt = (node.textContent || '').toLowerCase();
-        if ((node.tagName === 'BUTTON' || node.tagName === 'A') && (txt.includes('run') || txt.includes('backtest'))) {
-          var total = getAllocTotal();
-          if (total > 100) {
-            e.stopPropagation();
-            e.preventDefault();
-            if (errEl) errEl.style.display = 'flex';
-            setTimeout(function() { if (errEl) errEl.style.display = 'none'; }, 4000);
-          } else {
-            if (errEl) errEl.style.display = 'none';
-          }
-          return;
+      var btn = e.target.closest('button');
+      if (!btn) return;
+      var txt = (btn.textContent || '').trim().toLowerCase();
+      if (txt.indexOf('run') === -1) return;
+
+      var total = getAllocTotal();
+      if (total > 100) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        if (errEl) {
+          errEl.style.display = 'flex';
+          clearTimeout(errTimer);
+          errTimer = setTimeout(function() { errEl.style.display = 'none'; }, 4000);
         }
-        node = node.parentElement;
+      } else {
+        if (errEl) errEl.style.display = 'none';
       }
     }, true);
   }
