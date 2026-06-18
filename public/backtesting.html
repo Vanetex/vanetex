@@ -302,9 +302,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 
+
 <script>
 (function() {
-  var TOPBAR_H = 52;
 
   function getAllocTotal() {
     var total = 0;
@@ -325,53 +325,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateErr();
   }
 
-  // Find and permanently hide the bundle's native topbar using a CSS rule
-  function hideNativeTopbar() {
-    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-    var node;
-    while ((node = walker.nextNode())) {
-      if (node.textContent.indexOf('Market data live') !== -1) {
-        var el = node.parentElement;
-        while (el && el !== document.body) {
-          var rect = el.getBoundingClientRect();
-          if (rect.width > window.innerWidth * 0.5 && rect.height > 20 && rect.height < 200) {
-            // Build a CSS selector from its id/classes so the rule survives re-renders
-            var sel = el.tagName.toLowerCase();
-            if (el.id) {
-              sel = '#' + el.id;
-            } else if (el.className && typeof el.className === 'string') {
-              var cls = el.className.trim().split(/\s+/);
-              if (cls.length) sel = '.' + cls.join('.');
-            }
-            var styleEl = document.getElementById('__vx-hide-topbar-style');
-            if (!styleEl) {
-              styleEl = document.createElement('style');
-              styleEl.id = '__vx-hide-topbar-style';
-              document.head.appendChild(styleEl);
-            }
-            styleEl.textContent = sel + ' { display: none !important; }';
-            el.style.setProperty('display', 'none', 'important');
-            return true;
-          }
-          el = el.parentElement;
-        }
-        break;
-      }
-    }
-    return false;
-  }
-
-  // Keep retrying until the bundle topbar is found and hidden
-  function watchAndHide() {
-    if (!hideNativeTopbar()) {
-      var obs = new MutationObserver(function() {
-        if (hideNativeTopbar()) obs.disconnect();
-      });
-      obs.observe(document.body, { childList: true, subtree: true });
-    }
-  }
-
-  // Intercept replaceWith — inject our topbar into the new doc before the swap
   var _origReplaceWith = Element.prototype.replaceWith;
   Element.prototype.replaceWith = function() {
     if (this === document.documentElement) {
@@ -379,7 +332,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (newHtml && newHtml.tagName === 'HTML') {
         var newBody = newHtml.querySelector('body');
         if (newBody) {
-          newBody.style.paddingTop = TOPBAR_H + 'px';
+          // No paddingTop — bundle topbar sits at y=0-52, directly behind our fixed overlay
           var bar = document.createElement('div');
           bar.id = '__vx-topbar';
           bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:52px;background:rgba(8,11,20,0.98);border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:2147483647;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);';
@@ -390,9 +343,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     _origReplaceWith.apply(this, arguments);
     if (this === document.documentElement) {
-      watchAndHide();
       attachAllocWatcher();
-      // Capture-phase run guard
       document.addEventListener('click', function(e) {
         var el = e.target;
         for (var i = 0; i < 5; i++) {
