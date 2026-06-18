@@ -299,13 +299,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 
+
 <script>
 (function() {
   var TOPBAR_H = 52;
   var injected = false;
 
   function hideBundleTopbar() {
-    // Walk text nodes to find "Market data live", then hide its wide block ancestor
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     var node;
     while ((node = walker.nextNode())) {
@@ -348,42 +348,37 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.body.style.paddingTop = TOPBAR_H + 'px';
 
     var errEl = document.getElementById('__vx-alloc-err');
-    var errTimer = null;
 
     function getAllocTotal() {
-      var inputs = document.querySelectorAll('input[type="number"]');
       var total = 0;
-      inputs.forEach(function(inp) { total += parseFloat(inp.value) || 0; });
+      document.querySelectorAll('input[type="number"]').forEach(function(inp) {
+        total += parseFloat(inp.value) || 0;
+      });
       return Math.round(total * 100) / 100;
     }
 
-    // Only intercept clicks on actual <button> elements whose own text contains "run"
-    document.addEventListener('click', function(e) {
-      var btn = e.target.closest('button');
-      if (!btn) return;
-      var txt = (btn.textContent || '').trim().toLowerCase();
-      if (txt.indexOf('run') === -1) return;
+    function updateErr() {
+      if (!errEl) return;
+      errEl.style.display = getAllocTotal() > 100 ? 'flex' : 'none';
+    }
 
-      var total = getAllocTotal();
-      if (total > 100) {
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        if (errEl) {
-          errEl.style.display = 'flex';
-          clearTimeout(errTimer);
-          errTimer = setTimeout(function() { errEl.style.display = 'none'; }, 4000);
-        }
-      } else {
-        if (errEl) errEl.style.display = 'none';
-      }
-    }, true);
+    // Real-time: show/hide as inputs change
+    document.addEventListener('input', updateErr);
+    document.addEventListener('change', updateErr);
+
+    // Initial check (inputs may already have values)
+    updateErr();
+
+    // Re-check whenever new inputs appear (bundle may render them later)
+    new MutationObserver(updateErr).observe(document.body, { childList: true, subtree: true });
   }
 
   var poll = setInterval(function() {
     var loading = document.getElementById('__bundler_loading');
     var thumbnail = document.getElementById('__bundler_thumbnail');
-    var bodyReady = document.body && document.body.childElementCount > 2;
-    if (bodyReady && (!loading || loading.style.display === 'none') && (!thumbnail || thumbnail.style.display === 'none')) {
+    if (document.body && document.body.childElementCount > 2
+        && (!loading || loading.style.display === 'none')
+        && (!thumbnail || thumbnail.style.display === 'none')) {
       clearInterval(poll);
       injectTopbar();
     }
