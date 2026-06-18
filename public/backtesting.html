@@ -301,6 +301,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 
+
 <script>
 (function() {
   var TOPBAR_H = 52;
@@ -321,35 +322,56 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     document.addEventListener('input', updateErr);
     document.addEventListener('change', updateErr);
-    new MutationObserver(updateErr).observe(document.body, { childList: true, subtree: true });
     updateErr();
   }
 
+  // Find and permanently hide the bundle's native topbar using a CSS rule
   function hideNativeTopbar() {
-    // Hide the bundle's topbar via MutationObserver once it renders
-    var obs = new MutationObserver(function() {
-      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-      var node;
-      while ((node = walker.nextNode())) {
-        if (node.textContent.indexOf('Market data live') !== -1) {
-          var el = node.parentElement;
-          while (el && el !== document.body) {
-            var rect = el.getBoundingClientRect();
-            if (rect.width > window.innerWidth * 0.5 && rect.height > 20 && rect.height < 200) {
-              el.style.setProperty('display', 'none', 'important');
-              obs.disconnect();
-              return;
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (node.textContent.indexOf('Market data live') !== -1) {
+        var el = node.parentElement;
+        while (el && el !== document.body) {
+          var rect = el.getBoundingClientRect();
+          if (rect.width > window.innerWidth * 0.5 && rect.height > 20 && rect.height < 200) {
+            // Build a CSS selector from its id/classes so the rule survives re-renders
+            var sel = el.tagName.toLowerCase();
+            if (el.id) {
+              sel = '#' + el.id;
+            } else if (el.className && typeof el.className === 'string') {
+              var cls = el.className.trim().split(/\s+/);
+              if (cls.length) sel = '.' + cls.join('.');
             }
-            el = el.parentElement;
+            var styleEl = document.getElementById('__vx-hide-topbar-style');
+            if (!styleEl) {
+              styleEl = document.createElement('style');
+              styleEl.id = '__vx-hide-topbar-style';
+              document.head.appendChild(styleEl);
+            }
+            styleEl.textContent = sel + ' { display: none !important; }';
+            el.style.setProperty('display', 'none', 'important');
+            return true;
           }
-          break;
+          el = el.parentElement;
         }
+        break;
       }
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
+    }
+    return false;
   }
 
-  // Intercept replaceWith so our topbar is in the new document from frame one
+  // Keep retrying until the bundle topbar is found and hidden
+  function watchAndHide() {
+    if (!hideNativeTopbar()) {
+      var obs = new MutationObserver(function() {
+        if (hideNativeTopbar()) obs.disconnect();
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
+  // Intercept replaceWith — inject our topbar into the new doc before the swap
   var _origReplaceWith = Element.prototype.replaceWith;
   Element.prototype.replaceWith = function() {
     if (this === document.documentElement) {
@@ -358,7 +380,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         var newBody = newHtml.querySelector('body');
         if (newBody) {
           newBody.style.paddingTop = TOPBAR_H + 'px';
-          var bar = newBody.ownerDocument.createElement('div');
+          var bar = document.createElement('div');
           bar.id = '__vx-topbar';
           bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:52px;background:rgba(8,11,20,0.98);border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:2147483647;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);';
           bar.innerHTML = '<a href="/" style="display:flex;align-items:center;gap:9px;text-decoration:none;"><div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#1F6FEB,#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(31,111,235,.4);flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 22 22" fill="none"><path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span style="font-family:ui-sans-serif,system-ui,sans-serif;font-weight:800;font-size:14px;letter-spacing:-.3px;color:#FAFAF7;">VANETEX</span><span style="font-family:ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:rgba(250,250,247,0.38);margin-left:1px;">BACKTEST</span></a><div id="__vx-alloc-err" style="display:none;align-items:center;gap:6px;background:rgba(255,77,94,.12);border:1px solid rgba(255,77,94,.3);border-radius:8px;padding:5px 12px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:12px;font-weight:600;color:#ff4d5e;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 5v4M8 11h.01M2 14h12L8 2 2 14z" stroke="#ff4d5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>&nbsp;Allocation exceeds 100% &#8212; reduce before running</div>';
@@ -367,27 +389,26 @@ document.addEventListener('DOMContentLoaded', async function() {
       }
     }
     _origReplaceWith.apply(this, arguments);
-    // After swap, attach watchers to the live document
     if (this === document.documentElement) {
-      hideNativeTopbar();
+      watchAndHide();
       attachAllocWatcher();
-      // Capture-phase run button guard
+      // Capture-phase run guard
       document.addEventListener('click', function(e) {
         var el = e.target;
-        // Walk up max 4 levels to find a clickable run element
-        for (var i = 0; i < 4; i++) {
+        for (var i = 0; i < 5; i++) {
           if (!el || el === document.body) break;
-          var tag = el.tagName;
-          var txt = (el.textContent || '').trim().toLowerCase();
-          var isClickable = tag === 'BUTTON' || tag === 'A' || el.getAttribute('role') === 'button' || (el.onclick != null);
-          if (isClickable && (txt.includes('run backtest') || txt === 'run')) {
-            if (getAllocTotal() > 100) {
-              e.stopImmediatePropagation();
-              e.preventDefault();
-              var err = document.getElementById('__vx-alloc-err');
-              if (err) err.style.display = 'flex';
+          var isClickable = el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button' || el.onclick;
+          if (isClickable) {
+            var txt = (el.textContent || '').trim().toLowerCase();
+            if (txt.indexOf('run') !== -1 && txt.length < 30) {
+              if (getAllocTotal() > 100) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                var err = document.getElementById('__vx-alloc-err');
+                if (err) err.style.display = 'flex';
+              }
+              return;
             }
-            return;
           }
           el = el.parentElement;
         }
