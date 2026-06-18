@@ -304,8 +304,20 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 
+
 <script>
 (function() {
+
+  var LS_KEY = 'vx_deleted_saves';
+
+  function getDeleted() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function markDeleted(name) {
+    var d = getDeleted();
+    if (d.indexOf(name) === -1) d.push(name);
+    localStorage.setItem(LS_KEY, JSON.stringify(d));
+  }
 
   function getAllocTotal() {
     var total = 0;
@@ -326,8 +338,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateErr();
   }
 
-  // Find and REMOVE the bundle's native topbar from the DOM entirely.
-  // Searches every scrollable container too (bundle often wraps in overflow:auto div).
   function removeBundleTopbar(root) {
     root = root || document.body;
     var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
@@ -337,18 +347,14 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (txt.indexOf('Market data') !== -1 || txt.indexOf('Not financial advice') !== -1) {
         var el = node.parentElement;
         while (el && el !== document.body) {
-          // Walk up until we hit something that spans the full width (the topbar row)
           var style = window.getComputedStyle(el);
           var w = el.offsetWidth;
           if (w > window.innerWidth * 0.5 &&
-              (style.position === 'fixed' || style.position === 'sticky' ||
-               el.offsetTop < 120)) {
-            el.remove();
-            return true;
+              (style.position === 'fixed' || style.position === 'sticky' || el.offsetTop < 120)) {
+            el.remove(); return true;
           }
           el = el.parentElement;
         }
-        // Fallback: remove the closest block ancestor
         el = node.parentElement;
         while (el && el !== document.body) {
           if (el.offsetWidth > 200) { el.remove(); return true; }
@@ -359,14 +365,69 @@ document.addEventListener('DOMContentLoaded', async function() {
     return false;
   }
 
-  // Watch for the bundle topbar appearing (handles async dc-runtime render)
-  // and keep removing it if dc-runtime ever re-adds it.
+  // Add delete buttons to saved portfolio cards and apply persisted deletions
+  function patchSavedCards() {
+    var deleted = getDeleted();
+    // vx-tile = saved portfolio card
+    document.querySelectorAll('.vx-tile').forEach(function(card) {
+      if (card.dataset.vxPatched) return;
+      card.dataset.vxPatched = '1';
+
+      // Get portfolio name from the first bold text inside the card
+      var nameEl = card.querySelector('[style*="font-weight:700"]') ||
+                   card.querySelector('[style*="font-weight: 700"]');
+      var name = nameEl ? nameEl.textContent.trim() : null;
+
+      // Remove cards that were previously deleted
+      if (name && deleted.indexOf(name) !== -1) {
+        card.remove(); return;
+      }
+
+      // Find the top row (name + stat) to append delete button
+      var topRow = card.firstElementChild;
+      if (!topRow) return;
+
+      var btn = document.createElement('button');
+      btn.title = 'Remove portfolio';
+      btn.style.cssText = (
+        'position:absolute;top:12px;right:12px;width:22px;height:22px;border-radius:6px;' +
+        'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);' +
+        'color:rgba(250,250,247,0.4);font-size:14px;line-height:1;cursor:pointer;' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'transition:background 0.15s,color 0.15s;z-index:10;padding:0;'
+      );
+      btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+      btn.onmouseenter = function() {
+        btn.style.background = 'rgba(255,77,94,0.12)';
+        btn.style.borderColor = 'rgba(255,77,94,0.3)';
+        btn.style.color = '#ff4d5e';
+      };
+      btn.onmouseleave = function() {
+        btn.style.background = 'rgba(255,255,255,0.04)';
+        btn.style.borderColor = 'rgba(255,255,255,0.1)';
+        btn.style.color = 'rgba(250,250,247,0.4)';
+      };
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        if (name) markDeleted(name);
+        card.style.transition = 'opacity 0.2s,transform 0.2s';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.95)';
+        setTimeout(function() { card.remove(); }, 200);
+      };
+
+      // Card needs position:relative for absolute delete btn
+      card.style.position = 'relative';
+      card.appendChild(btn);
+    });
+  }
+
   function watchAndKill() {
     removeBundleTopbar();
     var obs = new MutationObserver(function() {
       obs.disconnect();
       removeBundleTopbar();
-      // Re-attach after a tick so we catch any follow-up renders
+      patchSavedCards();
       setTimeout(function() {
         obs.observe(document.body, { childList: true, subtree: true });
       }, 0);
