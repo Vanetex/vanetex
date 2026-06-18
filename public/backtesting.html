@@ -300,93 +300,100 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 
+
 <script>
 (function() {
   var TOPBAR_H = 52;
-  var injected = false;
 
-  function hideBundleTopbar() {
-    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-    var node;
-    while ((node = walker.nextNode())) {
-      if (node.textContent.indexOf('Market data live') !== -1) {
-        var el = node.parentElement;
-        while (el && el !== document.body) {
-          var rect = el.getBoundingClientRect();
-          if (rect.width > window.innerWidth * 0.5 && rect.height > 20 && rect.height < 200) {
-            el.style.setProperty('display', 'none', 'important');
+  function getAllocTotal() {
+    var total = 0;
+    document.querySelectorAll('input[type="number"]').forEach(function(inp) {
+      total += parseFloat(inp.value) || 0;
+    });
+    return Math.round(total * 100) / 100;
+  }
+
+  function attachAllocWatcher() {
+    var errEl = document.getElementById('__vx-alloc-err');
+    if (!errEl) return;
+    function updateErr() {
+      errEl.style.display = getAllocTotal() > 100 ? 'flex' : 'none';
+    }
+    document.addEventListener('input', updateErr);
+    document.addEventListener('change', updateErr);
+    new MutationObserver(updateErr).observe(document.body, { childList: true, subtree: true });
+    updateErr();
+  }
+
+  function hideNativeTopbar() {
+    // Hide the bundle's topbar via MutationObserver once it renders
+    var obs = new MutationObserver(function() {
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+      var node;
+      while ((node = walker.nextNode())) {
+        if (node.textContent.indexOf('Market data live') !== -1) {
+          var el = node.parentElement;
+          while (el && el !== document.body) {
+            var rect = el.getBoundingClientRect();
+            if (rect.width > window.innerWidth * 0.5 && rect.height > 20 && rect.height < 200) {
+              el.style.setProperty('display', 'none', 'important');
+              obs.disconnect();
+              return;
+            }
+            el = el.parentElement;
+          }
+          break;
+        }
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // Intercept replaceWith so our topbar is in the new document from frame one
+  var _origReplaceWith = Element.prototype.replaceWith;
+  Element.prototype.replaceWith = function() {
+    if (this === document.documentElement) {
+      var newHtml = arguments[0];
+      if (newHtml && newHtml.tagName === 'HTML') {
+        var newBody = newHtml.querySelector('body');
+        if (newBody) {
+          newBody.style.paddingTop = TOPBAR_H + 'px';
+          var bar = newBody.ownerDocument.createElement('div');
+          bar.id = '__vx-topbar';
+          bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:52px;background:rgba(8,11,20,0.98);border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:2147483647;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);';
+          bar.innerHTML = '<a href="/" style="display:flex;align-items:center;gap:9px;text-decoration:none;"><div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#1F6FEB,#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(31,111,235,.4);flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 22 22" fill="none"><path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span style="font-family:ui-sans-serif,system-ui,sans-serif;font-weight:800;font-size:14px;letter-spacing:-.3px;color:#FAFAF7;">VANETEX</span><span style="font-family:ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:rgba(250,250,247,0.38);margin-left:1px;">BACKTEST</span></a><div id="__vx-alloc-err" style="display:none;align-items:center;gap:6px;background:rgba(255,77,94,.12);border:1px solid rgba(255,77,94,.3);border-radius:8px;padding:5px 12px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:12px;font-weight:600;color:#ff4d5e;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 5v4M8 11h.01M2 14h12L8 2 2 14z" stroke="#ff4d5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>&nbsp;Allocation exceeds 100% &#8212; reduce before running</div>';
+          newBody.insertBefore(bar, newBody.firstChild);
+        }
+      }
+    }
+    _origReplaceWith.apply(this, arguments);
+    // After swap, attach watchers to the live document
+    if (this === document.documentElement) {
+      hideNativeTopbar();
+      attachAllocWatcher();
+      // Capture-phase run button guard
+      document.addEventListener('click', function(e) {
+        var el = e.target;
+        // Walk up max 4 levels to find a clickable run element
+        for (var i = 0; i < 4; i++) {
+          if (!el || el === document.body) break;
+          var tag = el.tagName;
+          var txt = (el.textContent || '').trim().toLowerCase();
+          var isClickable = tag === 'BUTTON' || tag === 'A' || el.getAttribute('role') === 'button' || (el.onclick != null);
+          if (isClickable && (txt.includes('run backtest') || txt === 'run')) {
+            if (getAllocTotal() > 100) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              var err = document.getElementById('__vx-alloc-err');
+              if (err) err.style.display = 'flex';
+            }
             return;
           }
           el = el.parentElement;
         }
-        break;
-      }
+      }, true);
     }
-  }
-
-  function injectTopbar() {
-    if (injected || !document.body) return;
-    injected = true;
-
-    hideBundleTopbar();
-
-    var bar = document.createElement('div');
-    bar.id = '__vx-topbar';
-    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:' + TOPBAR_H + 'px;background:rgba(8,11,20,0.98);border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:2147483647;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);';
-    bar.innerHTML = '<a href="/" style="display:flex;align-items:center;gap:9px;text-decoration:none;">'
-      + '<div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#1F6FEB,#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(31,111,235,.4);flex-shrink:0;">'
-      + '<svg width="16" height="16" viewBox="0 0 22 22" fill="none"><path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-      + '</div>'
-      + '<span style="font-family:ui-sans-serif,system-ui,sans-serif;font-weight:800;font-size:14px;letter-spacing:-.3px;color:#FAFAF7;">VANETEX</span>'
-      + '<span style="font-family:ui-sans-serif,system-ui,sans-serif;font-weight:700;font-size:10px;letter-spacing:.16em;color:rgba(250,250,247,0.38);margin-left:1px;">BACKTEST</span>'
-      + '</a>'
-      + '<div id="__vx-alloc-err" style="display:none;align-items:center;gap:6px;background:rgba(255,77,94,.12);border:1px solid rgba(255,77,94,.3);border-radius:8px;padding:5px 12px;font-family:ui-sans-serif,system-ui,sans-serif;font-size:12px;font-weight:600;color:#ff4d5e;">'
-      + '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 5v4M8 11h.01M2 14h12L8 2 2 14z" stroke="#ff4d5e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-      + '&nbsp;Allocation exceeds 100% &#8212; reduce before running'
-      + '</div>';
-    document.body.insertBefore(bar, document.body.firstChild);
-    document.body.style.paddingTop = TOPBAR_H + 'px';
-
-    var errEl = document.getElementById('__vx-alloc-err');
-
-    function getAllocTotal() {
-      var total = 0;
-      document.querySelectorAll('input[type="number"]').forEach(function(inp) {
-        total += parseFloat(inp.value) || 0;
-      });
-      return Math.round(total * 100) / 100;
-    }
-
-    function updateErr() {
-      if (!errEl) return;
-      errEl.style.display = getAllocTotal() > 100 ? 'flex' : 'none';
-    }
-
-    // Real-time: show/hide as inputs change
-    document.addEventListener('input', updateErr);
-    document.addEventListener('change', updateErr);
-
-    // Initial check (inputs may already have values)
-    updateErr();
-
-    // Re-check whenever new inputs appear (bundle may render them later)
-    new MutationObserver(updateErr).observe(document.body, { childList: true, subtree: true });
-  }
-
-  var poll = setInterval(function() {
-    var loading = document.getElementById('__bundler_loading');
-    var thumbnail = document.getElementById('__bundler_thumbnail');
-    if (document.body && document.body.childElementCount > 2
-        && (!loading || loading.style.display === 'none')
-        && (!thumbnail || thumbnail.style.display === 'none')) {
-      clearInterval(poll);
-      injectTopbar();
-    }
-  }, 150);
-
-  window.addEventListener('load', function() {
-    setTimeout(function() { if (!injected) injectTopbar(); }, 4000);
-  });
+  };
 })();
 </script>
 </body>
