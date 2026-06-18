@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div style={{ background: "#07080b", minHeight: "100vh" }}>
+    <div style={{ background: "#07080b", minHeight: "100vh", color: "#FAFAF7" }}>
       {/* Header */}
       <header style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "20px 24px" }}>
         <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
