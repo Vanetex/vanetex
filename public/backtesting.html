@@ -303,6 +303,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 
+
 <script>
 (function() {
 
@@ -325,6 +326,54 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateErr();
   }
 
+  // Find and REMOVE the bundle's native topbar from the DOM entirely.
+  // Searches every scrollable container too (bundle often wraps in overflow:auto div).
+  function removeBundleTopbar(root) {
+    root = root || document.body;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    var node;
+    while ((node = walker.nextNode())) {
+      var txt = node.textContent;
+      if (txt.indexOf('Market data') !== -1 || txt.indexOf('Not financial advice') !== -1) {
+        var el = node.parentElement;
+        while (el && el !== document.body) {
+          // Walk up until we hit something that spans the full width (the topbar row)
+          var style = window.getComputedStyle(el);
+          var w = el.offsetWidth;
+          if (w > window.innerWidth * 0.5 &&
+              (style.position === 'fixed' || style.position === 'sticky' ||
+               el.offsetTop < 120)) {
+            el.remove();
+            return true;
+          }
+          el = el.parentElement;
+        }
+        // Fallback: remove the closest block ancestor
+        el = node.parentElement;
+        while (el && el !== document.body) {
+          if (el.offsetWidth > 200) { el.remove(); return true; }
+          el = el.parentElement;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Watch for the bundle topbar appearing (handles async dc-runtime render)
+  // and keep removing it if dc-runtime ever re-adds it.
+  function watchAndKill() {
+    removeBundleTopbar();
+    var obs = new MutationObserver(function() {
+      obs.disconnect();
+      removeBundleTopbar();
+      // Re-attach after a tick so we catch any follow-up renders
+      setTimeout(function() {
+        obs.observe(document.body, { childList: true, subtree: true });
+      }, 0);
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  }
+
   var _origReplaceWith = Element.prototype.replaceWith;
   Element.prototype.replaceWith = function() {
     if (this === document.documentElement) {
@@ -332,7 +381,6 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (newHtml && newHtml.tagName === 'HTML') {
         var newBody = newHtml.querySelector('body');
         if (newBody) {
-          // No paddingTop — bundle topbar sits at y=0-52, directly behind our fixed overlay
           var bar = document.createElement('div');
           bar.id = '__vx-topbar';
           bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:52px;background:rgba(8,11,20,0.98);border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:2147483647;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);';
@@ -343,12 +391,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     _origReplaceWith.apply(this, arguments);
     if (this === document.documentElement) {
+      watchAndKill();
       attachAllocWatcher();
       document.addEventListener('click', function(e) {
         var el = e.target;
         for (var i = 0; i < 5; i++) {
           if (!el || el === document.body) break;
-          var isClickable = el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button' || el.onclick;
+          var isClickable = el.tagName === 'BUTTON' || el.tagName === 'A' ||
+                            el.getAttribute('role') === 'button' || el.onclick;
           if (isClickable) {
             var txt = (el.textContent || '').trim().toLowerCase();
             if (txt.indexOf('run') !== -1 && txt.length < 30) {
