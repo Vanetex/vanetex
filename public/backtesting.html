@@ -307,6 +307,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 
+
 <script>
 (function() {
 
@@ -329,6 +330,26 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateErr();
   }
 
+  // Cap initial investment — the $ sibling identifies the right input
+  function attachInvestmentCap() {
+    document.querySelectorAll('input[type="number"]').forEach(function(inp) {
+      if(inp.dataset.vxCapped) return;
+      var prev=inp.previousElementSibling;
+      if(prev && prev.textContent.trim()==='$') {
+        inp.dataset.vxCapped='1';
+        inp.addEventListener('input',function() {
+          var v=parseFloat(this.value);
+          if(!isNaN(v)&&v>10000000) this.value=10000000;
+        });
+        inp.addEventListener('blur',function() {
+          var v=parseFloat(this.value);
+          if(!isNaN(v)&&v>10000000) { this.value=10000000; this.dispatchEvent(new Event('change')); }
+          if(!isNaN(v)&&v<1) { this.value=1; this.dispatchEvent(new Event('change')); }
+        });
+      }
+    });
+  }
+
   function removeBundleTopbar() {
     var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);
     var node;
@@ -348,81 +369,94 @@ document.addEventListener('DOMContentLoaded', async function() {
     return false;
   }
 
-  // "Load & run" text node → parent = load-row div → parent = card container
+  function makeDeleteBtn(card, name) {
+    var btn=document.createElement('button');
+    btn.title='Remove';
+    btn.style.cssText=(
+      'display:inline-flex;align-items:center;justify-content:center;'+
+      'width:22px;height:22px;border-radius:5px;flex-shrink:0;'+
+      'background:transparent;border:1px solid rgba(255,255,255,0.15);'+
+      'color:rgba(250,250,247,0.4);cursor:pointer;padding:0;'+
+      'transition:background 0.12s,color 0.12s,border-color 0.12s;'
+    );
+    btn.innerHTML='<svg width="8" height="8" viewBox="0 0 10 10" fill="none"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    btn.onmouseenter=function(){ btn.style.background='rgba(255,77,94,0.14)'; btn.style.borderColor='rgba(255,77,94,0.4)'; btn.style.color='#ff4d5e'; };
+    btn.onmouseleave=function(){ btn.style.background='transparent'; btn.style.borderColor='rgba(255,255,255,0.15)'; btn.style.color='rgba(250,250,247,0.4)'; };
+    btn.onclick=function(e) {
+      e.stopPropagation();
+      if(name) markDeleted(name);
+      card.style.transition='opacity 0.18s,transform 0.18s';
+      card.style.opacity='0'; card.style.transform='scale(0.94)';
+      setTimeout(function() { card.remove(); },200);
+    };
+    return btn;
+  }
+
   function patchSavedCards() {
     var deleted=getDeleted();
-    var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);
-    var node;
-    while((node=walker.nextNode())) {
-      if(node.nodeValue.trim()!=='Load & run') continue;
-      var loadRow=node.parentElement;   // <div style="...color:#6ea8ff">
-      var card=loadRow&&loadRow.parentElement; // vx-tile card
+    // Scan all elements for ones that look like "Load & run" footer rows:
+    // short text, contains "Load" and "run", few children
+    var all=document.body.querySelectorAll('div,a,span');
+    for(var i=0;i<all.length;i++) {
+      var el=all[i];
+      var tc=el.textContent||'';
+      if(tc.indexOf('Load')===-1||tc.indexOf('run')===-1) continue;
+      if(el.children.length>4) continue;
+      // Strip whitespace and check length — should be short ("Load & run →")
+      var stripped=tc.replace(/\s+/g,' ').trim();
+      if(stripped.length>20) continue;
+      // Walk up to find card: first ancestor with cursor:pointer inline style
+      var card=el.parentElement;
+      var depth=0;
+      while(card&&card!==document.body&&depth<8) {
+        if(card.dataset&&card.dataset.vxDel) { card=null; break; }
+        if((card.style&&card.style.cursor==='pointer')||(card.getAttribute&&(card.getAttribute('style')||'').indexOf('cursor:pointer')!==-1)) break;
+        card=card.parentElement; depth++;
+      }
       if(!card||card===document.body) continue;
       if(card.dataset.vxDel) continue;
       card.dataset.vxDel='1';
 
-      // Get name from first bold element
       var nameEl=card.querySelector('[style*="font-weight:700"],[style*="font-weight: 700"]');
       var name=nameEl?nameEl.textContent.trim():'';
-
       if(name&&deleted.indexOf(name)!==-1) { card.remove(); continue; }
 
-      // Build × button and inject into the header row's right column
-      var btn=document.createElement('button');
-      btn.setAttribute('title','Remove saved portfolio');
-      btn.style.cssText=(
-        'display:inline-flex;align-items:center;justify-content:center;'+
-        'width:20px;height:20px;border-radius:5px;margin-left:6px;margin-top:1px;flex-shrink:0;'+
-        'background:transparent;border:1px solid rgba(255,255,255,0.15);'+
-        'color:rgba(250,250,247,0.4);cursor:pointer;padding:0;'+
-        'transition:background 0.12s,color 0.12s,border-color 0.12s;'
-      );
-      btn.innerHTML='<svg width="8" height="8" viewBox="0 0 10 10" fill="none"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-      btn.onmouseenter=function(){ btn.style.background='rgba(255,77,94,0.14)'; btn.style.borderColor='rgba(255,77,94,0.4)'; btn.style.color='#ff4d5e'; };
-      btn.onmouseleave=function(){ btn.style.background='transparent'; btn.style.borderColor='rgba(255,255,255,0.15)'; btn.style.color='rgba(250,250,247,0.4)'; };
-      btn.onclick=function(e) {
-        e.stopPropagation();
-        if(name) markDeleted(name);
-        card.style.transition='opacity 0.18s,transform 0.18s';
-        card.style.opacity='0'; card.style.transform='scale(0.94)';
-        setTimeout(function() { card.remove(); },200);
-      };
-
-      // Header row = card's first child; its second child = stat column
+      var btn=makeDeleteBtn(card,name);
+      // Inject into the header row (first child), last column
       var headerRow=card.firstElementChild;
-      if(headerRow) {
-        var statCol=headerRow.children[1]; // right column (stat + "total return")
-        if(statCol) {
-          statCol.style.display='flex';
-          statCol.style.alignItems='flex-start';
-          statCol.style.gap='6px';
-          statCol.appendChild(btn);
-        } else {
-          headerRow.appendChild(btn);
-        }
+      if(headerRow&&headerRow.children.length>=2) {
+        var lastCol=headerRow.children[headerRow.children.length-1];
+        lastCol.style.display='flex';
+        lastCol.style.alignItems='flex-start';
+        lastCol.style.gap='6px';
+        lastCol.appendChild(btn);
+      } else {
+        card.style.position='relative';
+        btn.style.cssText+=';position:absolute;top:12px;right:12px;';
+        card.appendChild(btn);
       }
     }
   }
 
-  // Poll every 400ms for up to 20s — catches async dc-runtime renders
-  function startPoller() {
-    var tries=0;
-    var timer=setInterval(function() {
-      patchSavedCards();
-      tries++;
-      if(tries>50) clearInterval(timer);
-    },400);
+  function runAll() {
+    removeBundleTopbar();
+    patchSavedCards();
+    attachInvestmentCap();
   }
 
   function watchAndKill() {
-    removeBundleTopbar();
+    runAll();
     var obs=new MutationObserver(function() {
       obs.disconnect();
-      removeBundleTopbar();
-      patchSavedCards();
+      runAll();
       setTimeout(function() { obs.observe(document.body,{childList:true,subtree:true}); },0);
     });
     obs.observe(document.body,{childList:true,subtree:true});
+    var tries=0;
+    var timer=setInterval(function() {
+      patchSavedCards(); attachInvestmentCap();
+      if(++tries>75) clearInterval(timer);
+    },400);
   }
 
   var _origReplaceWith=Element.prototype.replaceWith;
@@ -442,7 +476,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     _origReplaceWith.apply(this,arguments);
     if(this===document.documentElement) {
       watchAndKill();
-      startPoller();
       attachAllocWatcher();
       document.addEventListener('click',function(e) {
         var el=e.target;
