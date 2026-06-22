@@ -1175,7 +1175,7 @@ fetch('/api/auth/status',{credentials:'include'}).then(function(r){return r.json
   if(su) su.remove();
   if(divider) divider.remove();
   var a=document.createElement('a');
-  a.href='/challenge';
+  a.href='/profile';
   a.className='profile-btn';
   a.innerHTML='<div class="profile-avatar">'+d.initial+'</div><span class="profile-name">'+d.displayName+'</span>';
   right.appendChild(a);
