@@ -861,9 +861,9 @@ const vtx = {
     const live = this.state.feedLive;
     const mode = this.state.feedMode;
     const tapeLabel = document.getElementById('tapeSourceLabel');
-    if (tapeLabel) tapeLabel.textContent = !live ? 'Live Tape · Time & Sales (simulated)' : mode === 'ws' ? 'Live Tape · Time & Sales (Finnhub real-time)' : 'Live Tape · Time & Sales (Finnhub quotes)';
+    if (tapeLabel) tapeLabel.textContent = !live ? 'Live Tape · Time & Sales (market closed)' : mode === 'ws' ? 'Live Tape · Time & Sales (Finnhub real-time)' : 'Live Tape · Time & Sales (Finnhub quotes)';
     const dataMode = document.getElementById('dataModeLabel');
-    if (dataMode) dataMode.textContent = !live ? '◆ SIMULATED DEMO DATA' : mode === 'ws' ? '◆ LIVE TRADES (FINNHUB)' : '◆ LIVE QUOTES (FINNHUB)';
+    if (dataMode) dataMode.textContent = !live ? '◆ MARKET CLOSED' : mode === 'ws' ? '◆ LIVE TRADES (FINNHUB)' : '◆ LIVE QUOTES (FINNHUB)';
     if (dataMode) dataMode.style.color = live ? 'var(--pos)' : 'var(--warn)';
   },
 
@@ -1036,7 +1036,7 @@ const vtx = {
     if (!this.state.marketOpen && this.state.tape.length === 0) {
       const msg = this.state.feedLive
         ? 'Market is closed — waiting for the next live print.'
-        : 'Market is closed — live prints resume at the next open.<br><span style="color:var(--mut);opacity:.7;">Tape is simulated for demo purposes (see footer).</span>';
+        : 'Market is closed — live prints resume at the next open.';
       document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">${msg}</div>`;
       return;
     }
