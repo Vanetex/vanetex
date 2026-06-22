@@ -739,40 +739,90 @@ const vtx = {
   },
 
   async connectFeed() {
+    // Try WebSocket first; fall back to quote polling if it fails
+    let wsConnected = false;
     try {
       const res = await fetch('/api/stock/ws-token');
-      if (!res.ok) return;
-      const { token } = await res.json();
-      if (!token) return;
+      if (res.ok) {
+        const { token } = await res.json();
+        if (token) {
+          this._wsSymbols = new Set();
+          this._lastTradePrice = {};
+          this._renderPending = false;
 
-      this._wsSymbols = new Set();
-      this._lastTradePrice = {};
-      this._renderPending = false;
+          const ws = new WebSocket(`wss://ws.finnhub.io?token=${token}`);
+          this._ws = ws;
 
-      const ws = new WebSocket(`wss://ws.finnhub.io?token=${token}`);
-      this._ws = ws;
+          ws.onopen = () => {
+            wsConnected = true;
+            this.state.feedLive = true;
+            this.state.feedMode = 'ws';
+            this.state.tickers.forEach(t => this.subscribeSymbol(t.sym));
+            this.renderMarketStatus();
+            this.renderFeedLabels();
+          };
+          ws.onmessage = ev => {
+            let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+            if (msg.type === 'trade' && Array.isArray(msg.data)) {
+              msg.data.forEach(d => this.handleTrade(d));
+            }
+          };
+          ws.onclose = () => {
+            this.state.feedLive = false;
+            this.state.feedMode = null;
+            this.renderMarketStatus(); this.renderFeedLabels(); this.renderTimeSales();
+            if (!this._pollTimer) this.startPollFeed();
+          };
+          ws.onerror = () => {
+            this.state.feedLive = false;
+            this.state.feedMode = null;
+            if (!this._pollTimer) setTimeout(() => this.startPollFeed(), 1000);
+          };
 
-      ws.onopen = () => {
-        this.state.feedLive = true;
-        this.state.tickers.forEach(t => this.subscribeSymbol(t.sym));
-        this.renderMarketStatus();
-        this.renderFeedLabels();
-      };
-      ws.onmessage = ev => {
-        let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-        if (msg.type === 'trade' && Array.isArray(msg.data)) {
-          msg.data.forEach(d => this.handleTrade(d));
+          if (!this._feedFlushTimer) {
+            this._feedFlushTimer = setInterval(() => {
+              if (this._renderPending) { this._renderPending = false; this.render(); }
+            }, 700);
+          }
+
+          // Give WebSocket 4 seconds to connect; if not, start polling
+          setTimeout(() => { if (!wsConnected && !this._pollTimer) this.startPollFeed(); }, 4000);
+          return;
         }
-      };
-      ws.onclose = () => { this.state.feedLive = false; this.renderMarketStatus(); this.renderFeedLabels(); this.renderTimeSales(); };
-      ws.onerror = () => { this.state.feedLive = false; };
-
-      if (!this._feedFlushTimer) {
-        this._feedFlushTimer = setInterval(() => {
-          if (this._renderPending) { this._renderPending = false; this.render(); }
-        }, 700);
       }
-    } catch (e) { /* fall back to simulated feed */ }
+    } catch (e) { /* fall through to polling */ }
+    this.startPollFeed();
+  },
+  async startPollFeed() {
+    if (this._pollTimer) return;
+    this.state.feedLive = true;
+    this.state.feedMode = 'poll';
+    this.renderFeedLabels();
+    const poll = async () => {
+      const syms = this.state.tickers.map(t => t.sym);
+      await Promise.all(syms.map(async sym => {
+        try {
+          const r = await fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`);
+          if (!r.ok) return;
+          const d = await r.json();
+          if (!d.c) return;
+          const prev = this._lastTradePrice[sym] ?? d.c;
+          const side = d.c >= prev ? 'B' : 'S';
+          this._lastTradePrice[sym] = d.c;
+          const time = this.hhmmss();
+          const estVol = Math.floor(Math.random() * 400 + 100);
+          this.state.tape = [{ id: Math.random(), time, sym, price: d.c.toFixed(2), size: estVol.toLocaleString(), side }, ...this.state.tape].slice(0, 26);
+          this.state.tickers = this.state.tickers.map(x => {
+            if (x.sym !== sym) return x;
+            const hist = x.hist.concat(d.c); if (hist.length > 46) hist.shift();
+            return { ...x, price: d.c, hist };
+          });
+        } catch (e) {}
+      }));
+      this.render();
+    };
+    await poll();
+    this._pollTimer = setInterval(poll, 5000);
   },
   subscribeSymbol(sym) {
     if (!this._ws || this._ws.readyState !== 1 || !this._wsSymbols) return;
@@ -809,10 +859,11 @@ const vtx = {
   },
   renderFeedLabels() {
     const live = this.state.feedLive;
+    const mode = this.state.feedMode;
     const tapeLabel = document.getElementById('tapeSourceLabel');
-    if (tapeLabel) tapeLabel.textContent = live ? 'Live Tape · Time & Sales (Finnhub real-time trades)' : 'Live Tape · Time & Sales (simulated)';
+    if (tapeLabel) tapeLabel.textContent = !live ? 'Live Tape · Time & Sales (simulated)' : mode === 'ws' ? 'Live Tape · Time & Sales (Finnhub real-time)' : 'Live Tape · Time & Sales (Finnhub quotes)';
     const dataMode = document.getElementById('dataModeLabel');
-    if (dataMode) dataMode.textContent = live ? '◆ LIVE TRADES (FINNHUB)' : '◆ SIMULATED DEMO DATA';
+    if (dataMode) dataMode.textContent = !live ? '◆ SIMULATED DEMO DATA' : mode === 'ws' ? '◆ LIVE TRADES (FINNHUB)' : '◆ LIVE QUOTES (FINNHUB)';
     if (dataMode) dataMode.style.color = live ? 'var(--pos)' : 'var(--warn)';
   },
 
