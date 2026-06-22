@@ -330,21 +330,42 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateErr();
   }
 
-  // Cap initial investment — the $ sibling identifies the right input
+  // Block negatives on all inputs; cap investment input at $10M with min $1
   function attachInvestmentCap() {
     document.querySelectorAll('input[type="number"]').forEach(function(inp) {
-      if(inp.dataset.vxCapped) return;
-      var prev=inp.previousElementSibling;
-      if(prev && prev.textContent.trim()==='$') {
-        inp.dataset.vxCapped='1';
+      // Block negative values on every keystroke for ALL number inputs
+      if(!inp.dataset.vxNonNeg) {
+        inp.dataset.vxNonNeg='1';
         inp.addEventListener('input',function() {
           var v=parseFloat(this.value);
-          if(!isNaN(v)&&v>10000000) this.value=10000000;
+          if(!isNaN(v)&&v<0) this.value=0;
         });
         inp.addEventListener('blur',function() {
           var v=parseFloat(this.value);
-          if(!isNaN(v)&&v>10000000) { this.value=10000000; this.dispatchEvent(new Event('change')); }
-          if(!isNaN(v)&&v<1) { this.value=1; this.dispatchEvent(new Event('change')); }
+          if(!isNaN(v)&&v<0) { this.value=0; this.dispatchEvent(new Event('change')); }
+        });
+      }
+      // Investment-specific $10M cap: detect by $ sibling or large max attr / current value
+      if(inp.dataset.vxCapped) return;
+      var prev=inp.previousElementSibling;
+      var isInvestment=prev&&prev.textContent.trim()==='$';
+      if(!isInvestment) {
+        var maxAttr=parseFloat(inp.getAttribute('max')||'0');
+        var curVal=parseFloat(inp.value||'0');
+        if(maxAttr>=10000||curVal>=1000) isInvestment=true;
+      }
+      if(isInvestment) {
+        inp.dataset.vxCapped='1';
+        inp.setAttribute('min','1');
+        inp.addEventListener('input',function() {
+          var v=parseFloat(this.value);
+          if(!isNaN(v)&&v>10000000) this.value=10000000;
+          if(!isNaN(v)&&v<0) this.value=0;
+        });
+        inp.addEventListener('blur',function() {
+          var v=parseFloat(this.value);
+          if(isNaN(v)||v<1) { this.value=1; this.dispatchEvent(new Event('change')); }
+          else if(v>10000000) { this.value=10000000; this.dispatchEvent(new Event('change')); }
         });
       }
     });
