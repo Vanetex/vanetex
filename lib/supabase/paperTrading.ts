@@ -42,7 +42,7 @@ export async function getOrCreatePortfolio(): Promise<Portfolio | null> {
   // both attempt this safely — the second is a no-op, then both read the row.
   const { error: upsertErr } = await supabase
     .from("paper_portfolios")
-    .upsert({ user_id: user.id, cash: 10000 }, { onConflict: "user_id", ignoreDuplicates: true });
+    .upsert({ user_id: user.id, cash: 10000, portfolio_value: 10000 }, { onConflict: "user_id", ignoreDuplicates: true });
 
   if (upsertErr) {
     console.error("[paperTrading] getOrCreatePortfolio upsert error:", upsertErr.message);

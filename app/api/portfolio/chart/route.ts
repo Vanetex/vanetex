@@ -90,14 +90,20 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const startDate = new Date(portfolio.created_at as string);
 
-  // No trades yet — flat $10,000 line
+  // No trades yet — flat line at current cash balance
   if (!trades || trades.length === 0) {
     const todayStr = now.toISOString().split("T")[0];
     const startStr = startDate.toISOString().split("T")[0];
+    const cashValue = Number(portfolio.cash);
+    // Ensure portfolio_value is set so this user appears on the leaderboard
+    await supabase
+      .from("paper_portfolios")
+      .update({ portfolio_value: cashValue, value_updated_at: new Date().toISOString() })
+      .eq("user_id", user.id);
     return NextResponse.json({
       portfolioPoints: [
-        { date: startStr, value: 10000 },
-        { date: todayStr, value: 10000 },
+        { date: startStr, value: cashValue },
+        { date: todayStr, value: cashValue },
       ],
       spyPoints: [],
       annualReturn: 0,
