@@ -97,16 +97,16 @@ export default function SignUpPage() {
   const maxDobStr = maxDob.toISOString().split("T")[0];
 
   return (
-    <div className="flex flex-col items-center pt-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Create your account</h1>
-      <p className="mt-2 text-sm text-muted">Start training like an investor today.</p>
+    <div className="flex flex-col">
+      <h1 className="text-2xl font-semibold tracking-tight text-[#e8edf8]">Create your account</h1>
+      <p className="mt-2 text-sm text-[rgba(180,200,230,0.6)]">Start training like an investor today.</p>
 
-      <div className="mt-8 w-full max-w-sm space-y-4">
+      <div className="mt-8 w-full space-y-4">
         {/* OAuth buttons */}
         <button
           type="button"
           onClick={() => handleOAuth("google")}
-          className="flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-white px-4 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:bg-gray-50"
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-[#e8edf8] transition hover:bg-white/10"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path
@@ -131,17 +131,17 @@ export default function SignUpPage() {
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-black/10" />
+            <div className="w-full border-t border-white/10" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-paper px-2 text-muted">or</span>
+            <span className="px-2 text-[rgba(180,200,230,0.5)]" style={{background:"transparent"}}>or</span>
           </div>
         </div>
 
         {/* Email/password form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="displayName" className="block text-sm font-medium text-ink">
+            <label htmlFor="displayName" className="block text-sm font-medium text-[#c8d8f0]">
               Display name
             </label>
             <input
@@ -151,13 +151,13 @@ export default function SignUpPage() {
               maxLength={50}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#e8edf8] placeholder-[rgba(180,200,230,0.35)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               placeholder="Your name"
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-ink">
+            <label htmlFor="email" className="block text-sm font-medium text-[#c8d8f0]">
               Email
             </label>
             <input
@@ -166,13 +166,13 @@ export default function SignUpPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#e8edf8] placeholder-[rgba(180,200,230,0.35)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-ink">
+            <label htmlFor="password" className="block text-sm font-medium text-[#c8d8f0]">
               Password
             </label>
             <input
@@ -182,13 +182,13 @@ export default function SignUpPage() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#e8edf8] placeholder-[rgba(180,200,230,0.35)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               placeholder="At least 8 characters"
             />
           </div>
 
           <div>
-            <label htmlFor="dob" className="block text-sm font-medium text-ink">
+            <label htmlFor="dob" className="block text-sm font-medium text-[#c8d8f0]">
               Date of birth
             </label>
             <input
@@ -198,9 +198,9 @@ export default function SignUpPage() {
               max={maxDobStr}
               value={dob}
               onChange={(e) => setDob(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#e8edf8] placeholder-[rgba(180,200,230,0.35)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
-            <p className="mt-1 text-xs text-muted">You must be at least {MIN_AGE} to sign up.</p>
+            <p className="mt-1 text-xs text-[rgba(180,200,230,0.5)]">You must be at least {MIN_AGE} to sign up.</p>
           </div>
 
           {error && (
@@ -216,7 +216,7 @@ export default function SignUpPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-muted">
+        <p className="text-center text-sm text-[rgba(180,200,230,0.5)]">
           Already have an account?{" "}
           <Link href="/auth/sign-in" className="font-medium text-accent hover:underline">
             Sign in

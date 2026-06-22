@@ -60,16 +60,16 @@ function SignInContent() {
   }
 
   return (
-    <div className="flex flex-col items-center pt-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
-      <p className="mt-2 text-sm text-muted">Sign in to continue training.</p>
+    <div className="flex flex-col">
+      <h1 className="text-2xl font-semibold tracking-tight text-[#e8edf8]">Welcome back</h1>
+      <p className="mt-2 text-sm text-[rgba(180,200,230,0.6)]">Sign in to continue.</p>
 
-      <div className="mt-8 w-full max-w-sm space-y-4">
+      <div className="mt-8 w-full space-y-4">
         {/* OAuth buttons */}
         <button
           type="button"
           onClick={() => handleOAuth("google")}
-          className="flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-white px-4 py-2.5 text-sm font-medium text-ink shadow-sm transition hover:bg-gray-50"
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-[#e8edf8] transition hover:bg-white/10"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path
@@ -94,17 +94,17 @@ function SignInContent() {
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-black/10" />
+            <div className="w-full border-t border-white/10" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-paper px-2 text-muted">or</span>
+            <span className="px-2 text-[rgba(180,200,230,0.5)]" style={{background:"transparent"}}>or</span>
           </div>
         </div>
 
         {/* Email/password form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-ink">
+            <label htmlFor="email" className="block text-sm font-medium text-[#c8d8f0]">
               Email
             </label>
             <input
@@ -113,13 +113,13 @@ function SignInContent() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#e8edf8] placeholder-[rgba(180,200,230,0.35)] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-ink">
+            <label htmlFor="password" className="block text-sm font-medium text-[#c8d8f0]">
               Password
             </label>
             <input
@@ -128,7 +128,7 @@ function SignInContent() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm shadow-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              className="mt-1 block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#e8edf8] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             />
           </div>
 
@@ -139,14 +139,14 @@ function SignInContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-accent/90 disabled:opacity-50"
+            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent/90 disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
         <div className="flex items-center justify-between text-sm">
-          <Link href="/auth/reset-password" className="text-muted hover:text-accent">
+          <Link href="/auth/reset-password" className="text-[rgba(180,200,230,0.5)] hover:text-accent">
             Forgot password?
           </Link>
           <Link href="/auth/sign-up" className="font-medium text-accent hover:underline">
