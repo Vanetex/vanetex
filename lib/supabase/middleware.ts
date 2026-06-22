@@ -66,7 +66,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If user IS signed in and on an auth page (except sign-out), redirect home.
+  // If user IS signed in and on an auth page (except sign-out), redirect to app.
   if (
     user &&
     pathname.startsWith("/auth/") &&
@@ -77,7 +77,9 @@ export async function updateSession(request: NextRequest) {
     pathname !== "/auth/verify"
   ) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    const next = request.nextUrl.searchParams.get("next");
+    url.pathname = next && next.startsWith("/") && !next.startsWith("/auth/") ? next : "/challenge";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

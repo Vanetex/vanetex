@@ -332,8 +332,8 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
     <div class="mkt-live" id="mkt-live-el"><span class="ldot" id="mkt-ldot"></span><span id="mkt-live-txt">Markets Live</span></div>
     <div class="clock" id="clock"></div>
     <div class="auth-divider"></div>
-    <a class="btn-signin" href="/auth/sign-in">Sign in</a>
-    <a class="btn-signup" href="/auth/sign-up">Get started</a>
+    <a class="btn-signin" id="nav-signin" href="/auth/sign-in">Sign in</a>
+    <a class="btn-signup" id="nav-signup" href="/auth/sign-up">Get started</a>
   </div>
 </header>
 
@@ -1158,6 +1158,28 @@ function submitWaitlist(){
   document.getElementById('wl-success').style.display='block';
 }
 window.submitWaitlist=submitWaitlist;
+
+// Auth-aware nav: if a Supabase session exists in localStorage, swap buttons
+(function() {
+  function hasSession() {
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('auth-token') !== -1) {
+          var v = JSON.parse(localStorage.getItem(k) || 'null');
+          return v && v.access_token;
+        }
+      }
+    } catch(e) {}
+    return false;
+  }
+  if (hasSession()) {
+    var si = document.getElementById('nav-signin');
+    var su = document.getElementById('nav-signup');
+    if (si) { si.textContent = 'Dashboard'; si.href = '/challenge'; }
+    if (su) { su.textContent = 'Go to app'; su.href = '/challenge'; }
+  }
+})();
 </script>
 </body>
 </html>
