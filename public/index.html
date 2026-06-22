@@ -48,6 +48,10 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .btn-signin:hover{color:#e8edf8}
 .btn-signup{font-size:11px;font-weight:700;letter-spacing:.06em;color:#e8edf8;background:rgba(59,130,246,.18);border:1px solid rgba(59,130,246,.3);border-radius:6px;padding:5px 14px;cursor:pointer;font-family:inherit;text-decoration:none;transition:background .2s,border-color .2s;white-space:nowrap}
 .btn-signup:hover{background:rgba(59,130,246,.3);border-color:rgba(59,130,246,.5)}
+.profile-btn{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:4px 12px 4px 4px;cursor:pointer;text-decoration:none;transition:background .2s}
+.profile-btn:hover{background:rgba(255,255,255,.1)}
+.profile-avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#22d3ee);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.profile-name{font-size:11px;font-weight:600;color:#e8edf8;letter-spacing:.02em;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mkt-live{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--green);font-weight:600;letter-spacing:.04em}
 .ldot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:blink 1.8s ease-in-out infinite}
 .clock{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.05em}
@@ -1159,27 +1163,23 @@ function submitWaitlist(){
 }
 window.submitWaitlist=submitWaitlist;
 
-// Auth-aware nav: if a Supabase session exists in localStorage, swap buttons
-(function() {
-  function hasSession() {
-    try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (k && k.indexOf('auth-token') !== -1) {
-          var v = JSON.parse(localStorage.getItem(k) || 'null');
-          return v && v.access_token;
-        }
-      }
-    } catch(e) {}
-    return false;
-  }
-  if (hasSession()) {
-    var si = document.getElementById('nav-signin');
-    var su = document.getElementById('nav-signup');
-    if (si) { si.textContent = 'Dashboard'; si.href = '/challenge'; }
-    if (su) { su.textContent = 'Go to app'; su.href = '/'; }
-  }
-})();
+// Auth-aware nav: call server to check session, show profile pill if signed in
+fetch('/api/auth/status',{credentials:'include'}).then(function(r){return r.json();}).then(function(d){
+  if(!d.signedIn) return;
+  var right=document.querySelector('.topbar-right');
+  if(!right) return;
+  var si=document.getElementById('nav-signin');
+  var su=document.getElementById('nav-signup');
+  var divider=right.querySelector('.auth-divider');
+  if(si) si.remove();
+  if(su) su.remove();
+  if(divider) divider.remove();
+  var a=document.createElement('a');
+  a.href='/challenge';
+  a.className='profile-btn';
+  a.innerHTML='<div class="profile-avatar">'+d.initial+'</div><span class="profile-name">'+d.displayName+'</span>';
+  right.appendChild(a);
+}).catch(function(){});
 </script>
 </body>
 </html>
