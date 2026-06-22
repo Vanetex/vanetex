@@ -48,7 +48,7 @@ function PrefetchAll() {
 export default function ShellWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname === "/" || pathname === "/terms" || pathname === "/privacy") {
+  if (pathname === "/" || pathname === "/terms" || pathname === "/privacy" || pathname.startsWith("/auth/")) {
     return <>{children}</>;
   }
 

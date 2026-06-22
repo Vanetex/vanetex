@@ -941,7 +941,7 @@ const MOCK_TICKER={SPY:{c:737.45,p:-0.29},QQQ:{c:515.22,p:0.45},DIA:{c:421.30,p:
 function setTickerHtml(dataArray){
   const tape=document.getElementById('ttape');
   if(!tape)return;
-  const html=TSYMS.map((s,i)=>{const d=dataArray[i];if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=(d.p||d.dp)||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+  const html=TSYMS.map((s,i)=>{const raw=dataArray[i];const d=(!raw?.c&&MOCK_TICKER[s])?MOCK_TICKER[s]:raw;if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=(d.p||d.dp)||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
   tape.innerHTML=html+html;
   tape.style.animationDuration=(TSYMS.length*4.5)+'s';
   tape.classList.add('go');
@@ -954,7 +954,7 @@ async function loadTicker(){
     setTickerHtml(r);
   }catch(e){console.error('Ticker error:',e);}
 }
-setInterval(loadTicker,30000);
+loadTicker();setInterval(loadTicker,30000);
 
 // ── Intelligence preview ──────────────────────
 const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
