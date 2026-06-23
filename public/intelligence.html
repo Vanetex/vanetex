@@ -264,7 +264,7 @@ input{font-family:var(--ui)}
 const vtx = {
   state: {
     variant: 'A', focus: 'NVDA', tab: 'news', tf: '1D',
-    query: '', searchOpen: false, remoteResults: [], tickers: [], tape: [],
+    query: '', searchOpen: false, remoteResults: [], tickers: [], tape: [], tickerBarData: [],
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: 12,
     indicators: { sma9: false, sma20: false },
@@ -476,6 +476,8 @@ const vtx = {
     this.renderClock();
     this.renderMarketStatus();
     this.loadChartData(this.state.focus, this.state.tf);
+    this.loadTickerBar();
+    setInterval(() => this.loadTickerBar(), 5 * 60 * 1000);
   },
 
   applyVariant() {
@@ -515,6 +517,36 @@ const vtx = {
   selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; this.renderRight(); },
   openSector(name) { this.state.moversSector = name; this.renderRight(); },
+  TICKER_BAR_SYMS: ['SPY','QQQ','DIA','NVDA','AAPL','MSFT','TSLA','META','AMZN','GOOGL','AMD','NFLX','COIN','PLTR','AVGO','VGT','SOXX','GLD','TLT','BTC-USD'],
+
+  async loadTickerBar() {
+    const syms = this.TICKER_BAR_SYMS;
+    const results = await Promise.all(syms.map(s =>
+      fetch(`/api/stock/quote?symbol=${encodeURIComponent(s)}`).then(r => r.ok ? r.json() : null).catch(() => null)
+    ));
+    this.state.tickerBarData = syms.map((s, i) => {
+      const d = results[i];
+      return d && d.price ? { sym: s, price: d.price, changePct: d.changePct ?? 0 } : null;
+    }).filter(Boolean);
+    this.renderTickerBar();
+  },
+
+  renderTickerBar() {
+    const items = this.state.tickerBarData;
+    if (!items.length) return;
+    const cPos = 'var(--pos)', cNeg = 'var(--neg)';
+    const html = items.concat(items).map(t => {
+      const up = t.changePct >= 0;
+      return `<div style="display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px;">
+        <span style="font-family:var(--mono);font-weight:700;color:var(--txt);">${t.sym}</span>
+        <span style="font-family:var(--mono);color:var(--mut);">${this.fmt(t.price)}</span>
+        <span style="font-family:var(--mono);font-weight:600;color:${up?cPos:cNeg};">${(up?'+':'')+t.changePct.toFixed(2)}%</span>
+        <span style="color:${up?cPos:cNeg};font-size:9px;">${up?'▲':'▼'}</span>
+      </div>`;
+    }).join('');
+    document.getElementById('tickerTape').innerHTML = html;
+  },
+
   setTf(tf) { this.state.tf = tf; this.render(); this.loadChartData(this.state.focus, tf); },
   async loadChartData(sym, tf) {
     try {
@@ -886,17 +918,8 @@ const vtx = {
     const f = T.find(t=>t.sym===s.focus) || T[0];
     const cPos='var(--pos)', cNeg='var(--neg)';
 
-    // Ticker tape
-    const tapeItems = T.concat(T).map(t => {
-      const p = this.pctOf(t), up = p>=0;
-      return `<div style="display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:12px;">
-        <span style="font-family:var(--mono);font-weight:700;color:var(--txt);">${t.sym}</span>
-        <span style="font-family:var(--mono);color:var(--mut);">${this.fmt(t.price)}</span>
-        <span style="font-family:var(--mono);font-weight:600;color:${up?cPos:cNeg};">${(up?'+':'')+p.toFixed(2)}%</span>
-        <span style="color:${up?cPos:cNeg};font-size:9px;">${up?'▲':'▼'}</span>
-      </div>`;
-    }).join('');
-    document.getElementById('tickerTape').innerHTML = tapeItems;
+    // Ticker tape — uses fixed bar data, not watchlist
+    this.renderTickerBar();
 
     // Watchlist
     document.getElementById('watchCount').textContent = T.length+' SYM';
