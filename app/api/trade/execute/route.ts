@@ -352,24 +352,36 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Sync portfolio_value for the leaderboard immediately after every trade.
-  // Uses cash + positions at avg_cost as the approximation — accurate enough
-  // for ranking. The chart API overwrites this with live Finnhub prices when
-  // the user views their Trade page.
+  // Sync portfolio_value for the leaderboard using live market prices.
   const [{ data: updatedPortfolio }, { data: updatedPositions }] = await Promise.all([
     supabase.from("paper_portfolios").select("cash").eq("user_id", user.id).maybeSingle(),
-    supabase.from("paper_positions").select("shares, avg_cost").eq("user_id", user.id),
+    supabase.from("paper_positions").select("ticker, shares").eq("user_id", user.id),
   ]);
 
-  if (updatedPortfolio) {
-    const positionValue = (updatedPositions ?? []).reduce(
-      (sum, p) => sum + Number(p.shares) * Number(p.avg_cost),
-      0,
+  if (updatedPortfolio && updatedPositions) {
+    // Fetch current prices for all positions (excluding the ticker we just priced)
+    const otherTickers = [...new Set(
+      updatedPositions.map((p) => p.ticker as string).filter((t) => t !== ticker)
+    )];
+    const otherPrices = await Promise.all(
+      otherTickers.map((t) =>
+        fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(t)}&token=${apiKey}`)
+          .then((r) => r.ok ? r.json() : null)
+          .then((d) => ({ ticker: t, price: d?.c ?? 0 }))
+          .catch(() => ({ ticker: t, price: 0 }))
+      )
     );
-    const approxValue = parseFloat((Number(updatedPortfolio.cash) + positionValue).toFixed(2));
+    const priceMap: Record<string, number> = { [ticker]: currentPrice };
+    otherPrices.forEach(({ ticker: t, price: p }) => { if (p > 0) priceMap[t] = p; });
+
+    const positionValue = updatedPositions.reduce((sum, p) => {
+      const price = priceMap[p.ticker as string] ?? 0;
+      return sum + Number(p.shares) * price;
+    }, 0);
+    const liveValue = parseFloat((Number(updatedPortfolio.cash) + positionValue).toFixed(2));
     await supabase
       .from("paper_portfolios")
-      .update({ portfolio_value: approxValue, value_updated_at: new Date().toISOString() })
+      .update({ portfolio_value: liveValue, value_updated_at: new Date().toISOString() })
       .eq("user_id", user.id);
   }
 
