@@ -268,7 +268,7 @@ const vtx = {
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: 12,
     indicators: { sma9: false, sma20: false },
-    moversSector: null, marketOpen: true, customAccent: null, feedLive: false
+    moversSector: null, marketOpen: false, customAccent: null, feedLive: false
   },
 
   NEWS: [
@@ -396,7 +396,7 @@ const vtx = {
       shares: this.hashN(a[0],11)*3.6+0.5
     }));
     if (!this.state.tickers.some(t=>t.sym===this.state.focus)) this.state.focus = this.state.tickers[0].sym;
-    for (let i=0;i<16;i++) { this.state.tape.push(this.mkPrint(this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)])); }
+    if (this.isMarketOpen()) { for (let i=0;i<16;i++) { this.state.tape.push(this.mkPrint(this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)])); } }
 
     let savedAccent = null;
     try { savedAccent = localStorage.getItem(this.ACCENT_KEY); } catch(e) {}
@@ -463,6 +463,7 @@ const vtx = {
       const open = this.isMarketOpen();
       if (open !== this.state.marketOpen) {
         this.state.marketOpen = open;
+        if (!open) { this.state.tape = []; }
         this.renderMarketStatus();
         this.renderTimeSales();
       }
