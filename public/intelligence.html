@@ -305,7 +305,7 @@ const vtx = {
   ],
 
   hashN(str, salt) { let h = salt || 0; for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return (h % 1000) / 1000; },
-  genHist(price, n) { const a = []; let p = price * 0.962; for (let i = 0; i < n - 1; i++) { p += (Math.random() - 0.47) * price * 0.0065; a.push(p); } a.push(price); return a; },
+  genHist(price, n, prevClose) { const start = (prevClose && prevClose > 0) ? prevClose : price; const a = []; let p = start; const drift = (price - start) / (n - 1); for (let i = 0; i < n - 1; i++) { p += drift + (Math.random() - 0.5) * price * 0.003; a.push(p); } a.push(price); return a; },
   hhmmss() { return new Date().toTimeString().slice(0, 8); },
   mkPrint(t) { const sizes = [100,100,200,200,300,400,500,800,1200,2000]; return {id:Math.random(), time:this.hhmmss(), sym:t.sym, price:t.price.toFixed(2), size:sizes[Math.floor(Math.random()*sizes.length)].toLocaleString(), side: Math.random()>0.5?'B':'S'}; },
   sparkPath(arr) { const w=104,h=30,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1; return 'M '+arr.map((v,i)=>((i/(arr.length-1))*w).toFixed(1)+' '+(h-((v-min)/r)*(h-5)-2.5).toFixed(1)).join(' L '); },
@@ -546,7 +546,7 @@ const vtx = {
       this.state.tickers = this.state.tickers.map(x => {
         if (x.sym!==sym) return x;
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, hist:this.genHist(q.price,46), name:q.name||upd.name, sector:q.industry||upd.sector}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, hist:this.genHist(q.price,46,q.prevClose), name:q.name||upd.name, sector:q.industry||upd.sector}; }
         if (fin && !fin.error) upd.fin = fin;
         return upd;
       });
@@ -681,7 +681,7 @@ const vtx = {
           price: q.price,
           open: (q.open && q.open > 0 ? q.open : null) || q.prevClose || q.price,
           prevClose: q.prevClose,
-          hist: this.genHist(q.price, 46),
+          hist: this.genHist(q.price, 46, q.prevClose),
           changePct: q.changePct,
           name: q.name || t.name,
           sector: q.industry || t.sector,
