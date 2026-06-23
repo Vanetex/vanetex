@@ -15,14 +15,17 @@ export async function GET(request: NextRequest) {
   const symbol = request.nextUrl.searchParams.get("symbol");
   if (!symbol) return NextResponse.json({ error: "symbol is required" }, { status: 400 });
 
-  const rangeParam = request.nextUrl.searchParams.get("range") ?? "30D";
-  const RANGE_MAP: Record<string, { interval: string; range: string }> = {
-    "1D":  { interval: "5m",  range: "1d"  },
-    "1W":  { interval: "1d",  range: "5d"  },
-    "30D": { interval: "1d",  range: "2mo" },
-    "1Y":  { interval: "1wk", range: "1y"  },
+  const rangeParam = request.nextUrl.searchParams.get("range") ?? "1M";
+  const RANGE_MAP: Record<string, { interval: string; range: string; limit: number }> = {
+    "1D":  { interval: "5m",  range: "1d",  limit: 78  },
+    "5D":  { interval: "1h",  range: "5d",  limit: 40  },
+    "1M":  { interval: "1d",  range: "1mo", limit: 30  },
+    "6M":  { interval: "1wk", range: "6mo", limit: 26  },
+    "1Y":  { interval: "1wk", range: "1y",  limit: 52  },
+    "MAX": { interval: "1mo", range: "10y", limit: 120 },
   };
-  const { interval, range } = RANGE_MAP[rangeParam] ?? RANGE_MAP["30D"];
+  const cfg = RANGE_MAP[rangeParam] ?? RANGE_MAP["1M"];
+  const { interval, range, limit } = cfg;
 
   const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}`;
   const cached = await kvGet<number[]>(cacheKey);
@@ -53,7 +56,7 @@ export async function GET(request: NextRequest) {
     }
 
     const closes = data.chart.result[0].indicators.quote[0]?.close ?? [];
-    const prices = closes.filter((c) => c !== null && c !== undefined).slice(-30);
+    const prices = closes.filter((c) => c !== null && c !== undefined).slice(-limit);
 
     await kvSet(cacheKey, prices, CACHE_TTL_S);
     return NextResponse.json({ prices });
