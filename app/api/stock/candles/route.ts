@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
+import { kvGet, kvSet } from "@/lib/kvCache";
 
 export const runtime = "nodejs";
 
-const CACHE_TTL_MS = 30 * 60 * 1000;
-
-type CacheEntry = { prices: number[]; ts: number };
-const cache = new Map<string, CacheEntry>();
+const CACHE_TTL_S = 30 * 60; // 30 minutes
 
 export async function GET(request: NextRequest) {
   const rl = checkRateLimit("stock:candles", clientIdFromRequest(request), 20, 60_000);
@@ -26,10 +24,10 @@ export async function GET(request: NextRequest) {
   };
   const { interval, range } = RANGE_MAP[rangeParam] ?? RANGE_MAP["30D"];
 
-  const key = `${symbol.toUpperCase()}:${rangeParam}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
-    return NextResponse.json({ prices: hit.prices });
+  const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}`;
+  const cached = await kvGet<number[]>(cacheKey);
+  if (cached) {
+    return NextResponse.json({ prices: cached });
   }
 
   try {
@@ -57,7 +55,7 @@ export async function GET(request: NextRequest) {
     const closes = data.chart.result[0].indicators.quote[0]?.close ?? [];
     const prices = closes.filter((c) => c !== null && c !== undefined).slice(-30);
 
-    cache.set(key, { prices, ts: Date.now() });
+    await kvSet(cacheKey, prices, CACHE_TTL_S);
     return NextResponse.json({ prices });
   } catch (err) {
     console.error("[stock/candles] error:", err);

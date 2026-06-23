@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
+import { kvGet, kvSet } from "@/lib/kvCache";
 
 export const runtime = "nodejs";
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-type FinancialsEntry = {
-  body: Record<string, unknown>;
-  ts: number;
-};
-const cache = new Map<string, FinancialsEntry>();
+const CACHE_TTL_S = 60 * 60; // 1 hour — financials change infrequently
 
 export async function GET(request: NextRequest) {
   const rl = checkRateLimit("stock:financials", clientIdFromRequest(request), 40, 60_000);
@@ -28,23 +23,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "FINNHUB_API_KEY is not configured" }, { status: 500 });
   }
 
-  const key = symbol.toUpperCase();
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
-    return NextResponse.json(hit.body, {
-      headers: { "Cache-Control": "public, max-age=3600, stale-while-revalidate=300" },
+  const sym = symbol.toUpperCase();
+  const cacheKey = `financials:${sym}`;
+  const cached = await kvGet<Record<string, unknown>>(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached, {
+      headers: { "Cache-Control": "private, max-age=3600, stale-while-revalidate=300" },
     });
   }
 
   try {
-    const res = await fetch(`${FINNHUB_BASE}/stock/metric?symbol=${encodeURIComponent(key)}&metric=all&token=${apiKey}`);
+    const res = await fetch(`${FINNHUB_BASE}/stock/metric?symbol=${encodeURIComponent(sym)}&metric=all&token=${apiKey}`);
     if (!res.ok) throw new Error("Finnhub request failed");
 
     const data = (await res.json()) as { metric?: Record<string, number> };
     const m = data.metric ?? {};
 
     const body = {
-      symbol: key,
+      symbol: sym,
       peTTM: m.peTTM ?? null,
       epsTTM: m.epsInclExtraItemsTTM ?? m.epsTTM ?? null,
       beta: m.beta ?? null,
@@ -56,10 +52,10 @@ export async function GET(request: NextRequest) {
       avgVolume3M: m["3MonthAverageTradingVolume"] ?? null,
     };
 
-    cache.set(key, { body, ts: Date.now() });
+    await kvSet(cacheKey, body, CACHE_TTL_S);
 
     return NextResponse.json(body, {
-      headers: { "Cache-Control": "public, max-age=3600, stale-while-revalidate=300" },
+      headers: { "Cache-Control": "private, max-age=3600, stale-while-revalidate=300" },
     });
   } catch (err) {
     console.error("[stock/financials] error:", err);

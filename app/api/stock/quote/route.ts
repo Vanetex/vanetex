@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
+import { kvGet, kvSet } from "@/lib/kvCache";
 
 export const runtime = "nodejs";
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
-const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
-
-type QuoteEntry = {
-  body: Record<string, unknown>;
-  ts: number;
-};
-const cache = new Map<string, QuoteEntry>();
+const CACHE_TTL_S = 180; // 3 minutes
 
 export async function GET(request: NextRequest) {
   const rl = checkRateLimit("stock:quote", clientIdFromRequest(request), 40, 60_000);
@@ -28,18 +23,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "FINNHUB_API_KEY is not configured" }, { status: 500 });
   }
 
-  const key = symbol.toUpperCase();
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
-    return NextResponse.json(hit.body, {
+  const sym = symbol.toUpperCase();
+  const cacheKey = `quote:${sym}`;
+  const cached = await kvGet<Record<string, unknown>>(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached, {
       headers: { "Cache-Control": "private, max-age=180, stale-while-revalidate=60" },
     });
   }
 
   try {
     const [quoteRes, profileRes] = await Promise.all([
-      fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(key)}&token=${apiKey}`),
-      fetch(`${FINNHUB_BASE}/stock/profile2?symbol=${encodeURIComponent(key)}&token=${apiKey}`),
+      fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(sym)}&token=${apiKey}`),
+      fetch(`${FINNHUB_BASE}/stock/profile2?symbol=${encodeURIComponent(sym)}&token=${apiKey}`),
     ]);
 
     if (!quoteRes.ok || !profileRes.ok) throw new Error("Finnhub request failed");
@@ -53,14 +49,14 @@ export async function GET(request: NextRequest) {
 
     if (!quote.c) {
       return NextResponse.json(
-        { error: `No price data found for symbol: ${key}` },
+        { error: `No price data found for symbol: ${sym}` },
         { status: 404 },
       );
     }
 
     const body = {
-      symbol: key,
-      name: profile.name ?? key,
+      symbol: sym,
+      name: profile.name ?? sym,
       exchange: profile.exchange ?? "",
       industry: profile.finnhubIndustry ?? "",
       price: quote.c,
@@ -72,7 +68,7 @@ export async function GET(request: NextRequest) {
       prevClose: quote.pc,
     };
 
-    cache.set(key, { body, ts: Date.now() });
+    await kvSet(cacheKey, body, CACHE_TTL_S);
 
     return NextResponse.json(body, {
       headers: { "Cache-Control": "private, max-age=180, stale-while-revalidate=60" },
