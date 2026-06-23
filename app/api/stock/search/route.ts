@@ -40,11 +40,11 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json() as { result: FinnhubSearchResult[] };
 
-    // Filter to US common stocks only and limit to 8 results
+    // Filter to US common stocks and ETFs, limit to 8 results
     const results = (data.result ?? [])
       .filter(
         (r) =>
-          r.type === "Common Stock" &&
+          (r.type === "Common Stock" || r.type === "ETP") &&
           !r.symbol.includes(".") && // exclude non-US exchanges
           r.displaySymbol.length <= 5,
       )
