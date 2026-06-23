@@ -679,7 +679,7 @@ const vtx = {
         return {
           ...t,
           price: q.price,
-          open: q.open || q.prevClose || q.price,
+          open: (q.open && q.open > 0 ? q.open : null) || q.prevClose || q.price,
           prevClose: q.prevClose,
           hist: this.genHist(q.price, 46),
           changePct: q.changePct,
@@ -806,17 +806,17 @@ const vtx = {
           const r = await fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`);
           if (!r.ok) return;
           const d = await r.json();
-          if (!d.c) return;
-          const prev = this._lastTradePrice[sym] ?? d.c;
-          const side = d.c >= prev ? 'B' : 'S';
-          this._lastTradePrice[sym] = d.c;
+          if (!d.price) return;
+          const prev = this._lastTradePrice[sym] ?? d.price;
+          const side = d.price >= prev ? 'B' : 'S';
+          this._lastTradePrice[sym] = d.price;
           const time = this.hhmmss();
           const estVol = Math.floor(Math.random() * 400 + 100);
-          this.state.tape = [{ id: Math.random(), time, sym, price: d.c.toFixed(2), size: estVol.toLocaleString(), side }, ...this.state.tape].slice(0, 26);
+          this.state.tape = [{ id: Math.random(), time, sym, price: d.price.toFixed(2), size: estVol.toLocaleString(), side }, ...this.state.tape].slice(0, 26);
           this.state.tickers = this.state.tickers.map(x => {
             if (x.sym !== sym) return x;
-            const hist = x.hist.concat(d.c); if (hist.length > 46) hist.shift();
-            return { ...x, price: d.c, hist };
+            const hist = x.hist.concat(d.price); if (hist.length > 46) hist.shift();
+            return { ...x, price: d.price, changePct: d.changePct, prevClose: d.prevClose, open: d.open || d.prevClose || d.price, hist };
           });
         } catch (e) {}
       }));
