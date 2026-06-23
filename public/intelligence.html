@@ -1022,8 +1022,8 @@ const vtx = {
     document.getElementById('latencyVal').textContent = s.latency;
     const spy = T.find(t=>t.sym==='SPY'), qqq = T.find(t=>t.sym==='QQQ');
     const indices = [
-      {label:'S&P', value:this.fmt(spy.price), color:cPos},
-      {label:'NDX', value:this.fmt(qqq.price), color:cPos},
+      {label:'S&P', value:spy ? this.fmt(spy.price) : '—', color:cPos},
+      {label:'NDX', value:qqq ? this.fmt(qqq.price) : '—', color:cPos},
       {label:'VIX', value:(13+this.hashN('VIX',(Date.now()/3000|0))*0.4).toFixed(2), color:'var(--warn)'},
       {label:'10Y', value:'4.21%', color:'var(--mut)'}
     ];
