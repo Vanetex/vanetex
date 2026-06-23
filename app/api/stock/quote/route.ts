@@ -4,7 +4,7 @@ import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 export const runtime = "nodejs";
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 60 * 1000; // 1 minute
 
 type QuoteEntry = {
   body: Record<string, unknown>;
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
     return NextResponse.json(hit.body, {
-      headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=60" },
+      headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=30" },
     });
   }
 
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     cache.set(key, { body, ts: Date.now() });
 
     return NextResponse.json(body, {
-      headers: { "Cache-Control": "public, max-age=600, stale-while-revalidate=60" },
+      headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=30" },
     });
   } catch (err) {
     console.error("[stock/quote] error:", err);
