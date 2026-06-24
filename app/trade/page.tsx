@@ -1130,11 +1130,11 @@ function PriceAlerts({ positions }: { positions: PositionWithQuote[] }) {
 
 // ── 30-day sparkline ──────────────────────────────────────────────────────
 
-type Timeframe = "1D" | "1W" | "30D" | "1Y";
-const TIMEFRAMES: Timeframe[] = ["1D", "1W", "30D", "1Y"];
+type Timeframe = "1D" | "5D" | "1M" | "1Y";
+const TIMEFRAMES: Timeframe[] = ["1D", "5D", "1M", "1Y"];
 
 function Sparkline({ symbol }: { symbol: string }) {
-  const [tf, setTf] = useState<Timeframe>("30D");
+  const [tf, setTf] = useState<Timeframe>("1M");
   const [prices, setPrices] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
