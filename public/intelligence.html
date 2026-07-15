@@ -93,6 +93,9 @@ input{font-family:var(--ui)}
         <span id="mktStatusLabel" style="font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--pos);">MKT OPEN</span>
       </div>
 
+      <!-- Auth pill -->
+      <a id="authPill" href="/auth/sign-in" style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--mut);text-decoration:none;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Sign In</a>
+
       <!-- Clock -->
       <div style="text-align:right;line-height:1.15;">
         <div id="clockEl" style="font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.02em;">00:00:00</div>
@@ -268,7 +271,7 @@ const vtx = {
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: 12,
     indicators: { sma9: false, sma20: false },
-    moversSector: null, marketOpen: false, customAccent: null, feedLive: false
+    moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null
   },
 
   NEWS: [
@@ -456,6 +459,7 @@ const vtx = {
       this.renderTimeSales();
     }, 520);
 
+    this.checkAuth();
     this.connectFeed();
 
     setInterval(() => { this.renderClock(); }, 1000);
@@ -784,6 +788,22 @@ const vtx = {
     } catch (e) { /* keep previous data on failure */ }
   },
 
+  async checkAuth() {
+    try {
+      const r = await fetch('/api/auth/status', { credentials: 'include' });
+      const d = await r.json();
+      this.state.signedIn = !!d.signedIn;
+      const pill = document.getElementById('authPill');
+      if (pill && d.signedIn) {
+        pill.href = '/me';
+        pill.style.color = 'var(--txt)';
+        pill.style.background = 'rgba(255,255,255,.06)';
+        pill.innerHTML = '<span style="width:16px;height:16px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;">' + (d.initial || '?') + '</span><span>' + (d.displayName || '') + '</span>';
+      }
+    } catch (e) { this.state.signedIn = false; }
+    this.renderFeedLabels();
+  },
+
   async connectFeed() {
     // Try WebSocket first; fall back to quote polling if it fails
     let wsConnected = false;
@@ -918,10 +938,12 @@ const vtx = {
   renderFeedLabels() {
     const live = this.state.feedLive;
     const mode = this.state.feedMode;
+    const signedIn = this.state.signedIn;
+    const pollReason = signedIn === false ? 'sign in for real-time' : signedIn === true ? 'reconnecting' : 'Finnhub quotes';
     const tapeLabel = document.getElementById('tapeSourceLabel');
-    if (tapeLabel) tapeLabel.textContent = !live ? 'Live Tape · Time & Sales (market closed)' : mode === 'ws' ? 'Live Tape · Time & Sales (Finnhub real-time)' : 'Live Tape · Time & Sales (Finnhub quotes)';
+    if (tapeLabel) tapeLabel.textContent = !live ? 'Live Tape · Time & Sales (market closed)' : mode === 'ws' ? 'Live Tape · Time & Sales (Finnhub real-time)' : `Live Tape · Time & Sales (${pollReason})`;
     const dataMode = document.getElementById('dataModeLabel');
-    if (dataMode) dataMode.textContent = !live ? '◆ MARKET CLOSED' : mode === 'ws' ? '◆ LIVE TRADES (FINNHUB)' : '◆ LIVE QUOTES (FINNHUB)';
+    if (dataMode) dataMode.textContent = !live ? '◆ MARKET CLOSED' : mode === 'ws' ? '◆ LIVE TRADES (FINNHUB)' : signedIn === false ? '◆ SIGN IN FOR LIVE TRADES' : '◆ LIVE QUOTES (FINNHUB)';
     if (dataMode) dataMode.style.color = live ? 'var(--pos)' : 'var(--warn)';
   },
 
