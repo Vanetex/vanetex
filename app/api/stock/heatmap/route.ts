@@ -5,112 +5,140 @@ import { kvGet, kvSet } from "@/lib/kvCache";
 export const runtime = "nodejs";
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
-const CACHE_KEY = "heatmap:v1";
+const CACHE_KEY = "heatmap:v2";
 const CACHE_TTL_S = 300; // 5 minutes — shared across all users
+const MCAP_CACHE_KEY = "heatmap:mcap:v2";
+const MCAP_CACHE_TTL_S = 24 * 60 * 60; // market cap barely moves day to day
 
-// Curated prominent companies per sector. `tier` drives tile size
-// (1 = largest/most prominent, 3 = smallest) as a manual stand-in
-// for market-cap ranking, so the heatmap doesn't need a second
-// Finnhub call per symbol just to size tiles.
-type SeedCompany = { sym: string; name: string; tier: 1 | 2 | 3 };
-const SECTOR_SEEDS: Record<string, SeedCompany[]> = {
+// Curated companies per sector. Market cap (for sector ordering and
+// tile sizing) is fetched live and cached separately for a day, since
+// it doesn't need the same 5-min freshness as price/change.
+type Seed = { sym: string; name: string };
+const SECTOR_SEEDS: Record<string, Seed[]> = {
   Technology: [
-    { sym: "NVDA", name: "NVIDIA", tier: 1 },
-    { sym: "AAPL", name: "Apple", tier: 1 },
-    { sym: "MSFT", name: "Microsoft", tier: 2 },
-    { sym: "AVGO", name: "Broadcom", tier: 2 },
-    { sym: "ORCL", name: "Oracle", tier: 3 },
-    { sym: "CRM", name: "Salesforce", tier: 3 },
-    { sym: "AMD", name: "AMD", tier: 3 },
-    { sym: "ADBE", name: "Adobe", tier: 3 },
+    { sym: "NVDA", name: "NVIDIA" }, { sym: "AAPL", name: "Apple" },
+    { sym: "MSFT", name: "Microsoft" }, { sym: "AVGO", name: "Broadcom" },
+    { sym: "ORCL", name: "Oracle" }, { sym: "CRM", name: "Salesforce" },
+    { sym: "AMD", name: "AMD" }, { sym: "ADBE", name: "Adobe" },
+    { sym: "CSCO", name: "Cisco" }, { sym: "ACN", name: "Accenture" },
+    { sym: "IBM", name: "IBM" }, { sym: "TXN", name: "Texas Instruments" },
+    { sym: "QCOM", name: "Qualcomm" }, { sym: "INTC", name: "Intel" },
   ],
   Communication: [
-    { sym: "GOOGL", name: "Alphabet", tier: 1 },
-    { sym: "META", name: "Meta Platforms", tier: 1 },
-    { sym: "NFLX", name: "Netflix", tier: 2 },
-    { sym: "DIS", name: "Disney", tier: 3 },
-    { sym: "TMUS", name: "T-Mobile", tier: 3 },
-    { sym: "VZ", name: "Verizon", tier: 3 },
+    { sym: "GOOGL", name: "Alphabet" }, { sym: "META", name: "Meta Platforms" },
+    { sym: "NFLX", name: "Netflix" }, { sym: "DIS", name: "Disney" },
+    { sym: "TMUS", name: "T-Mobile" }, { sym: "VZ", name: "Verizon" },
+    { sym: "CMCSA", name: "Comcast" }, { sym: "T", name: "AT&T" },
+    { sym: "CHTR", name: "Charter Comm" }, { sym: "WBD", name: "Warner Bros Discovery" },
   ],
   Consumer: [
-    { sym: "AMZN", name: "Amazon", tier: 1 },
-    { sym: "TSLA", name: "Tesla", tier: 1 },
-    { sym: "HD", name: "Home Depot", tier: 2 },
-    { sym: "MCD", name: "McDonald's", tier: 2 },
-    { sym: "NKE", name: "Nike", tier: 3 },
-    { sym: "SBUX", name: "Starbucks", tier: 3 },
-    { sym: "TGT", name: "Target", tier: 3 },
+    { sym: "AMZN", name: "Amazon" }, { sym: "TSLA", name: "Tesla" },
+    { sym: "HD", name: "Home Depot" }, { sym: "MCD", name: "McDonald's" },
+    { sym: "NKE", name: "Nike" }, { sym: "SBUX", name: "Starbucks" },
+    { sym: "TGT", name: "Target" }, { sym: "LOW", name: "Lowe's" },
+    { sym: "BKNG", name: "Booking Holdings" }, { sym: "CMG", name: "Chipotle" },
+    { sym: "ABNB", name: "Airbnb" }, { sym: "YUM", name: "Yum! Brands" },
   ],
   Financials: [
-    { sym: "BRK.B", name: "Berkshire Hathaway", tier: 1 },
-    { sym: "JPM", name: "JPMorgan Chase", tier: 1 },
-    { sym: "V", name: "Visa", tier: 2 },
-    { sym: "MA", name: "Mastercard", tier: 2 },
-    { sym: "BAC", name: "Bank of America", tier: 3 },
-    { sym: "WFC", name: "Wells Fargo", tier: 3 },
-    { sym: "GS", name: "Goldman Sachs", tier: 3 },
+    { sym: "BRK.B", name: "Berkshire Hathaway" }, { sym: "JPM", name: "JPMorgan Chase" },
+    { sym: "V", name: "Visa" }, { sym: "MA", name: "Mastercard" },
+    { sym: "BAC", name: "Bank of America" }, { sym: "WFC", name: "Wells Fargo" },
+    { sym: "GS", name: "Goldman Sachs" }, { sym: "MS", name: "Morgan Stanley" },
+    { sym: "AXP", name: "American Express" }, { sym: "SCHW", name: "Charles Schwab" },
+    { sym: "BLK", name: "BlackRock" }, { sym: "C", name: "Citigroup" },
   ],
   Healthcare: [
-    { sym: "LLY", name: "Eli Lilly", tier: 1 },
-    { sym: "UNH", name: "UnitedHealth", tier: 1 },
-    { sym: "JNJ", name: "Johnson & Johnson", tier: 2 },
-    { sym: "ABBV", name: "AbbVie", tier: 2 },
-    { sym: "MRK", name: "Merck", tier: 3 },
-    { sym: "PFE", name: "Pfizer", tier: 3 },
-    { sym: "TMO", name: "Thermo Fisher", tier: 3 },
+    { sym: "LLY", name: "Eli Lilly" }, { sym: "UNH", name: "UnitedHealth" },
+    { sym: "JNJ", name: "Johnson & Johnson" }, { sym: "ABBV", name: "AbbVie" },
+    { sym: "MRK", name: "Merck" }, { sym: "PFE", name: "Pfizer" },
+    { sym: "TMO", name: "Thermo Fisher" }, { sym: "ABT", name: "Abbott" },
+    { sym: "DHR", name: "Danaher" }, { sym: "AMGN", name: "Amgen" },
+    { sym: "ISRG", name: "Intuitive Surgical" }, { sym: "BMY", name: "Bristol Myers Squibb" },
   ],
   Energy: [
-    { sym: "XOM", name: "ExxonMobil", tier: 1 },
-    { sym: "CVX", name: "Chevron", tier: 1 },
-    { sym: "COP", name: "ConocoPhillips", tier: 2 },
-    { sym: "SLB", name: "Schlumberger", tier: 3 },
-    { sym: "EOG", name: "EOG Resources", tier: 3 },
+    { sym: "XOM", name: "ExxonMobil" }, { sym: "CVX", name: "Chevron" },
+    { sym: "COP", name: "ConocoPhillips" }, { sym: "SLB", name: "Schlumberger" },
+    { sym: "EOG", name: "EOG Resources" }, { sym: "MPC", name: "Marathon Petroleum" },
+    { sym: "PSX", name: "Phillips 66" }, { sym: "OXY", name: "Occidental Petroleum" },
   ],
   Industrials: [
-    { sym: "CAT", name: "Caterpillar", tier: 1 },
-    { sym: "HON", name: "Honeywell", tier: 1 },
-    { sym: "BA", name: "Boeing", tier: 2 },
-    { sym: "UPS", name: "UPS", tier: 2 },
-    { sym: "GE", name: "GE Aerospace", tier: 3 },
-    { sym: "LMT", name: "Lockheed Martin", tier: 3 },
-    { sym: "RTX", name: "RTX Corp", tier: 3 },
+    { sym: "CAT", name: "Caterpillar" }, { sym: "HON", name: "Honeywell" },
+    { sym: "BA", name: "Boeing" }, { sym: "UPS", name: "UPS" },
+    { sym: "GE", name: "GE Aerospace" }, { sym: "LMT", name: "Lockheed Martin" },
+    { sym: "RTX", name: "RTX Corp" }, { sym: "DE", name: "Deere & Co" },
+    { sym: "UNP", name: "Union Pacific" }, { sym: "ETN", name: "Eaton Corp" },
+    { sym: "ADP", name: "ADP" }, { sym: "MMM", name: "3M" },
   ],
 };
 
-type HeatmapCompany = SeedCompany & { price: number; changePct: number };
+type HeatmapCompany = Seed & { price: number; changePct: number; marketCap: number; tier: 1 | 2 | 3 };
 type HeatmapPayload = Record<string, HeatmapCompany[]>;
 
-let inFlight: Promise<HeatmapPayload> | null = null;
+let quoteInFlight: Promise<Record<string, { price: number; changePct: number }>> | null = null;
+let mcapInFlight: Promise<Record<string, number>> | null = null;
 
-async function fetchQuote(apiKey: string, symbol: string) {
-  const r = await fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`);
-  if (!r.ok) return null;
-  const q = (await r.json()) as { c: number; dp: number };
-  if (!q.c) return null;
-  return { price: q.c, changePct: q.dp };
+async function fetchInChunks<T>(symbols: string[], fn: (sym: string) => Promise<T | null>, chunkSize = 10, delayMs = 250) {
+  const out: Record<string, T> = {};
+  for (let i = 0; i < symbols.length; i += chunkSize) {
+    const chunk = symbols.slice(i, i + chunkSize);
+    const results = await Promise.all(chunk.map(async (sym) => ({ sym, val: await fn(sym).catch(() => null) })));
+    for (const { sym, val } of results) if (val !== null) out[sym] = val;
+    if (i + chunkSize < symbols.length) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return out;
+}
+
+async function getQuotes(apiKey: string, symbols: string[]) {
+  if (!quoteInFlight) {
+    quoteInFlight = fetchInChunks(symbols, async (sym) => {
+      const r = await fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(sym)}&token=${apiKey}`);
+      if (!r.ok) return null;
+      const q = (await r.json()) as { c: number; dp: number };
+      if (!q.c) return null;
+      return { price: q.c, changePct: q.dp };
+    }).finally(() => { quoteInFlight = null; });
+  }
+  return quoteInFlight;
+}
+
+async function getMarketCaps(apiKey: string, symbols: string[]) {
+  const cached = await kvGet<Record<string, number>>(MCAP_CACHE_KEY);
+  if (cached) return cached;
+  if (!mcapInFlight) {
+    mcapInFlight = fetchInChunks(symbols, async (sym) => {
+      const r = await fetch(`${FINNHUB_BASE}/stock/profile2?symbol=${encodeURIComponent(sym)}&token=${apiKey}`);
+      if (!r.ok) return null;
+      const p = (await r.json()) as { marketCapitalization?: number };
+      if (!p.marketCapitalization) return null;
+      return p.marketCapitalization; // already in millions USD
+    }).finally(() => { mcapInFlight = null; });
+    const result = await mcapInFlight;
+    await kvSet(MCAP_CACHE_KEY, result, MCAP_CACHE_TTL_S);
+    return result;
+  }
+  return mcapInFlight;
 }
 
 async function buildHeatmap(apiKey: string): Promise<HeatmapPayload> {
-  const entries = Object.entries(SECTOR_SEEDS);
+  const allSymbols = Object.values(SECTOR_SEEDS).flat().map((s) => s.sym);
+  const [quotes, mcaps] = await Promise.all([getQuotes(apiKey, allSymbols), getMarketCaps(apiKey, allSymbols)]);
+
   const payload: HeatmapPayload = {};
+  for (const [sector, seeds] of Object.entries(SECTOR_SEEDS)) {
+    const withData = seeds
+      .map((seed) => {
+        const q = quotes[seed.sym];
+        const mc = mcaps[seed.sym];
+        if (!q || !mc) return null;
+        return { ...seed, price: q.price, changePct: q.changePct, marketCap: mc };
+      })
+      .filter((c): c is Omit<HeatmapCompany, "tier"> => c !== null)
+      .sort((a, b) => b.marketCap - a.marketCap);
 
-  // Fetch in small chunks (rather than all ~45 symbols at once) to stay
-  // well under Finnhub's free-tier per-minute call limit.
-  const allSeeds = entries.flatMap(([sector, seeds]) => seeds.map((s) => ({ sector, ...s })));
-  const CHUNK = 10;
-  const results: Array<{ sector: string; seed: SeedCompany; quote: { price: number; changePct: number } | null }> = [];
-  for (let i = 0; i < allSeeds.length; i += CHUNK) {
-    const chunk = allSeeds.slice(i, i + CHUNK);
-    const chunkResults = await Promise.all(
-      chunk.map(async ({ sector, ...seed }) => ({ sector, seed, quote: await fetchQuote(apiKey, seed.sym).catch(() => null) })),
-    );
-    results.push(...chunkResults);
-    if (i + CHUNK < allSeeds.length) await new Promise((r) => setTimeout(r, 250));
-  }
-
-  for (const { sector, seed, quote } of results) {
-    if (!quote) continue;
-    (payload[sector] ??= []).push({ ...seed, ...quote });
+    payload[sector] = withData.map((c, i) => ({
+      ...c,
+      tier: i < 2 ? 1 : i < 5 ? 2 : 3,
+    }));
   }
   return payload;
 }
@@ -132,10 +160,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (!inFlight) {
-      inFlight = buildHeatmap(apiKey).finally(() => { inFlight = null; });
-    }
-    const payload = await inFlight;
+    const payload = await buildHeatmap(apiKey);
     await kvSet(CACHE_KEY, payload, CACHE_TTL_S);
     return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=60" } });
   } catch (err) {

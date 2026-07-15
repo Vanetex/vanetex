@@ -1245,9 +1245,10 @@ const vtx = {
         const sectors = Object.keys(heat).map(name => {
           const items = heat[name];
           const avg = items.reduce((sum,c)=>sum+c.changePct,0)/items.length;
+          const totalMcap = items.reduce((sum,c)=>sum+(c.marketCap||0),0);
           const featured = items.filter(c=>c.tier===1).sort((a,b)=>b.changePct-a.changePct);
-          return {name, items, avg, featured};
-        }).sort((a,b)=>b.avg-a.avg);
+          return {name, items, avg, totalMcap, featured};
+        }).sort((a,b)=>b.totalMcap-a.totalMcap);
 
         el.innerHTML = `<div style="padding:10px;">
           <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:2px 2px 11px;">Sector Heatmap · Prominent Companies</div>` +
