@@ -9,15 +9,24 @@ export const maxDuration = 30;
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 const CACHE_KEY = "heatmap:v2";
 const CACHE_TTL_S = 300; // 5 minutes — shared across all users
+// Last-known-good quotes never expire on their own (only overwritten by
+// a fresher successful fetch), so a symbol that gets rate-limited this
+// cycle shows slightly-stale data instead of vanishing from its sector.
+const LASTGOOD_QUOTES_KEY = "heatmap:quotes:lastgood:v1";
+const LASTGOOD_TTL_S = 6 * 60 * 60;
 
+type Quote = { price: number; changePct: number };
 type HeatmapCompany = HeatmapSeed & { price: number; changePct: number; marketCap: number; tier: 1 | 2 | 3 };
 type HeatmapPayload = Record<string, HeatmapCompany[]>;
 
-let quoteInFlight: Promise<Record<string, { price: number; changePct: number }>> | null = null;
+let quoteInFlight: Promise<Record<string, Quote>> | null = null;
 
 // Gentle pacing: small chunks with a real gap between them. Quotes run
-// on every cold cache hit (every 5 min), so this must stay well under
-// Finnhub's free-tier rate limit even for the full ~80-symbol roster.
+// on every cold cache hit (every 5 min). Even at this pace Finnhub's
+// free-tier limit can still be hit partway through ~80 symbols, so
+// this is a best-effort pass, not a guarantee every symbol lands —
+// getQuotes() below rotates the start point and merges with last-known
+// -good so coverage is complete even when a given cycle is partial.
 async function fetchInChunks<T>(symbols: string[], fn: (sym: string) => Promise<T | null>, chunkSize = 6, delayMs = 600) {
   const out: Record<string, T> = {};
   for (let i = 0; i < symbols.length; i += chunkSize) {
@@ -30,15 +39,29 @@ async function fetchInChunks<T>(symbols: string[], fn: (sym: string) => Promise<
 }
 
 async function getQuotes(apiKey: string, symbols: string[]) {
-  if (!quoteInFlight) {
-    quoteInFlight = fetchInChunks(symbols, async (sym) => {
+  if (quoteInFlight) return quoteInFlight;
+
+  quoteInFlight = (async () => {
+    // Rotate the starting symbol each cache cycle so the same tail
+    // sectors aren't the ones perpetually starved by the rate limit.
+    const cycle = Math.floor(Date.now() / (CACHE_TTL_S * 1000));
+    const offset = cycle % symbols.length;
+    const rotated = [...symbols.slice(offset), ...symbols.slice(0, offset)];
+
+    const fresh = await fetchInChunks(rotated, async (sym) => {
       const r = await fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(sym)}&token=${apiKey}`);
       if (!r.ok) return null;
       const q = (await r.json()) as { c: number; dp: number };
       if (!q.c) return null;
-      return { price: q.c, changePct: q.dp };
-    }).finally(() => { quoteInFlight = null; });
-  }
+      return { price: q.c, changePct: q.dp } as Quote;
+    });
+
+    const lastGood = (await kvGet<Record<string, Quote>>(LASTGOOD_QUOTES_KEY)) ?? {};
+    const merged = { ...lastGood, ...fresh };
+    await kvSet(LASTGOOD_QUOTES_KEY, merged, LASTGOOD_TTL_S);
+    return merged;
+  })().finally(() => { quoteInFlight = null; });
+
   return quoteInFlight;
 }
 
