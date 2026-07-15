@@ -845,6 +845,15 @@ const vtx = {
     this.state.feedMode = 'poll';
     this.renderFeedLabels();
     const poll = async () => {
+      const open = this.isMarketOpen();
+      if (open !== this.state.marketOpen) {
+        this.state.marketOpen = open;
+        this.renderMarketStatus();
+      }
+      if (!open) {
+        if (this.state.tape.length !== 0) { this.state.tape = []; this.renderTimeSales(); }
+        return;
+      }
       const syms = this.state.tickers.map(t => t.sym);
       await Promise.all(syms.map(async sym => {
         try {
@@ -852,12 +861,15 @@ const vtx = {
           if (!r.ok) return;
           const d = await r.json();
           if (!d.price) return;
-          const prev = this._lastTradePrice[sym] ?? d.price;
-          const side = d.price >= prev ? 'B' : 'S';
+          const prev = this._lastTradePrice[sym];
+          const priceChanged = prev !== undefined && d.price !== prev;
           this._lastTradePrice[sym] = d.price;
-          const time = this.hhmmss();
-          const estVol = Math.floor(Math.random() * 400 + 100);
-          this.state.tape = [{ id: Math.random(), time, sym, price: d.price.toFixed(2), size: estVol.toLocaleString(), side }, ...this.state.tape].slice(0, 26);
+          if (priceChanged) {
+            const side = d.price >= prev ? 'B' : 'S';
+            const time = this.hhmmss();
+            const estVol = Math.floor(Math.random() * 400 + 100);
+            this.state.tape = [{ id: Math.random(), time, sym, price: d.price.toFixed(2), size: estVol.toLocaleString(), side }, ...this.state.tape].slice(0, 26);
+          }
           this.state.tickers = this.state.tickers.map(x => {
             if (x.sym !== sym) return x;
             const hist = x.hist.concat(d.price); if (hist.length > 46) hist.shift();
