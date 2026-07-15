@@ -8,12 +8,20 @@ export const maxDuration = 30;
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 const CACHE_KEY = "heatmap:v2";
-const CACHE_TTL_S = 300; // 5 minutes — shared across all users
+const CACHE_TTL_S = 120; // 2 minutes — short enough that the rotation below cycles fast
 // Last-known-good quotes never expire on their own (only overwritten by
-// a fresher successful fetch), so a symbol that gets rate-limited this
-// cycle shows slightly-stale data instead of vanishing from its sector.
+// a fresher successful fetch), so a symbol not in this cycle's batch
+// (or one that fails) shows slightly-stale data instead of vanishing.
 const LASTGOOD_QUOTES_KEY = "heatmap:quotes:lastgood:v1";
 const LASTGOOD_TTL_S = 6 * 60 * 60;
+// Only refresh a slice of the roster per request — fetching all ~80
+// symbols in one invocation flirted with both Finnhub's burst rate
+// limit and the function's own time budget, and a single dropped
+// batch meant whichever sector landed last in the list came up empty
+// every single cycle. A small rotating batch clears comfortably
+// within both limits, and cycles through the full roster over a few
+// requests instead of gambling on all-or-nothing.
+const BATCH_SIZE = 24;
 
 type Quote = { price: number; changePct: number };
 type HeatmapCompany = HeatmapSeed & { price: number; changePct: number; marketCap: number; tier: 1 | 2 | 3 };
@@ -21,12 +29,6 @@ type HeatmapPayload = Record<string, HeatmapCompany[]>;
 
 let quoteInFlight: Promise<Record<string, Quote>> | null = null;
 
-// Gentle pacing: small chunks with a real gap between them. Quotes run
-// on every cold cache hit (every 5 min). Even at this pace Finnhub's
-// free-tier limit can still be hit partway through ~80 symbols, so
-// this is a best-effort pass, not a guarantee every symbol lands —
-// getQuotes() below rotates the start point and merges with last-known
-// -good so coverage is complete even when a given cycle is partial.
 async function fetchInChunks<T>(symbols: string[], fn: (sym: string) => Promise<T | null>, chunkSize = 6, delayMs = 600) {
   const out: Record<string, T> = {};
   for (let i = 0; i < symbols.length; i += chunkSize) {
@@ -42,13 +44,16 @@ async function getQuotes(apiKey: string, symbols: string[]) {
   if (quoteInFlight) return quoteInFlight;
 
   quoteInFlight = (async () => {
-    // Rotate the starting symbol each cache cycle so the same tail
-    // sectors aren't the ones perpetually starved by the rate limit.
+    // Rotate which BATCH_SIZE-sized slice gets refreshed this cycle,
+    // so every symbol gets a fresh fetch roughly every ceil(80/24) ≈ 4
+    // cycles (~8 min at a 2-min TTL), and no sector is ever singled
+    // out as "the one that always misses."
     const cycle = Math.floor(Date.now() / (CACHE_TTL_S * 1000));
-    const offset = cycle % symbols.length;
+    const offset = (cycle * BATCH_SIZE) % symbols.length;
     const rotated = [...symbols.slice(offset), ...symbols.slice(0, offset)];
+    const batch = rotated.slice(0, BATCH_SIZE);
 
-    const fresh = await fetchInChunks(rotated, async (sym) => {
+    const fresh = await fetchInChunks(batch, async (sym) => {
       const r = await fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(sym)}&token=${apiKey}`);
       if (!r.ok) return null;
       const q = (await r.json()) as { c: number; dp: number };
@@ -113,13 +118,13 @@ export async function GET(request: NextRequest) {
 
   const cached = await kvGet<HeatmapPayload>(CACHE_KEY);
   if (cached) {
-    return NextResponse.json(cached, { headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=60" } });
+    return NextResponse.json(cached, { headers: { "Cache-Control": "public, max-age=120, stale-while-revalidate=30" } });
   }
 
   try {
     const payload = await buildHeatmap(apiKey);
     await kvSet(CACHE_KEY, payload, CACHE_TTL_S);
-    return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=300, stale-while-revalidate=60" } });
+    return NextResponse.json(payload, { headers: { "Cache-Control": "public, max-age=120, stale-while-revalidate=30" } });
   } catch (err) {
     console.error("[stock/heatmap] error:", err);
     return NextResponse.json({ error: "Failed to build heatmap" }, { status: 500 });
