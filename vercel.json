@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/refresh-portfolios",
       "schedule": "0 21 * * 1-5"
+    },
+    {
+      "path": "/api/cron/refresh-heatmap-mcap",
+      "schedule": "0 11 * * *"
     }
   ]
 }
