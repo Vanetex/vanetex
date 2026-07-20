@@ -66,6 +66,33 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Email/password sign-up collects date_of_birth up front, but OAuth
+  // (Google) sign-in skips it entirely — profiles.date_of_birth is left
+  // null. Since the app enforces a 13+ minimum, gate every OAuth user
+  // through a one-time DOB prompt before they can use the app, the same
+  // way unconfirmed emails are gated above.
+  if (
+    user &&
+    user.email_confirmed_at &&
+    !pathname.startsWith("/auth/") &&
+    pathname !== "/" &&
+    pathname !== "/terms" &&
+    pathname !== "/privacy"
+  ) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("date_of_birth")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile && !(profile as { date_of_birth: string | null }).date_of_birth) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/complete-profile";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+  }
+
   // If user IS signed in and on an auth page (except sign-out), redirect to app.
   if (
     user &&
@@ -74,7 +101,8 @@ export async function updateSession(request: NextRequest) {
     pathname !== "/auth/callback" &&
     pathname !== "/auth/confirm" &&
     pathname !== "/auth/update-password" &&
-    pathname !== "/auth/verify"
+    pathname !== "/auth/verify" &&
+    pathname !== "/auth/complete-profile"
   ) {
     const url = request.nextUrl.clone();
     const next = request.nextUrl.searchParams.get("next");
