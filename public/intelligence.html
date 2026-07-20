@@ -1201,7 +1201,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Calendar'],['movers','Sectors'],['ai','AI']];
+    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Calendar'],['movers','Sectors'],['ai','Assistant']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -1373,7 +1373,7 @@ const vtx = {
     }
     else if (s.tab === 'ai') {
       el.innerHTML = `<div style="display:flex;flex-direction:column;height:100%;min-height:0;">
-        <div style="flex-shrink:0;padding:6px 12px;background:rgba(245,158,11,.06);border-bottom:1px solid rgba(245,158,11,.12);font-size:9.5px;color:rgba(245,158,11,.7);line-height:1.4;">For informational purposes only. Not financial advice. AI responses may be inaccurate — verify before acting.</div>
+        <div style="flex-shrink:0;padding:6px 12px;background:rgba(245,158,11,.06);border-bottom:1px solid rgba(245,158,11,.12);font-size:9.5px;color:rgba(245,158,11,.7);line-height:1.4;">For informational purposes only. Not financial advice. This is a rule-based lookup over the data already loaded on this page — not a generative AI model — verify before acting.</div>
         <div id="chatMessages" style="flex:1;min-height:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;"></div>
         <div style="flex-shrink:0;padding:10px 12px;border-top:1px solid var(--line);">
           <div id="quickPrompts" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px;"></div>
@@ -1407,6 +1407,8 @@ const vtx = {
     const prompts = [
       {label:'Summarize '+f.sym, msg:'Summarize '+f.sym},
       {label:'Financials', msg:'Show me the financials'},
+      {label:'Analyst ratings', msg:'What are the analyst ratings?'},
+      {label:'Sector standing', msg:'How does this compare to its sector?'},
       {label:'Dark-pool read', msg:'What is the dark-pool activity?'},
       {label:'Insider filings', msg:'Any recent insider filings?'},
       {label:'Calendar', msg:'What is on the calendar?'}
@@ -1463,11 +1465,30 @@ const vtx = {
       return `${f.sym} — ${f.name}\n\nTrading ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session. Sector: ${f.sector}. P/E ${peStr}.\n\n${darkLine}\n${filLine}\n\nSession range: $${this.fmt(lo)} – $${this.fmt(hi)}.`;
     }
 
-    if (/help|what can you|how.+work/.test(q)) {
-      return `I can answer questions about ${f.sym} (or whichever symbol you have focused) using the live data already loaded on this page:\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" / "calendar" — upcoming scheduled events\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
+    if (/analyst|rating|consensus|price target|upgrade|downgrade/.test(q)) {
+      const ar = f.analyst;
+      const total = ar ? ar.strongBuy+ar.buy+ar.hold+ar.sell+ar.strongSell : 0;
+      if (!ar || total === 0) return `No analyst coverage on file for ${f.sym} right now.`;
+      const score = (ar.strongBuy*5 + ar.buy*4 + ar.hold*3 + ar.sell*2 + ar.strongSell*1) / total;
+      const label = score>=4.5?'Strong Buy':score>=3.5?'Buy':score>=2.5?'Hold':score>=1.5?'Sell':'Strong Sell';
+      return `${f.sym} — Analyst Ratings\n\nConsensus: ${label} (${total} analysts${ar.period?', '+ar.period:''})\nStrong Buy ${ar.strongBuy} · Buy ${ar.buy} · Hold ${ar.hold} · Sell ${ar.sell} · Strong Sell ${ar.strongSell}`;
     }
 
-    return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "dark pool" activity, "filings", or "earnings" — I'll pull from the live data on this page. Type "help" for the full list.`;
+    if (/sector|heatmap|industry/.test(q)) {
+      const heat = this.state.heatmap;
+      const sectorName = this.sectorBucket(f.sector);
+      const items = heat ? heat[sectorName] : null;
+      if (!items || !items.length) return `${f.sym} is in ${f.sector || 'an unclassified sector'}, but I don't have sector-heatmap data loaded for it yet — check the Sectors tab.`;
+      const avg = items.reduce((s,c)=>s+c.changePct,0)/items.length;
+      const rank = items.slice().sort((a,b)=>b.changePct-a.changePct).findIndex(c=>c.sym===f.sym)+1;
+      return `${f.sym} — ${sectorName}\n\nSector average today: ${(avg>=0?'+':'')+avg.toFixed(2)}%\n${f.sym} ranks ${rank||'—'} of ${items.length} tracked names in this sector by today's move.`;
+    }
+
+    if (/help|what can you|how.+work/.test(q)) {
+      return `I'm a rule-based lookup, not a generative model — I match your question to a category and pull straight from the live data already loaded on this page for ${f.sym} (or whichever symbol you have focused):\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "analyst ratings" — consensus + buy/hold/sell breakdown\n• "sector" — how ${f.sym} compares to its sector today\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" / "calendar" — upcoming scheduled events\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
+    }
+
+    return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "analyst ratings", "sector" standing, "dark pool" activity, "filings", or "earnings" — I'll pull from the live data on this page. Type "help" for the full list.`;
   },
   sendChat(text) {
     const input = document.getElementById('chatInputEl');
