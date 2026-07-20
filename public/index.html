@@ -577,8 +577,6 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 </div>
 
 <script>
-const FH='d7h7btpr01qhiu0ai3s0d7h7btpr01qhiu0ai3sg';
-
 // ── Background: flowing data lines ────────────
 (()=>{
   const cvs=document.getElementById('cvs'),ctx=cvs.getContext('2d');
@@ -829,23 +827,35 @@ window.closeModal=closeModal;
 })();
 
 // ── Market data ───────────────────────────────
-const MKT=['SPY','QQQ','GLD','VIXY'];
-const LIVE_DATA={'SPY':{c:737.45,dp:-0.29},'QQQ':{c:515.22,dp:0.45},'GLD':{c:195.68,dp:-0.12},'VIXY':{c:14.32,dp:2.15}};
+// Real index/commodity levels via our server-side proxy — element ids
+// (mv-SPY etc.) are kept as-is for CSS/markup compatibility, but each
+// now maps to the actual index/futures symbol it's labeled as, not an
+// ETF's share price.
+const MKT=[
+  {id:'SPY', idx:'SPX', fmt:'plain'},
+  {id:'QQQ', idx:'NDX', fmt:'plain'},
+  {id:'GLD', idx:'GOLD', fmt:'usd'},
+  {id:'VIXY', idx:'VIX', fmt:'plain'},
+];
+const MKT_FALLBACK={'SPY':{price:7443.28,changePct:-0.29},'QQQ':{price:25508.07,changePct:0.45},'GLD':{price:4011.80,changePct:-0.12},'VIXY':{price:18.65,changePct:2.15}};
+function fmtMktValue(price,fmt){
+  const s=price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  return fmt==='usd' ? '$'+s : s;
+}
+function renderMktCell(id,fmt,d){
+  const v=document.getElementById('mv-'+id);
+  const c=document.getElementById('mc-'+id);
+  if(v)v.textContent=fmtMktValue(d.price,fmt);
+  if(c){const p=d.changePct||0;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn');}
+}
 async function loadMarket(){
   try{
-    const r=await Promise.all(MKT.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>LIVE_DATA[s])));
-    r.forEach((d,i)=>{
-      if(!d||!d.c)return;
-      const s=MKT[i];
-      const v=document.getElementById('mv-'+s);
-      const c=document.getElementById('mc-'+s);
-      if(v)v.textContent='$'+d.c.toFixed(2);
-      if(c){const p=d.dp||0;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn');}
-    });
+    const r=await Promise.all(MKT.map(m=>fetch(`/api/market/index-quote?symbol=${m.idx}`).then(r=>r.ok?r.json():null).catch(()=>null)));
+    r.forEach((d,i)=>{ if(d&&d.price)renderMktCell(MKT[i].id,MKT[i].fmt,d); });
   }catch(e){console.warn('Market load error',e);}
 }
 // Load immediately with fallback
-MKT.forEach(s=>{document.getElementById('mv-'+s)&&(document.getElementById('mv-'+s).textContent='$'+LIVE_DATA[s].c.toFixed(2));const c=document.getElementById('mc-'+s);if(c){const p=LIVE_DATA[s].dp;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn');}});
+MKT.forEach(m=>renderMktCell(m.id,m.fmt,MKT_FALLBACK[m.id]));
 loadMarket();
 setInterval(loadMarket,30000);
 
@@ -864,7 +874,7 @@ function setTickerHtml(dataArray){
 setTickerHtml(TSYMS.map(s=>MOCK_TICKER[s]));
 async function loadTicker(){
   try{
-    const r=await Promise.all(TSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${FH}`).then(r=>r.json()).catch(()=>MOCK_TICKER[s])));
+    const r=await Promise.all(TSYMS.map(s=>fetch(`/api/stock/quote?symbol=${encodeURIComponent(s)}`).then(r=>r.ok?r.json():null).then(d=>d&&d.price?{c:d.price,dp:d.changePct}:MOCK_TICKER[s]).catch(()=>MOCK_TICKER[s])));
     setTickerHtml(r);
   }catch(e){console.error('Ticker error:',e);}
 }
@@ -874,7 +884,7 @@ loadTicker();setInterval(loadTicker,30000);
 const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
 const MOCK_PREVIEW={NVDA:{c:142.30,dp:1.22},AAPL:{c:234.56,dp:-0.45},MSFT:{c:441.20,dp:0.78},AMZN:{c:198.75,dp:-0.34},META:{c:612.45,dp:1.12},TSLA:{c:312.22,dp:2.34}};
 async function loadPreview(){
-  const r=await Promise.all(PSYMS.map(s=>fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${FH}`).then(r=>r.json()).catch(()=>null)));
+  const r=await Promise.all(PSYMS.map(s=>fetch(`/api/stock/quote?symbol=${s}`).then(r=>r.ok?r.json():null).then(d=>d&&d.price?{c:d.price,dp:d.changePct}:null).catch(()=>null)));
   const grid=document.getElementById('data-grid');if(!grid)return;
   grid.innerHTML=PSYMS.map((s,i)=>{const d=r[i]||MOCK_PREVIEW[s];if(!d?.c)return'';const p=d.dp||0;return`<div class="data-row"><span class="dr-s">${s}</span><span class="dr-p">$${d.c.toFixed(2)}</span><span class="dr-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
 }
@@ -883,9 +893,9 @@ loadPreview();setInterval(loadPreview,15000);
 // ── Demo Data Loading ─────────────────────────
 async function loadDemoData(){
   try{
-    const nvda=await fetch(`https://finnhub.io/api/v1/quote?symbol=NVDA&token=${FH}`).then(r=>r.json()).catch(()=>null);
-    if(nvda?.c){
-      document.getElementById('bt-price').textContent='$'+nvda.c.toFixed(2);
+    const nvda=await fetch(`/api/stock/quote?symbol=NVDA`).then(r=>r.ok?r.json():null).catch(()=>null);
+    if(nvda?.price){
+      document.getElementById('bt-price').textContent='$'+nvda.price.toFixed(2);
       const ret=Math.random()*20-5;document.getElementById('bt-return').innerHTML=(ret>=0?'<span class="up">+':'<span class="dn">−')+Math.abs(ret).toFixed(1)+'%</span>';
       const sharpe=(Math.random()*2+1).toFixed(2);document.getElementById('bt-sharpe').textContent=sharpe;
     }
@@ -1004,18 +1014,18 @@ async function loadAssetClasses(){
   const setAsset=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
   const setAssetChg=(id,chg,up)=>{const el=document.getElementById(id);if(el){el.textContent=chg;el.className='asset-change '+(up?'up':'dn')}};
 
-  // S&P 500 via SPY (Finnhub)
-  fetch(`https://finnhub.io/api/v1/quote?symbol=SPY&token=${FH}`).then(r=>r.json()).then(d=>{
-    if(!d?.c)return;
-    setAsset('ac-equities','$'+d.c.toFixed(2));
-    const p=d.dp||0;setAssetChg('ac-equities-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
+  // Equities via S&P 500 index
+  fetch(`/api/market/index-quote?symbol=SPX`).then(r=>r.ok?r.json():null).then(d=>{
+    if(!d?.price)return;
+    setAsset('ac-equities',d.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+    const p=d.changePct||0;setAssetChg('ac-equities-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
   }).catch(()=>{});
 
-  // Gold via GLD (Finnhub)
-  fetch(`https://finnhub.io/api/v1/quote?symbol=GLD&token=${FH}`).then(r=>r.json()).then(d=>{
-    if(!d?.c)return;
-    setAsset('ac-commodities','$'+d.c.toFixed(2));
-    const p=d.dp||0;setAssetChg('ac-commodities-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
+  // Commodities via Gold futures
+  fetch(`/api/market/index-quote?symbol=GOLD`).then(r=>r.ok?r.json():null).then(d=>{
+    if(!d?.price)return;
+    setAsset('ac-commodities','$'+d.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+    const p=d.changePct||0;setAssetChg('ac-commodities-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
   }).catch(()=>{});
 
   // Bitcoin via CoinGecko (free, no key)
