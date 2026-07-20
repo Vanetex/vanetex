@@ -291,14 +291,7 @@ const vtx = {
     {time:'08:40',src:'FT',sym:'AVGO',headline:'Broadcom lands second hyperscaler custom-silicon contract',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'},
     {time:'08:12',src:'Bloomberg',sym:'COIN',headline:'Coinbase derivatives volume hits record as ETF inflows surge',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'}
   ],
-  CAL: [
-    {day:'MON',date:'16',sym:'Macro',event:'US Retail Sales (MoM)',time:'08:30',imp:'HIGH',tone:'var(--warn)',toneBorder:'rgba(245,165,36,.4)'},
-    {day:'TUE',date:'17',sym:'NFLX',event:'Q2 Earnings — After Close',time:'16:05',imp:'EARN',tone:'var(--acc2)',toneBorder:'rgba(52,211,255,.4)'},
-    {day:'WED',date:'18',sym:'Macro',event:'FOMC Rate Decision',time:'14:00',imp:'HIGH',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
-    {day:'WED',date:'18',sym:'TSLA',event:'Q2 Earnings — After Close',time:'16:30',imp:'EARN',tone:'var(--acc2)',toneBorder:'rgba(52,211,255,.4)'},
-    {day:'THU',date:'19',sym:'Macro',event:'Initial Jobless Claims',time:'08:30',imp:'MED',tone:'var(--mut)',toneBorder:'rgba(255,255,255,.18)'},
-    {day:'FRI',date:'20',sym:'AVGO',event:'Q3 Earnings — Before Open',time:'07:00',imp:'EARN',tone:'var(--acc2)',toneBorder:'rgba(52,211,255,.4)'}
-  ],
+  CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
   FIL: [
     {time:'2m',sym:'NVDA',who:'J. Huang',role:'CEO',act:'SELL',shares:'120,000',value:'$141.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
     {time:'18m',sym:'PLTR',who:'S. Cohen',role:'President',act:'SELL',shares:'2.4M',value:'$149.8M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
@@ -487,9 +480,11 @@ const vtx = {
     this.loadFilings();
     this.loadDarkPool();
     this.loadHeatmap();
+    this.loadCalendar();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
     setInterval(() => this.loadHeatmap(), 5 * 60 * 1000);
+    setInterval(() => this.loadCalendar(), 30 * 60 * 1000);
     this.renderClock();
     this.renderMarketStatus();
     this.loadChartData(this.state.focus, this.state.tf);
@@ -617,6 +612,7 @@ const vtx = {
       this.saveWatchlist();
       this.render();
       this.loadDarkPool();
+      this.loadCalendar();
     } catch(e) {}
   },
   removeTicker(sym) {
@@ -816,6 +812,18 @@ const vtx = {
         return { ...d, time: label };
       });
       if (this.state.tab === 'dark') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  async loadCalendar() {
+    try {
+      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      const res = await fetch(`/api/intel/calendar?symbols=${encodeURIComponent(symbols)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.events) return;
+      this.CAL = data.events;
+      if (this.state.tab === 'calendar') this.renderRight();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -1284,6 +1292,10 @@ const vtx = {
           </div>`).join('') + `</div>`;
     }
     else if (s.tab === 'calendar') {
+      if (!this.CAL.length) {
+        el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading earnings calendar…</div>`;
+        return;
+      }
       el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
         this.CAL.map(c => `
           <div style="display:grid;grid-template-columns:46px 1fr auto;gap:11px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
