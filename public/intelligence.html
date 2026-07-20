@@ -230,7 +230,7 @@ input{font-family:var(--ui)}
           <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
             <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
               <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Depth of Market</span>
-              <span id="depthDpi" style="font-family:var(--mono);font-size:9.5px;color:var(--acc2);margin-left:auto;"></span>
+              <span style="font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.08em;color:var(--warn);margin-left:auto;" title="Finnhub's free tier doesn't provide Level 2 order book data — this ladder is simulated for illustration.">SIMULATED</span>
             </div>
             <div id="depthBody" style="padding:8px 12px;"></div>
           </div>
@@ -1106,9 +1106,6 @@ const vtx = {
       asks.push({price:this.fmt(f.price+step*i), raw:az});
       bids.push({price:this.fmt(f.price-step*i), raw:bz});
     }
-    const dpi = (38+this.hashN(f.sym,7)*16).toFixed(1)+'%';
-    const litPct = (62-this.hashN(f.sym,7)*16).toFixed(1)+'%';
-    document.getElementById('depthDpi').textContent = 'DPI '+dpi;
     const asksHtml = asks.slice().reverse().map(a => `
       <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 6px;font-family:var(--mono);font-size:10.5px;">
         <div style="position:absolute;right:0;top:1px;bottom:1px;width:${(a.raw/maxz*100).toFixed(0)}%;background:rgba(255,77,94,.16);border-radius:3px;"></div>
@@ -1230,12 +1227,18 @@ const vtx = {
       el.innerHTML = `<div style="padding:10px;">
         <div style="display:flex;gap:9px;margin-bottom:10px;">
           <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:rgba(52,211,255,.05);">
-            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:5px;">Dark Pool Index</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+              <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Dark Pool Index</span>
+              <span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--warn);">SIMULATED</span>
+            </div>
             <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--acc2);">${dpi}</div>
             <div style="font-size:9.5px;color:var(--mut);margin-top:2px;">of consolidated volume off-exchange</div>
           </div>
           <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;">
-            <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:7px;">Lit / Dark Split</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+              <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Lit / Dark Split</span>
+              <span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--warn);">SIMULATED</span>
+            </div>
             <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.05);">
               <div style="width:${litPct};background:var(--acc);"></div>
               <div style="flex:1;background:var(--acc2);opacity:.6;"></div>
