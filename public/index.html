@@ -271,7 +271,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .cmodal-close:hover{color:#e8edf8}
 .cmodal-status{font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px}
 .cmodal-name{font-size:20px;font-weight:700;color:#e8edf8;letter-spacing:-.01em;margin-bottom:10px}
-.cmodal-body{font-size:12.5px;color:#4e6080;line-height:1.7}
+.cmodal-body{font-size:12.5px;color:#4e6080;line-height:1.7;white-space:pre-line}
 .cmodal-overlay{position:fixed;inset:0;z-index:699;display:none}
 .cmodal-overlay.show{display:block}
 </style>
@@ -585,50 +585,18 @@ window.closeModal=closeModal;
   ctx.fillStyle='rgba(10,28,70,0.5)';ctx.fillRect(0,0,SIZE,SIZE);
   const CX=SIZE/2,CY=SIZE/2,R=SIZE*.44;
 
-  const STATUS={
-    4:'red',180:'red',231:'red',332:'red',434:'red',466:'red',562:'red',643:'red',706:'red',729:'red',760:'red',804:'red',854:'red',887:'red',376:'red',
-    104:'yellow',120:'yellow',156:'yellow',170:'yellow',178:'yellow',192:'yellow',268:'yellow',364:'yellow',368:'yellow',408:'yellow',422:'yellow',484:'yellow',498:'yellow',508:'yellow',558:'yellow',566:'yellow',586:'yellow',604:'yellow',608:'yellow',682:'yellow',710:'yellow',762:'yellow',764:'yellow',788:'yellow',792:'yellow',800:'yellow',818:'yellow',862:'yellow',716:'yellow',450:'yellow'
-  };
-
-  const FILLS={red:{fill:'rgba(239,68,68,0.55)',border:'rgba(239,68,68,0.8)'},yellow:{fill:'rgba(245,158,11,0.45)',border:'rgba(245,158,11,0.75)'},green:{fill:'rgba(16,185,129,0.22)',border:'rgba(16,185,129,0.45)'}};
+  // Every country renders the same neutral fill — no risk/status
+  // classification. Real per-country data (population, GDP) is fetched
+  // on demand from /api/geo/country-snapshot when a country is clicked.
+  const GLOBE_FILL={fill:'rgba(59,130,246,0.22)',border:'rgba(96,165,250,0.45)'};
 
   // Complete country names — fixed
   const NAMES={2:'Andorra',4:'Afghanistan',8:'Albania',10:'Antarctica',12:'Algeria',16:'American Samoa',20:'Andorra',24:'Angola',28:'Antigua & Barbuda',31:'Azerbaijan',32:'Argentina',36:'Australia',40:'Austria',44:'Bahamas',48:'Bahrain',50:'Bangladesh',52:'Barbados',56:'Belgium',60:'Bermuda',64:'Bhutan',68:'Bolivia',70:'Bosnia',72:'Botswana',76:'Brazil',84:'Belize',86:'British IOT',90:'Solomon Islands',96:'Brunei',100:'Bulgaria',104:'Myanmar',108:'Burundi',112:'Belarus',116:'Cambodia',120:'Cameroon',124:'Canada',132:'Cape Verde',136:'Cayman Islands',140:'Central African Rep',144:'Sri Lanka',148:'Chad',152:'Chile',156:'China',158:'Taiwan',160:'Cook Islands',162:'Christmas Island',166:'Cocos Islands',170:'Colombia',174:'Comoros',175:'Mayotte',178:'Congo',180:'DR Congo',184:'Cook Islands',188:'Costa Rica',191:'Croatia',192:'Cuba',196:'Cyprus',203:'Czechia',206:'Timor-Leste',208:'Denmark',212:'Dominica',214:'Dominican Republic',218:'Ecuador',226:'Equatorial Guinea',231:'Ethiopia',232:'Eritrea',233:'Estonia',238:'Falkland Islands',242:'Fiji',246:'Finland',250:'France',260:'French Polynesia',262:'Djibouti',266:'Gabon',268:'Georgia',270:'Gambia',275:'Palestine',276:'Germany',288:'Ghana',292:'Gibraltar',296:'Kiribati',300:'Greece',304:'Greenland',308:'Grenada',312:'Guadeloupe',316:'Guam',320:'Guatemala',324:'Guinea',328:'Guyana',332:'Haiti',334:'Heard Island',336:'Vatican',344:'Hong Kong',348:'Hungary',352:'Iceland',356:'India',360:'Indonesia',364:'Iran',368:'Iraq',372:'Ireland',376:'Israel',380:'Italy',388:'Jamaica',392:'Japan',398:'Kazakhstan',400:'Jordan',404:'Kenya',408:'North Korea',410:'South Korea',414:'Kuwait',417:'Kyrgyzstan',418:'Laos',422:'Lebanon',426:'Lesotho',428:'Latvia',430:'Liberia',434:'Libya',438:'Liechtenstein',440:'Lithuania',442:'Luxembourg',446:'Macao',450:'Madagascar',454:'Malawi',458:'Malaysia',462:'Maldives',466:'Mali',470:'Malta',474:'Martinique',478:'Mauritania',480:'Mauritius',484:'Mexico',492:'Monaco',496:'Mongolia',498:'Moldova',499:'Montenegro',504:'Morocco',508:'Mozambique',512:'Oman',516:'Namibia',520:'Nauru',524:'Nepal',528:'Netherlands',533:'Aruba',534:'Sint Maarten',540:'New Caledonia',548:'Vanuatu',554:'New Zealand',558:'Nicaragua',562:'Niger',566:'Nigeria',578:'Norway',580:'Northern Mariana Islands',583:'Micronesia',584:'Marshall Islands',585:'Palau',586:'Pakistan',591:'Panama',598:'Papua New Guinea',600:'Paraguay',604:'Peru',608:'Philippines',612:'Pitcairn',616:'Poland',620:'Portugal',624:'Guinea-Bissau',626:'Timor-Leste',630:'Puerto Rico',634:'Qatar',638:'Reunion',642:'Romania',643:'Russia',646:'Rwanda',652:'Saint Barth',654:'Saint Helena',659:'St Kitts & Nevis',660:'Anguilla',662:'Saint Lucia',666:'Saint Pierre & Miquelon',670:'St Vincent',674:'San Marino',678:'Sao Tome',682:'Saudi Arabia',686:'Senegal',688:'Serbia',690:'Seychelles',694:'Sierra Leone',702:'Singapore',703:'Slovakia',704:'Vietnam',705:'Slovenia',706:'Somalia',710:'South Africa',716:'Zimbabwe',724:'Spain',728:'South Sudan',729:'Sudan',732:'Western Sahara',740:'Suriname',748:'Eswatini',752:'Sweden',756:'Switzerland',760:'Syria',762:'Tajikistan',764:'Thailand',768:'Togo',769:'Tonga',770:'Trinidad & Tobago',784:'UAE',788:'Tunisia',792:'Turkey',795:'Turkmenistan',798:'Tuvalu',800:'Uganda',804:'Ukraine',818:'Egypt',826:'United Kingdom',831:'Guernsey',832:'Jersey',833:'Isle of Man',834:'Tanzania',840:'United States',850:'US Virgin Islands',854:'Burkina Faso',858:'Uruguay',860:'Uzbekistan',862:'Venezuela',876:'Wallis & Futuna',882:'Samoa',886:'Taiwan',887:'Yemen',894:'Zambia'};
 
-  // Country situation briefings
-  const BRIEFINGS={
-    4:'Afghanistan: Taliban control, humanitarian crisis ongoing, drug production accelerating.',
-    180:'DR Congo: Ongoing conflict in east (M23), competition for rare earth minerals.',
-    231:'Ethiopia: Tigray war concluded but regional instability remains, economic strain.',
-    332:'Haiti: State collapse, gang violence controlling major cities, government dysfunction.',
-    434:'Libya: Government fragmentation, ongoing civil conflict, refugee crisis.',
-    466:'Mali: Military coup 2021, terrorist groups active, French withdrawal.',
-    562:'Niger: Military coup 2023, Islamic militant activity, destabilization risk.',
-    643:'Russia: Active invasion of Ukraine, major geopolitical flashpoint, sanctions regime.',
-    706:'Somalia: Al-Shabaab terrorist activity, weak federal government, piracy zones.',
-    729:'Sudan: Civil war 2023-present, RSF vs SAF, major humanitarian crisis unfolding.',
-    760:'Syria: Ongoing civil war, humanitarian catastrophe, refugee flows.',
-    804:'Ukraine: Russian invasion ongoing, massive displacement, energy security crisis.',
-    854:'Burkina Faso: Jihadist insurgency spreading, coup 2022, internal instability.',
-    887:'Yemen: Humanitarian disaster, Houthi-Saudi conflict, famine conditions.',
-    376:'Israel: Gaza conflict escalated Oct 2023, complex regional tensions.',
-    104:'Myanmar: Military coup 2021, ongoing civil unrest, Karen state tensions.',
-    156:'China: Taiwan strait tensions, South China Sea disputes, trade friction.',
-    268:'Georgia: Russian-backed South Ossetia control, occupation tensions.',
-    364:'Iran: Nuclear program controversy, regional proxy conflicts, sanctions.',
-    408:'North Korea: Isolated regime, nuclear weapons development, constant tension.',
-    422:'Lebanon: Economic collapse, political deadlock, Hezbollah influence.',
-    484:'Mexico: Drug cartel violence, migration issues, border security concerns.',
-    498:'Moldova: Russian-backed Transnistria occupation, NATO integration push.',
-    586:'Pakistan: Political instability, militant groups active, China ties.',
-    792:'Turkey: Syria border tensions, Kurdish conflict, NATO member but complications.',
-    862:'Venezuela: Economic collapse, migrant exodus, authoritarian governance.',
-    156:'China: Strategic tensions, regional disputes, economic competition.',
-    710:'South Africa: Electricity crisis, xenophobic violence, governance challenges.',
-  };
-
-  const STATUS_LABEL={red:'⚠ Active Conflict / Crisis',yellow:'⚡ Elevated Tension',green:'✓ Stable'};
-  const STATUS_COLOR={red:'#ef4444',yellow:'#f59e0b',green:'#10b981'};
+  // NUMERIC_TO_ISO3: which country ids the real-data route can resolve
+  // (matches /api/geo/country-snapshot's server-side mapping exactly,
+  // generated from the same world-atlas dataset + ISO 3166-1 table).
+  const NUMERIC_TO_ISO3={4:"AFG",8:"ALB",10:"ATA",12:"DZA",24:"AGO",31:"AZE",32:"ARG",36:"AUS",40:"AUT",44:"BHS",50:"BGD",51:"ARM",56:"BEL",64:"BTN",68:"BOL",70:"BIH",72:"BWA",76:"BRA",84:"BLZ",90:"SLB",96:"BRN",100:"BGR",104:"MMR",108:"BDI",112:"BLR",116:"KHM",120:"CMR",124:"CAN",140:"CAF",144:"LKA",148:"TCD",152:"CHL",156:"CHN",158:"TWN",170:"COL",178:"COG",180:"COD",188:"CRI",191:"HRV",192:"CUB",196:"CYP",203:"CZE",204:"BEN",208:"DNK",214:"DOM",218:"ECU",222:"SLV",226:"GNQ",231:"ETH",232:"ERI",233:"EST",238:"FLK",242:"FJI",246:"FIN",250:"FRA",260:"ATF",262:"DJI",266:"GAB",268:"GEO",270:"GMB",275:"PSE",276:"DEU",288:"GHA",300:"GRC",304:"GRL",320:"GTM",324:"GIN",328:"GUY",332:"HTI",340:"HND",348:"HUN",352:"ISL",356:"IND",360:"IDN",364:"IRN",368:"IRQ",372:"IRL",376:"ISR",380:"ITA",384:"CIV",388:"JAM",392:"JPN",398:"KAZ",400:"JOR",404:"KEN",408:"PRK",410:"KOR",414:"KWT",417:"KGZ",418:"LAO",422:"LBN",426:"LSO",428:"LVA",430:"LBR",434:"LBY",440:"LTU",442:"LUX",450:"MDG",454:"MWI",458:"MYS",466:"MLI",478:"MRT",484:"MEX",496:"MNG",498:"MDA",499:"MNE",504:"MAR",508:"MOZ",512:"OMN",516:"NAM",524:"NPL",528:"NLD",540:"NCL",548:"VUT",554:"NZL",558:"NIC",562:"NER",566:"NGA",578:"NOR",586:"PAK",591:"PAN",598:"PNG",600:"PRY",604:"PER",608:"PHL",616:"POL",620:"PRT",624:"GNB",626:"TLS",630:"PRI",634:"QAT",642:"ROU",643:"RUS",646:"RWA",682:"SAU",686:"SEN",688:"SRB",694:"SLE",703:"SVK",704:"VNM",705:"SVN",706:"SOM",710:"ZAF",716:"ZWE",724:"ESP",728:"SSD",729:"SDN",732:"ESH",740:"SUR",748:"SWZ",752:"SWE",756:"CHE",760:"SYR",762:"TJK",764:"THA",768:"TGO",780:"TTO",784:"ARE",788:"TUN",792:"TUR",795:"TKM",800:"UGA",804:"UKR",807:"MKD",818:"EGY",826:"GBR",834:"TZA",840:"USA",854:"BFA",858:"URY",860:"UZB",862:"VEN",887:"YEM",894:"ZMB"};
 
   let rotY=0;
   let countries=null;
@@ -689,9 +657,7 @@ window.closeModal=closeModal;
     // Draw country fills
     if(countries){
       countries.forEach(f=>{
-        const id=parseInt(f.id);
-        const s=STATUS[id]||'green';
-        const col=FILLS[s];
+        const col=GLOBE_FILL;
         const geom=f.geometry;
         const polys=geom.type==='Polygon'?[geom.coordinates]:geom.coordinates;
         polys.forEach(poly=>{
@@ -770,13 +736,13 @@ window.closeModal=closeModal;
     });
     if(best&&bestD<1600){
       const id=parseInt(best.id);
-      const s=STATUS[id]||'green';
       lastClicked=id;
       const name=NAMES[id]||'Region '+id;
-      document.getElementById('tip-status').textContent=STATUS_LABEL[s]||'Status Unknown';
-      document.getElementById('tip-status').style.color=STATUS_COLOR[s]||'#888';
+      const clickable=!!NUMERIC_TO_ISO3[id];
+      document.getElementById('tip-status').textContent='REGION';
+      document.getElementById('tip-status').style.color='#6ea8ff';
       document.getElementById('tip-name').textContent=name;
-      document.getElementById('tip-desc').textContent=s==='green'?'Stable':'Monitor';
+      document.getElementById('tip-desc').textContent=clickable?'Click for economic snapshot':'No data available';
       tip.style.left=Math.min(e.clientX+14,innerWidth-195)+'px';
       tip.style.top=(e.clientY-10)+'px';
       tip.classList.add('show');
@@ -788,17 +754,38 @@ window.closeModal=closeModal;
     tip.classList.remove('show');
   });
 
-  cvs.addEventListener('click',e=>{
-    if(!lastClicked||!BRIEFINGS[lastClicked])return;
+  cvs.addEventListener('click',async e=>{
+    if(!lastClicked||!NUMERIC_TO_ISO3[lastClicked])return;
     const id=lastClicked;
-    const s=STATUS[id]||'green';
     const name=NAMES[id]||'Unknown Region';
-    document.getElementById('cmodal-status').textContent=STATUS_LABEL[s];
-    document.getElementById('cmodal-status').style.color=STATUS_COLOR[s];
+    document.getElementById('cmodal-status').textContent='ECONOMIC SNAPSHOT';
+    document.getElementById('cmodal-status').style.color='#6ea8ff';
     document.getElementById('cmodal-name').textContent=name;
-    document.getElementById('cmodal-body').textContent=BRIEFINGS[id]||'No briefing available.';
+    document.getElementById('cmodal-body').textContent='Loading real data…';
     document.getElementById('cmodal').classList.add('show');
     document.getElementById('cmodal-overlay').classList.add('show');
+    try{
+      const d=await fetch(`/api/geo/country-snapshot?id=${id}`).then(r=>r.ok?r.json():null);
+      if(document.getElementById('cmodal-name').textContent!==name)return; // user moved on
+      if(!d||!d.hasData){
+        document.getElementById('cmodal-body').textContent='No World Bank data available for this region.';
+        return;
+      }
+      const fmtBig=n=>{
+        if(n==null)return null;
+        if(n>=1e12)return '$'+(n/1e12).toFixed(2)+'T';
+        if(n>=1e9)return '$'+(n/1e9).toFixed(1)+'B';
+        if(n>=1e6)return '$'+(n/1e6).toFixed(1)+'M';
+        return '$'+n.toFixed(0);
+      };
+      const lines=[];
+      if(d.population!=null)lines.push(`Population: ${(d.population/1e6).toFixed(1)}M (${d.populationYear})`);
+      if(d.gdp!=null)lines.push(`GDP: ${fmtBig(d.gdp)} (${d.gdpYear})`);
+      if(d.gdpPerCapita!=null)lines.push(`GDP per capita: $${Math.round(d.gdpPerCapita).toLocaleString()}`);
+      document.getElementById('cmodal-body').textContent=lines.join('\n')||'No World Bank data available for this region.';
+    }catch(e){
+      document.getElementById('cmodal-body').textContent='Failed to load data for this region.';
+    }
   });
   }catch(e){console.error('Globe error:',e);}
 })();
