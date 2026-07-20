@@ -249,9 +249,8 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .hiw-step-desc{font-size:12px;color:#4e6080;line-height:1.7;max-width:220px}
 @media(max-width:900px){.hiw-section{padding:60px 28px}.hiw-steps{grid-template-columns:1fr;gap:40px}.hiw-steps::before{display:none}.hiw-step{align-items:flex-start;text-align:left;padding:0}}
 
-/* FAQ + Waitlist split */
-.closer-section{padding:80px 60px 100px;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start}
-.faq-col{}
+/* FAQ */
+.closer-section{padding:80px 60px 100px;border-top:1px solid rgba(255,255,255,.05);flex-shrink:0;max-width:760px}
 .faq-heading{font-family:'Raleway',sans-serif;font-weight:100;font-size:clamp(28px,3.5vw,44px);letter-spacing:.12em;text-transform:uppercase;background:linear-gradient(135deg,#f0f4ff 0%,#93c5fd 50%,#67e8f9 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:32px;line-height:1.1}
 .faq-list{display:flex;flex-direction:column;gap:4px}
 .faq-item{border:1px solid rgba(255,255,255,.06);border-radius:10px;overflow:hidden;background:rgba(255,255,255,.015)}
@@ -261,18 +260,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
 .faq-item.open .faq-arrow{transform:rotate(180deg)}
 .faq-a{font-size:12px;color:#4e6080;line-height:1.7;padding:0 18px 16px;display:none}
 .faq-item.open .faq-a{display:block}
-.waitlist-col{}
-.waitlist-heading{font-family:'Raleway',sans-serif;font-weight:100;font-size:clamp(28px,3.5vw,44px);letter-spacing:.12em;text-transform:uppercase;background:linear-gradient(135deg,#f0f4ff 0%,#93c5fd 50%,#67e8f9 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px;line-height:1.1}
-.waitlist-sub{font-size:13px;color:#3a5068;line-height:1.7;margin-bottom:32px}
-.waitlist-form{display:flex;flex-direction:column;gap:12px}
-.wl-input{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-radius:8px;padding:13px 16px;font-size:13px;font-family:inherit;color:#e8edf8;outline:none;transition:border-color .2s}
-.wl-input::placeholder{color:#2e4060}
-.wl-input:focus{border-color:rgba(59,130,246,.5);background:rgba(59,130,246,.04)}
-.wl-btn{padding:14px 24px;border-radius:8px;border:none;background:linear-gradient(135deg,rgba(59,130,246,.9),rgba(34,211,238,.75));color:#fff;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:opacity .2s;box-shadow:0 4px 20px rgba(59,130,246,.3)}
-.wl-btn:hover{opacity:.85}
-.wl-note{font-size:10.5px;color:var(--muted);line-height:1.5}
-.wl-success{display:none;padding:18px;border-radius:8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#10b981;font-size:13px;font-weight:600;text-align:center}
-@media(max-width:900px){.closer-section{grid-template-columns:1fr;gap:60px;padding:60px 28px 80px}}
+@media(max-width:900px){.closer-section{padding:60px 28px 80px}}
 @media(max-width:900px){.hero{flex-direction:column;padding:14px 22px}.hero-right{display:none}.products{grid-template-columns:1fr}.module-panel{padding:40px 20px}}
 
 /* Country brief modal */
@@ -525,7 +513,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
     </div>
   </div>
 
-  <!-- FAQ + Waitlist -->
+  <!-- FAQ -->
   <div class="closer-section">
     <div class="faq-col">
       <div class="faq-heading">Questions</div>
@@ -552,20 +540,9 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
         </div>
         <div class="faq-item">
           <button class="faq-q" onclick="toggleFaq(this)">When is Intelligence launching fully? <span class="faq-arrow">▼</span></button>
-          <div class="faq-a">Intelligence is in active development. Core features — watchlist, live quotes, dark pool feed, and AI research — are already live. Full charting and the pro tier are shipping soon. Join the waitlist for early access.</div>
+          <div class="faq-a">Intelligence is in active development. Core features — watchlist, live quotes, dark pool feed, and AI research — are already live. Full charting and the pro tier are shipping soon.</div>
         </div>
       </div>
-    </div>
-    <div class="waitlist-col">
-      <div class="waitlist-heading">Get early access</div>
-      <div class="waitlist-sub">Join the waitlist for Intelligence Pro — dark pool flow, unlimited backtests, advanced charting, and AI research. First in, first served.</div>
-      <div class="waitlist-form" id="wl-form">
-        <input class="wl-input" type="text" placeholder="Full name" id="wl-name" autocomplete="name">
-        <input class="wl-input" type="email" placeholder="Email address" id="wl-email" autocomplete="email">
-        <button class="wl-btn" onclick="submitWaitlist()">Request Early Access →</button>
-        <div class="wl-note">No spam. No credit card. We'll reach out when your spot is ready. By submitting you agree to our <a href="/terms" style="color:inherit;opacity:.7;text-decoration:underline;">Terms</a> and <a href="/privacy" style="color:inherit;opacity:.7;text-decoration:underline;">Privacy Policy</a>.</div>
-      </div>
-      <div class="wl-success" id="wl-success">✓ You're on the list. We'll be in touch soon.</div>
     </div>
   </div>
 
@@ -1079,16 +1056,6 @@ function toggleFaq(btn){
   if(!wasOpen)item.classList.add('open');
 }
 window.toggleFaq=toggleFaq;
-
-// ── Waitlist ──────────────────────────────────
-function submitWaitlist(){
-  const name=document.getElementById('wl-name').value.trim();
-  const email=document.getElementById('wl-email').value.trim();
-  if(!name||!email||!email.includes('@'))return;
-  document.getElementById('wl-form').style.display='none';
-  document.getElementById('wl-success').style.display='block';
-}
-window.submitWaitlist=submitWaitlist;
 
 // Auth-aware nav: call server to check session, show profile pill if signed in
 fetch('/api/auth/status',{credentials:'include'}).then(function(r){return r.json();}).then(function(d){

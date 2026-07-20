@@ -28,14 +28,27 @@ function ConfirmContent() {
   useEffect(() => {
     const supabase = createClient();
 
+    // OAuth sign-in (both first-time and returning) always lands here.
+    // Existing accounts were backfilled with onboarding_completed = true,
+    // so this only ever routes brand-new signups into onboarding.
+    async function goToApp(userId: string) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("onboarding_completed")
+        .eq("id", userId)
+        .maybeSingle();
+      const needsOnboarding = profile && !(profile as { onboarding_completed: boolean | null }).onboarding_completed;
+      router.push(needsOnboarding ? "/onboarding" : "/");
+      router.refresh();
+    }
+
     async function handleAuth() {
       // PKCE code exchange (email confirmation link)
       const code = searchParams.get("code");
       if (code) {
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         if (!error && data.session) {
-          router.push("/");
-          router.refresh();
+          await goToApp(data.session.user.id);
           return;
         }
       }
@@ -59,8 +72,7 @@ function ConfirmContent() {
           return;
         }
 
-        router.push("/");
-        router.refresh();
+        await goToApp(session.user.id);
         return;
       }
 
@@ -74,8 +86,7 @@ function ConfirmContent() {
             });
             return;
           }
-          router.push("/");
-          router.refresh();
+          goToApp(session.user.id);
         }
       });
 

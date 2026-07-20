@@ -21,8 +21,21 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Only gate the default post-signup destination — password reset
+      // and other explicit `next` targets (e.g. /auth/update-password)
+      // should never be redirected into onboarding.
+      if (next === "/" && data.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("onboarding_completed")
+          .eq("id", data.user.id)
+          .maybeSingle();
+        if (profile && !(profile as { onboarding_completed: boolean | null }).onboarding_completed) {
+          return NextResponse.redirect(`${origin}/onboarding`);
+        }
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
     console.error("[/auth/callback] code exchange failed:", error.message);
