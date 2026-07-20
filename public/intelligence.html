@@ -1079,16 +1079,21 @@ const vtx = {
       <text x="${ch.W+6}" y="${(a.y+3).toFixed(1)}" font-family="var(--mono)" font-size="9" fill="var(--mut)">${this.fmt(a.price)}</text>`).join('');
 
     // Key stats
-    const fin = f.fin || {};
+    // `fin` is only set once /api/stock/financials has actually returned
+    // for this symbol — until then, fields fall back to rough estimates.
+    // Once it has loaded, a null field (e.g. dividendYield for a stock
+    // that pays none) is a real answer and must not be replaced by a
+    // fake number — that previously showed a fabricated dividend yield
+    // forever for every non-dividend-paying stock (TSLA, COIN, PLTR...).
+    const fin = f.fin || null;
     const metrics = [
       {label:'Prev Close',value:this.fmt(f.prevClose || f.open),color:'var(--txt)'},
-      {label:'P/E Ratio',value:fin.peTTM ? fin.peTTM.toFixed(1)+'x' : f.pe+'x',color:'var(--txt)'},
-      {label:'52W High',value:this.fmt(fin.week52High ?? hi*1.18),color:'var(--pos)'},
-      {label:'52W Low',value:this.fmt(fin.week52Low ?? lo*0.74),color:'var(--neg)'},
-      {label:'Beta',value:fin.beta ? fin.beta.toFixed(2) : (0.7+this.hashN(f.sym,21)*1.1).toFixed(2),color:'var(--txt)'},
-      {label:'Div Yield',value:(fin.dividendYield ?? this.hashN(f.sym,33)*1.6).toFixed(2)+'%',color:'var(--txt)'},
-      {label:'EPS (ttm)',value:'$'+(fin.epsTTM ?? (f.price/f.pe)).toFixed(2),color:'var(--txt)'},
-      {label:'Short Int',value:(1+this.hashN(f.sym,44)*6).toFixed(1)+'%',color:'var(--warn)'}
+      {label:'P/E Ratio',value:fin?.peTTM ? fin.peTTM.toFixed(1)+'x' : f.pe+'x',color:'var(--txt)'},
+      {label:'52W High',value:this.fmt(fin?.week52High ?? hi*1.18),color:'var(--pos)'},
+      {label:'52W Low',value:this.fmt(fin?.week52Low ?? lo*0.74),color:'var(--neg)'},
+      {label:'Beta',value:fin?.beta ? fin.beta.toFixed(2) : (0.7+this.hashN(f.sym,21)*1.1).toFixed(2),color:'var(--txt)'},
+      {label:'Div Yield',value:(fin ? (fin.dividendYield ?? 0) : this.hashN(f.sym,33)*1.6).toFixed(2)+'%',color:'var(--txt)'},
+      {label:'EPS (ttm)',value:'$'+(fin?.epsTTM ?? (f.price/f.pe)).toFixed(2),color:'var(--txt)'},
     ];
     document.getElementById('keyStats').innerHTML = metrics.map(m => `
       <div style="background:rgba(10,13,22,.55);padding:10px 13px;display:flex;justify-content:space-between;align-items:center;">
