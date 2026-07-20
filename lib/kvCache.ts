@@ -47,8 +47,12 @@ export async function kvHashSetFields<T>(key: string, fields: Record<string, T>,
       await kv.hset(key, fields);
       await kv.expire(key, ttlSeconds);
       return;
-    } catch {
-      // KV unavailable — fall through to local
+    } catch (err) {
+      // Log rather than swallow silently — a real KV error here (e.g.
+      // WRONGTYPE from reusing a key that used to hold a plain string)
+      // previously fell through to the ephemeral local map without a
+      // trace, which made a real bug look like a caching quirk.
+      console.error(`[kvCache] hset failed for key "${key}":`, err);
     }
   }
   const h = localHash.get(key) ?? new Map<string, unknown>();
@@ -61,8 +65,8 @@ export async function kvHashGetAll<T>(key: string): Promise<Record<string, T>> {
     try {
       const all = await kv.hgetall<Record<string, T>>(key);
       return all ?? {};
-    } catch {
-      // KV unavailable — fall through to local
+    } catch (err) {
+      console.error(`[kvCache] hgetall failed for key "${key}":`, err);
     }
   }
   const h = localHash.get(key);

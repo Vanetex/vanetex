@@ -12,7 +12,11 @@ const CACHE_TTL_S = 120; // 2 minutes — short enough that the rotation below c
 // Last-known-good quotes never expire on their own (only overwritten by
 // a fresher successful fetch), so a symbol not in this cycle's batch
 // (or one that fails) shows slightly-stale data instead of vanishing.
-const LASTGOOD_QUOTES_KEY = "heatmap:quotes:lastgood:v1";
+// v2 because v1 was a plain string (JSON blob via kv.set) — hset
+// against a key that already holds a string throws Redis's WRONGTYPE
+// error, which the try/catch swallowed and silently fell through to
+// the ephemeral per-instance memory map. New key name = clean hash.
+const LASTGOOD_QUOTES_KEY = "heatmap:quotes:lastgood:v2";
 const LASTGOOD_TTL_S = 6 * 60 * 60;
 // Only refresh a slice of the roster per request — fetching all ~80
 // symbols in one invocation flirted with both Finnhub's burst rate
