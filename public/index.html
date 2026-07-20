@@ -1053,16 +1053,23 @@ async function loadAssetClasses(){
       }
     }).catch(()=>{});
 }
+const IDX_LIST=[{id:'spx',sym:'SPX',mockVal:INDICES_MOCK.SPX,mockChg:INDICES_MOCK.SPXchg},{id:'ftse',sym:'FTSE',mockVal:INDICES_MOCK.FTSE,mockChg:INDICES_MOCK.FTSEchg},{id:'nikkei',sym:'NIKKEI',mockVal:INDICES_MOCK.Nikkei,mockChg:INDICES_MOCK.Nikkeichg},{id:'hsi',sym:'HSI',mockVal:INDICES_MOCK.HSI,mockChg:INDICES_MOCK.HSIchg}];
+function setIdx(id,val){const el=document.getElementById('idx-'+id);if(el)el.textContent=val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function setIdxChg(id,chg){const el=document.getElementById('idx-'+id+'-chg');if(el){el.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';el.className='index-change '+(chg>=0?'up':'dn')}}
 function loadIndices(){
-  const setIdx=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val.toFixed(2)};
-  const setIdxChg=(id,chg)=>{const el=document.getElementById(id);if(el){el.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';el.className='index-change '+(chg>=0?'up':'dn')}};
-  setIdx('idx-spx',INDICES_MOCK.SPX);setIdxChg('idx-spx-chg',INDICES_MOCK.SPXchg);
-  setIdx('idx-ftse',INDICES_MOCK.FTSE);setIdxChg('idx-ftse-chg',INDICES_MOCK.FTSEchg);
-  setIdx('idx-nikkei',INDICES_MOCK.Nikkei);setIdxChg('idx-nikkei-chg',INDICES_MOCK.Nikkeichg);
-  setIdx('idx-hsi',INDICES_MOCK.HSI);setIdxChg('idx-hsi-chg',INDICES_MOCK.HSIchg);
+  // Load immediately with fallback, then replace with real data
+  IDX_LIST.forEach(x=>{setIdx(x.id,x.mockVal);setIdxChg(x.id,x.mockChg);});
+  Promise.all(IDX_LIST.map(x=>fetch(`/api/market/index-quote?symbol=${x.sym}`).then(r=>r.ok?r.json():null).catch(()=>null)))
+    .then(results=>{
+      results.forEach((d,i)=>{
+        if(!d||!d.price)return;
+        setIdx(IDX_LIST[i].id,d.price);
+        setIdxChg(IDX_LIST[i].id,d.changePct||0);
+      });
+    });
 }
 loadAssetClasses();setInterval(loadAssetClasses,60000);
-loadIndices();
+loadIndices();setInterval(loadIndices,60000);
 
 // ── FAQ ───────────────────────────────────────
 function toggleFaq(btn){

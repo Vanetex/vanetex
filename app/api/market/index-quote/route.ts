@@ -14,6 +14,9 @@ const SYMBOL_MAP: Record<string, string> = {
   NDX: "^IXIC",
   VIX: "^VIX",
   GOLD: "GC=F",
+  FTSE: "^FTSE",
+  NIKKEI: "^N225",
+  HSI: "^HSI",
 };
 
 export async function GET(request: NextRequest) {
