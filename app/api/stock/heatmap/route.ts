@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
-import { kvGet, kvSet } from "@/lib/kvCache";
+import { kvGet, kvSet, kvHashGetAll, kvHashSetFields } from "@/lib/kvCache";
 import { SECTOR_SEEDS, MCAP_CACHE_KEY, type HeatmapSeed } from "@/lib/heatmapSeeds";
 
 export const runtime = "nodejs";
@@ -61,10 +61,19 @@ async function getQuotes(apiKey: string, symbols: string[]) {
       return { price: q.c, changePct: q.dp } as Quote;
     });
 
-    const lastGood = (await kvGet<Record<string, Quote>>(LASTGOOD_QUOTES_KEY)) ?? {};
-    const merged = { ...lastGood, ...fresh };
-    await kvSet(LASTGOOD_QUOTES_KEY, merged, LASTGOOD_TTL_S);
-    return merged;
+    // Per-symbol hash fields, not a JSON-blob get-merge-set: under real
+    // traffic, multiple serverless instances can hit a cache miss and
+    // refresh different batches concurrently. A blob merge means
+    // whichever instance's write lands last wins and silently drops
+    // every symbol the other instance just fetched — which is exactly
+    // what caused Financials to stay empty across cycles despite the
+    // rotation being correct. Hash fields only touch the symbols this
+    // call fetched, so concurrent writers can never clobber each other.
+    if (Object.keys(fresh).length > 0) {
+      await kvHashSetFields(LASTGOOD_QUOTES_KEY, fresh, LASTGOOD_TTL_S);
+    }
+    const lastGood = await kvHashGetAll<Quote>(LASTGOOD_QUOTES_KEY);
+    return { ...lastGood, ...fresh };
   })().finally(() => { quoteInFlight = null; });
 
   return quoteInFlight;

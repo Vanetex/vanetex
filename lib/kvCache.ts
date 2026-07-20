@@ -29,3 +29,42 @@ export async function kvSet(key: string, value: unknown, ttlSeconds: number): Pr
   }
   local.set(key, { value, expires: Date.now() + ttlSeconds * 1000 });
 }
+
+// Hash-field variants: use these instead of kvGet/kvSet whenever
+// multiple concurrent callers may update *different subsets* of the
+// same logical map (e.g. different serverless instances each
+// refreshing a different batch of symbols). A plain get-merge-set on a
+// JSON blob loses data under concurrency — whichever write lands last
+// wins and silently drops the other writer's fields. HSET only ever
+// touches the fields it's given, so concurrent partial updates never
+// clobber each other.
+const localHash = new Map<string, Map<string, unknown>>();
+
+export async function kvHashSetFields<T>(key: string, fields: Record<string, T>, ttlSeconds: number): Promise<void> {
+  if (Object.keys(fields).length === 0) return;
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      await kv.hset(key, fields);
+      await kv.expire(key, ttlSeconds);
+      return;
+    } catch {
+      // KV unavailable — fall through to local
+    }
+  }
+  const h = localHash.get(key) ?? new Map<string, unknown>();
+  for (const [f, v] of Object.entries(fields)) h.set(f, v);
+  localHash.set(key, h);
+}
+
+export async function kvHashGetAll<T>(key: string): Promise<Record<string, T>> {
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      const all = await kv.hgetall<Record<string, T>>(key);
+      return all ?? {};
+    } catch {
+      // KV unavailable — fall through to local
+    }
+  }
+  const h = localHash.get(key);
+  return h ? (Object.fromEntries(h) as Record<string, T>) : {};
+}
