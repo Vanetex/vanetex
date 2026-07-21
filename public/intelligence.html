@@ -598,6 +598,7 @@ const vtx = {
     document.getElementById('searchInput').value=''; this.closeSearch();
     this.state.focus = sym;
     this.render();
+    this.loadChartData(sym, this.state.tf);
     try {
       const [q, fin, analyst] = await Promise.all([
         fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
