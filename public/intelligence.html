@@ -1235,25 +1235,29 @@ const vtx = {
     }
     else if (s.tab === 'dark') {
       const f = T.find(t=>t.sym===s.focus) || T[0];
-      const dpi = (38+this.hashN(f.sym,7)*16).toFixed(1)+'%';
-      const litPct = (62-this.hashN(f.sym,7)*16).toFixed(1)+'%';
+      const focusRow = (this.DARK||[]).find(d=>d.sym===f.sym);
+      const hasReal = focusRow && focusRow.dpiPct != null && focusRow.litPct != null;
+      const dpi = hasReal ? focusRow.dpiPct.toFixed(1)+'%' : '—';
+      const litPct = hasReal ? focusRow.litPct.toFixed(1)+'%' : '—';
+      const summaryTag = hasReal
+        ? '<span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--pos);">EST. FROM FINRA + AVG VOL</span>'
+        : '<span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--mut);">NO DATA FOR '+f.sym+'</span>';
       el.innerHTML = `<div style="padding:10px;">
         <div style="display:flex;gap:9px;margin-bottom:10px;">
           <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:rgba(52,211,255,.05);">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
               <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Dark Pool Index</span>
-              <span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--warn);">SIMULATED</span>
+              ${summaryTag}
             </div>
             <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--acc2);">${dpi}</div>
-            <div style="font-size:9.5px;color:var(--mut);margin-top:2px;">of consolidated volume off-exchange</div>
+            <div style="font-size:9.5px;color:var(--mut);margin-top:2px;">of consolidated volume off-exchange (weekly, ~6-8wk lag)</div>
           </div>
           <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
               <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Lit / Dark Split</span>
-              <span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--warn);">SIMULATED</span>
             </div>
             <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.05);">
-              <div style="width:${litPct};background:var(--acc);"></div>
+              <div style="width:${hasReal?litPct:'0%'};background:var(--acc);"></div>
               <div style="flex:1;background:var(--acc2);opacity:.6;"></div>
             </div>
             <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:6px;"><span>LIT ${litPct}</span><span>DARK ${dpi}</span></div>

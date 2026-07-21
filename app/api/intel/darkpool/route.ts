@@ -4,10 +4,12 @@ import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 export const runtime = "nodejs";
 
 const FINRA_URL = "https://api.finra.org/data/group/otcMarket/name/weeklySummary";
+const FINNHUB_BASE = "https://finnhub.io/api/v1";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const LOOKBACK_DAYS = 60;
 const DEFAULT_SYMBOLS = ["NVDA", "AAPL", "TSLA", "MSFT", "AVGO", "META"];
 const MAX_SYMBOLS = 14;
+const TRADING_DAYS_PER_WEEK = 5;
 
 type DarkRow = {
   time: string;
@@ -16,6 +18,12 @@ type DarkRow = {
   notional: string;
   venue: string;
   pct: string;
+  // Real dark-pool index / lit-dark split, derived from FINRA's total
+  // off-exchange weekly volume divided by Finnhub's trailing 3-month
+  // average daily volume (×5 trading days) as a consolidated-volume
+  // proxy. null when avg volume isn't available for the symbol.
+  dpiPct: number | null;
+  litPct: number | null;
 };
 
 const cache = new Map<string, { body: DarkRow[]; ts: number }>();
@@ -63,7 +71,21 @@ function fmtMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-async function fetchSymbol(symbol: string): Promise<DarkRow | null> {
+async function fetchAvgWeeklyVolume(symbol: string, apiKey: string): Promise<number | null> {
+  try {
+    const res = await fetch(`${FINNHUB_BASE}/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${apiKey}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { metric?: Record<string, number> };
+    const avgDaily = data.metric?.["3MonthAverageTradingVolume"];
+    if (!avgDaily) return null;
+    // Finnhub reports this in millions of shares.
+    return avgDaily * 1_000_000 * TRADING_DAYS_PER_WEEK;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchSymbol(symbol: string, apiKey: string | undefined): Promise<DarkRow | null> {
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const sinceStr = since.toISOString().slice(0, 10);
 
@@ -101,6 +123,16 @@ async function fetchSymbol(symbol: string): Promise<DarkRow | null> {
   const notional = parseFloat(top.totalNotionalSum) || 0;
   const pct = (size / total) * 100;
 
+  let dpiPct: number | null = null;
+  let litPct: number | null = null;
+  if (apiKey) {
+    const weeklyConsolidated = await fetchAvgWeeklyVolume(symbol, apiKey);
+    if (weeklyConsolidated) {
+      dpiPct = Math.min(100, (total / weeklyConsolidated) * 100);
+      litPct = 100 - dpiPct;
+    }
+  }
+
   return {
     time: latestWeek,
     sym: symbol,
@@ -108,6 +140,8 @@ async function fetchSymbol(symbol: string): Promise<DarkRow | null> {
     notional: fmtMoney(notional),
     venue: top.marketParticipantName || top.MPID || "ATS",
     pct: `${pct.toFixed(1)}%`,
+    dpiPct,
+    litPct,
   };
 }
 
@@ -135,8 +169,10 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const apiKey = process.env.FINNHUB_API_KEY;
+
   try {
-    const results = await Promise.all(symbols.map((s) => fetchSymbol(s).catch(() => null)));
+    const results = await Promise.all(symbols.map((s) => fetchSymbol(s, apiKey).catch(() => null)));
     const rows = results.filter((r): r is DarkRow => r !== null);
 
     cache.set(key, { body: rows, ts: Date.now() });
