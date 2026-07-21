@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 const FOMC_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm";
-const CACHE_KEY = "intel:econ-calendar:v1";
+const CACHE_KEY = "intel:econ-calendar:v2"; // v2: date format changed to "D Mon"
 const CACHE_TTL_S = 24 * 60 * 60; // these dates are scheduled far in advance
 const WINDOW_DAYS = 90;
 
