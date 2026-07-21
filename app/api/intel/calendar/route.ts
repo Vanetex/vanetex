@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 import { kvGet, kvSet } from "@/lib/kvCache";
+import { SECTOR_SEEDS } from "@/lib/heatmapSeeds";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,12 @@ const FINNHUB_BASE = "https://finnhub.io/api/v1";
 const CACHE_KEY = "intel:calendar:v2";
 const CACHE_TTL_S = 60 * 60; // earnings dates don't change intraday
 const MAX_RESULTS = 8;
+
+// Same curated ~80-company list the sector heatmap uses — reused here
+// as a real-world "prominence" proxy so the fallback (when nothing on
+// the user's own watchlist reports soon) prefers recognizable large
+// caps over whichever obscure ticker happens to report earliest.
+const PROMINENT_SYMBOLS = new Set(Object.values(SECTOR_SEEDS).flat().map((s) => s.sym));
 
 type FinnhubEarning = {
   symbol: string;
@@ -91,11 +98,14 @@ export async function GET(request: NextRequest) {
     const pool = await getEarningsPool(apiKey);
 
     let rows = watchlist ? pool.filter((r) => watchlist.has(r.symbol.toUpperCase())) : [];
-    // Not enough (or no) watchlist matches reporting soon — fall back
-    // to the broader by-date pool so the tab isn't left nearly empty.
+    // Not enough (or no) watchlist matches reporting soon — fall back,
+    // preferring recognizable large caps (PROMINENT_SYMBOLS) over
+    // whichever obscure ticker happens to report earliest by date.
     if (rows.length < 4) {
       const seen = new Set(rows.map((r) => r.symbol));
-      for (const r of pool) {
+      const prominent = pool.filter((r) => PROMINENT_SYMBOLS.has(r.symbol) && !seen.has(r.symbol));
+      const rest = pool.filter((r) => !PROMINENT_SYMBOLS.has(r.symbol) && !seen.has(r.symbol));
+      for (const r of [...prominent, ...rest]) {
         if (rows.length >= MAX_RESULTS) break;
         if (!seen.has(r.symbol)) { rows.push(r); seen.add(r.symbol); }
       }

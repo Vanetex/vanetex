@@ -1209,7 +1209,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Calendar'],['movers','Sectors'],['ai','Assistant']];
+    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['movers','Sectors'],['ai','Assistant']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -1427,7 +1427,7 @@ const vtx = {
       {label:'Sector standing', msg:'How does this compare to its sector?'},
       {label:'Dark-pool read', msg:'What is the dark-pool activity?'},
       {label:'Insider filings', msg:'Any recent insider filings?'},
-      {label:'Calendar', msg:'What is on the calendar?'}
+      {label:'Earnings', msg:'When are the next earnings?'}
     ];
     qp.innerHTML = prompts.map(p => `<button class="qprompt" onclick="vtx.sendChat(${JSON.stringify(p.msg)})" style="font-family:var(--ui);font-size:10.5px;color:var(--acc2);background:rgba(52,211,255,.07);border:1px solid rgba(52,211,255,.22);border-radius:99px;padding:5px 11px;cursor:pointer;">${p.label}</button>`).join('');
   },
@@ -1461,7 +1461,7 @@ const vtx = {
       const own = (this.CAL||[]).filter(c=>c.sym===f.sym);
       const upcoming = own.length ? own : (this.CAL||[]).slice(0,4);
       const lines = upcoming.map(c=>`• ${c.day} ${c.date} — ${c.event} (${c.sym}, ${c.time} EST)`).join('\n');
-      return `${f.sym} — Calendar\n\n${lines || 'Nothing scheduled in the current calendar window.'}`;
+      return `${f.sym} — Earnings\n\n${lines || 'Nothing scheduled in the current earnings window.'}`;
     }
 
     if (/financ|fundamental|pe |p\/e|valuation|eps|dividend|beta|market cap/.test(q)) {
@@ -1501,7 +1501,7 @@ const vtx = {
     }
 
     if (/help|what can you|how.+work/.test(q)) {
-      return `I'm a rule-based lookup, not a generative model — I match your question to a category and pull straight from the live data already loaded on this page for ${f.sym} (or whichever symbol you have focused):\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "analyst ratings" — consensus + buy/hold/sell breakdown\n• "sector" — how ${f.sym} compares to its sector today\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" / "calendar" — upcoming scheduled events\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
+      return `I'm a rule-based lookup, not a generative model — I match your question to a category and pull straight from the live data already loaded on this page for ${f.sym} (or whichever symbol you have focused):\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "analyst ratings" — consensus + buy/hold/sell breakdown\n• "sector" — how ${f.sym} compares to its sector today\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" — upcoming earnings dates\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
     }
 
     return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "analyst ratings", "sector" standing, "dark pool" activity, "filings", or "earnings" — I'll pull from the live data on this page. Type "help" for the full list.`;
