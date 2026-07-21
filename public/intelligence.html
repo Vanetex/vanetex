@@ -283,14 +283,7 @@ const vtx = {
     moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null
   },
 
-  NEWS: [
-    {time:'09:42',src:'Bloomberg',sym:'NVDA',headline:'NVIDIA unveils next-gen Rubin accelerators; cloud demand called "insatiable"',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'},
-    {time:'09:31',src:'Reuters',sym:'AAPL',headline:'Apple readies AI-server push as supplier orders jump 18% QoQ',dot:'var(--acc2)',dotBorder:'rgba(52,211,255,.4)',tag:'FLOW'},
-    {time:'09:18',src:'WSJ',sym:'TSLA',headline:'Tesla robotaxi permit stalls in California — regulator cites data gaps',dot:'var(--neg)',dotBorder:'rgba(255,77,94,.4)',tag:'BEARISH'},
-    {time:'08:55',src:'CNBC',sym:'META',headline:'Meta lifts capex guide to $72B as AI buildout accelerates',dot:'var(--warn)',dotBorder:'rgba(245,165,36,.4)',tag:'CAPEX'},
-    {time:'08:40',src:'FT',sym:'AVGO',headline:'Broadcom lands second hyperscaler custom-silicon contract',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'},
-    {time:'08:12',src:'Bloomberg',sym:'COIN',headline:'Coinbase derivatives volume hits record as ETF inflows surge',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'}
-  ],
+  NEWS: [], // populated by loadNews() — real Finnhub company-news data, no seed
   CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
   ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
   FIL: [
@@ -483,11 +476,13 @@ const vtx = {
     this.loadHeatmap();
     this.loadCalendar();
     this.loadEconCalendar();
+    this.loadNews();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
     setInterval(() => this.loadHeatmap(), 5 * 60 * 1000);
     setInterval(() => this.loadCalendar(), 30 * 60 * 1000);
     setInterval(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
+    setInterval(() => this.loadNews(), 10 * 60 * 1000);
     this.renderClock();
     this.renderMarketStatus();
     this.loadChartData(this.state.focus, this.state.tf);
@@ -617,6 +612,7 @@ const vtx = {
       this.render();
       this.loadDarkPool();
       this.loadCalendar();
+      this.loadNews();
     } catch(e) {}
   },
   removeTicker(sym) {
@@ -839,6 +835,18 @@ const vtx = {
       if (!data.events) return;
       this.ECON = data.events;
       if (this.state.tab === 'econ') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  async loadNews() {
+    try {
+      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      const res = await fetch(`/api/intel/news?symbols=${encodeURIComponent(symbols)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.items) return;
+      this.NEWS = data.items;
+      if (this.state.tab === 'news') this.renderRight();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -1235,18 +1243,28 @@ const vtx = {
     this.renderTabs();
 
     if (s.tab === 'news') {
-      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:7px;">` +
-        this.NEWS.map(n => `
-          <div class="newscard" style="padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.02);cursor:pointer;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <span style="width:6px;height:6px;border-radius:50%;background:${n.dot};box-shadow:0 0 7px ${n.dot};"></span>
-              <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);">${n.sym}</span>
-              <span style="font-size:10px;color:var(--mut);">${n.src}</span>
-              <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;color:${n.dot};border:1px solid ${n.dotBorder};border-radius:5px;padding:1px 6px;margin-left:auto;">${n.tag}</span>
-            </div>
-            <div style="font-size:12.5px;line-height:1.45;color:var(--txt);">${n.headline}</div>
-            <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:6px;">${n.time} EST</div>
-          </div>`).join('') + `</div>`;
+      if (!this.NEWS.length) {
+        el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading news…</div>`;
+      } else {
+        const relTime = iso => {
+          const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+          if (mins < 1) return 'now';
+          if (mins < 60) return mins + 'm';
+          const hrs = Math.floor(mins / 60);
+          if (hrs < 24) return hrs + 'h';
+          return Math.floor(hrs / 24) + 'd';
+        };
+        el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:7px;">` +
+          this.NEWS.map(n => `
+            <div class="newscard" onclick="window.open(${JSON.stringify(n.url).replace(/"/g,'&quot;')}, '_blank', 'noopener')" style="padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.02);cursor:pointer;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);">${n.sym}</span>
+                <span style="font-size:10px;color:var(--mut);">${n.src}</span>
+                <span style="font-size:9.5px;color:var(--mut);margin-left:auto;">${relTime(n.time)}</span>
+              </div>
+              <div style="font-size:12.5px;line-height:1.45;color:var(--txt);">${n.headline}</div>
+            </div>`).join('') + `</div>`;
+      }
     }
     else if (s.tab === 'dark') {
       const f = T.find(t=>t.sym===s.focus) || T[0];
