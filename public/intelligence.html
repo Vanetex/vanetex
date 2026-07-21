@@ -229,8 +229,8 @@ input{font-family:var(--ui)}
 
           <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
             <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
-              <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Depth of Market</span>
-              <span style="font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.08em;color:var(--warn);margin-left:auto;" title="Finnhub's free tier doesn't provide Level 2 order book data — this ladder is simulated for illustration.">SIMULATED</span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Volume by Price</span>
+              <span style="font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.08em;color:var(--pos);margin-left:auto;" title="Finnhub's free tier doesn't provide Level 2 order book data. This is real volume-at-price for today's session (Yahoo intraday bars) plus real FINRA daily short-sale volume — not a live bid/ask book.">REAL</span>
             </div>
             <div id="depthBody" style="padding:8px 12px;"></div>
           </div>
@@ -486,8 +486,10 @@ const vtx = {
     this.renderClock();
     this.renderMarketStatus();
     this.loadChartData(this.state.focus, this.state.tf);
+    this.loadDepth(this.state.focus);
     this.loadTickerBar();
     setInterval(() => this.loadTickerBar(), 5 * 60 * 1000);
+    setInterval(() => this.loadDepth(this.state.focus), 5 * 60 * 1000);
   },
 
   applyVariant() {
@@ -524,7 +526,7 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); },
+  selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; this.renderRight(); },
   openSector(name) { this.state.moversSector = name; this.renderRight(); },
   TICKER_BAR_SYMS: ['SPY','QQQ','DIA','NVDA','AAPL','MSFT','TSLA','META','AMZN','GOOGL','AMD','NFLX','COIN','PLTR','AVGO','VGT','SOXX','GLD','TLT','BTC-USD'],
@@ -594,6 +596,7 @@ const vtx = {
     this.state.focus = sym;
     this.render();
     this.loadChartData(sym, this.state.tf);
+    this.loadDepth(sym);
     try {
       const [q, fin, analyst] = await Promise.all([
         fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
@@ -847,6 +850,17 @@ const vtx = {
       if (!data.items) return;
       this.NEWS = data.items;
       if (this.state.tab === 'news') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  async loadDepth(sym) {
+    try {
+      const res = await fetch(`/api/intel/depth?symbol=${encodeURIComponent(sym)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!this._depthData) this._depthData = {};
+      this._depthData[sym] = data;
+      if (this.state.focus === sym) this.render();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -1132,33 +1146,41 @@ const vtx = {
         <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${m.color};">${m.value}</span>
       </div>`).join('');
 
-    // Depth ladder
-    const step = Math.max(0.01, f.price*0.0007);
-    const asks=[], bids=[]; let maxz=1;
-    for (let i=1;i<=6;i++) {
-      const az=Math.round((this.hashN(f.sym,i)*0.85+0.15)*4200);
-      const bz=Math.round((this.hashN(f.sym,i+40)*0.85+0.15)*4200);
-      maxz=Math.max(maxz,az,bz);
-      asks.push({price:this.fmt(f.price+step*i), raw:az});
-      bids.push({price:this.fmt(f.price-step*i), raw:bz});
+    // Volume-by-price + real FINRA short volume (replaces the old fake bid/ask ladder)
+    const depth = (this._depthData && this._depthData[f.sym]) || null;
+    const profile = (depth && depth.profile) || [];
+    const sv = depth && depth.shortVol;
+
+    if (!profile.length) {
+      document.getElementById('depthBody').innerHTML = `<div style="padding:20px 6px;text-align:center;color:var(--mut);font-size:11px;">Loading volume profile…</div>`;
+    } else {
+      const maxVol = Math.max(...profile.map(p => p.volume), 1);
+      const rows = profile.slice().sort((a,b) => b.price - a.price);
+      let markerIdx = rows.findIndex(r => r.price <= f.price);
+      if (markerIdx === -1) markerIdx = rows.length;
+
+      const rowHtml = r => `
+        <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 6px;font-family:var(--mono);font-size:10.5px;">
+          <div style="position:absolute;right:0;top:1px;bottom:1px;width:${(r.volume/maxVol*100).toFixed(0)}%;background:rgba(52,211,255,.14);border-radius:3px;"></div>
+          <span style="position:relative;color:var(--txt);font-weight:600;">${this.fmt(r.price)}</span>
+          <span style="position:relative;color:var(--mut);">${Math.round(r.volume).toLocaleString()}</span>
+        </div>`;
+      const markerHtml = `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 6px;margin:4px 0;border-top:1px dashed rgba(255,255,255,.12);border-bottom:1px dashed rgba(255,255,255,.12);">
+          <span style="font-family:var(--mono);font-size:11px;font-weight:800;color:var(--acc2);">${this.fmt(f.price)}</span>
+          <span style="font-size:8.5px;letter-spacing:.1em;color:var(--mut);">LIVE</span>
+        </div>`;
+      const shortVolHtml = sv ? `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 6px 8px;font-size:9.5px;color:var(--mut);" title="FINRA Reg SHO daily file — short volume as a % of off-exchange (TRF-reported) volume, not full consolidated tape volume.">
+          <span>SHORT VOL (FINRA, ${sv.date.slice(5)})</span>
+          <span style="font-family:var(--mono);font-weight:700;color:${sv.shortPct>=50?'var(--neg)':'var(--pos)'};">${sv.shortPct.toFixed(1)}%</span>
+        </div>` : '';
+
+      document.getElementById('depthBody').innerHTML = shortVolHtml +
+        rows.slice(0, markerIdx).map(rowHtml).join('') +
+        markerHtml +
+        rows.slice(markerIdx).map(rowHtml).join('');
     }
-    const asksHtml = asks.slice().reverse().map(a => `
-      <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 6px;font-family:var(--mono);font-size:10.5px;">
-        <div style="position:absolute;right:0;top:1px;bottom:1px;width:${(a.raw/maxz*100).toFixed(0)}%;background:rgba(255,77,94,.16);border-radius:3px;"></div>
-        <span style="position:relative;color:var(--neg);font-weight:600;">${a.price}</span>
-        <span style="position:relative;color:var(--mut);">${a.raw.toLocaleString()}</span>
-      </div>`).join('');
-    const bidsHtml = bids.map(b => `
-      <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 6px;font-family:var(--mono);font-size:10.5px;">
-        <div style="position:absolute;right:0;top:1px;bottom:1px;width:${(b.raw/maxz*100).toFixed(0)}%;background:rgba(31,209,151,.16);border-radius:3px;"></div>
-        <span style="position:relative;color:var(--pos);font-weight:600;">${b.price}</span>
-        <span style="position:relative;color:var(--mut);">${b.raw.toLocaleString()}</span>
-      </div>`).join('');
-    document.getElementById('depthBody').innerHTML = asksHtml +
-      `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 6px;margin:4px 0;border-top:1px dashed rgba(255,255,255,.12);border-bottom:1px dashed rgba(255,255,255,.12);">
-        <span style="font-family:var(--mono);font-size:11px;font-weight:800;color:var(--acc2);">${this.fmt(f.price)}</span>
-        <span style="font-size:8.5px;letter-spacing:.1em;color:var(--mut);">SPREAD $${step.toFixed(2)}</span>
-      </div>` + bidsHtml;
 
     // Analyst ratings
     const ar = f.analyst;
