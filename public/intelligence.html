@@ -292,6 +292,7 @@ const vtx = {
     {time:'08:12',src:'Bloomberg',sym:'COIN',headline:'Coinbase derivatives volume hits record as ETF inflows surge',dot:'var(--pos)',dotBorder:'rgba(31,209,151,.4)',tag:'BULLISH'}
   ],
   CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
+  ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
   FIL: [
     {time:'2m',sym:'NVDA',who:'J. Huang',role:'CEO',act:'SELL',shares:'120,000',value:'$141.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
     {time:'18m',sym:'PLTR',who:'S. Cohen',role:'President',act:'SELL',shares:'2.4M',value:'$149.8M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
@@ -481,10 +482,12 @@ const vtx = {
     this.loadDarkPool();
     this.loadHeatmap();
     this.loadCalendar();
+    this.loadEconCalendar();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
     setInterval(() => this.loadHeatmap(), 5 * 60 * 1000);
     setInterval(() => this.loadCalendar(), 30 * 60 * 1000);
+    setInterval(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
     this.renderClock();
     this.renderMarketStatus();
     this.loadChartData(this.state.focus, this.state.tf);
@@ -824,6 +827,17 @@ const vtx = {
       if (!data.events) return;
       this.CAL = data.events;
       if (this.state.tab === 'calendar') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  async loadEconCalendar() {
+    try {
+      const res = await fetch(`/api/intel/econ-calendar`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.events) return;
+      this.ECON = data.events;
+      if (this.state.tab === 'econ') this.renderRight();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -1209,7 +1223,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['movers','Sectors'],['ai','Assistant']];
+    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['ai','Assistant']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -1313,6 +1327,30 @@ const vtx = {
             </div>
             <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
           </div>`).join('') + `</div>`;
+    }
+    else if (s.tab === 'econ') {
+      if (!this.ECON.length) {
+        el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading economic calendar…</div>`;
+        return;
+      }
+      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+        <div style="font-size:9px;color:var(--mut);line-height:1.5;padding:0 3px 4px;">CPI, Jobs Report, and PCE release dates from FRED · FOMC dates from the Federal Reserve.</div>` +
+        this.ECON.map(c => {
+          const [day, mon] = c.date.split(' ');
+          return `
+          <div style="display:grid;grid-template-columns:46px 1fr auto;gap:11px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+            <div style="text-align:center;border-right:1px solid var(--line);padding-right:8px;">
+              <div style="font-size:8.5px;letter-spacing:.1em;color:var(--mut);">${c.day}</div>
+              <div style="font-family:var(--mono);font-size:15px;font-weight:800;">${day}</div>
+              <div style="font-size:8px;color:var(--mut);text-transform:uppercase;">${mon}</div>
+            </div>
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${c.time} EST</div>
+            </div>
+            <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
+          </div>`;
+        }).join('') + `</div>`;
     }
     else if (s.tab === 'movers') {
       const cPos='var(--pos)', cNeg='var(--neg)';
@@ -1427,7 +1465,8 @@ const vtx = {
       {label:'Sector standing', msg:'How does this compare to its sector?'},
       {label:'Dark-pool read', msg:'What is the dark-pool activity?'},
       {label:'Insider filings', msg:'Any recent insider filings?'},
-      {label:'Earnings', msg:'When are the next earnings?'}
+      {label:'Earnings', msg:'When are the next earnings?'},
+      {label:'Macro calendar', msg:'What is on the economic calendar?'}
     ];
     qp.innerHTML = prompts.map(p => `<button class="qprompt" onclick="vtx.sendChat(${JSON.stringify(p.msg)})" style="font-family:var(--ui);font-size:10.5px;color:var(--acc2);background:rgba(52,211,255,.07);border:1px solid rgba(52,211,255,.22);border-radius:99px;padding:5px 11px;cursor:pointer;">${p.label}</button>`).join('');
   },
@@ -1455,6 +1494,12 @@ const vtx = {
       if (!own.length) return `No recent Form 4 insider filings available right now — the SEC EDGAR feed may not have a filing for ${f.sym} in the latest batch.`;
       const lines = own.slice(0,4).map(x=>`• ${x.who} (${x.role}) — ${x.act} ${x.shares} sh, ${x.value} (${x.time})`).join('\n');
       return `${filings.length ? f.sym+' — ' : 'Latest market-wide '}Insider Filings\n\n${lines}`;
+    }
+
+    if (/fomc|\bcpi\b|\bpce\b|\bnfp\b|payroll|jobs report|fed rate|rate decision|\bmacro\b|economic (event|calendar|data)/.test(q)) {
+      const upcoming = (this.ECON||[]).slice(0,5);
+      const lines = upcoming.map(c=>`• ${c.day} ${c.date} — ${c.event} (${c.time} EST)`).join('\n');
+      return `Economic Calendar\n\n${lines || 'Nothing scheduled in the current window.'}`;
     }
 
     if (/earning|calendar|event/.test(q)) {
@@ -1501,10 +1546,10 @@ const vtx = {
     }
 
     if (/help|what can you|how.+work/.test(q)) {
-      return `I'm a rule-based lookup, not a generative model — I match your question to a category and pull straight from the live data already loaded on this page for ${f.sym} (or whichever symbol you have focused):\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "analyst ratings" — consensus + buy/hold/sell breakdown\n• "sector" — how ${f.sym} compares to its sector today\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" — upcoming earnings dates\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
+      return `I'm a rule-based lookup, not a generative model — I match your question to a category and pull straight from the live data already loaded on this page for ${f.sym} (or whichever symbol you have focused):\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "analyst ratings" — consensus + buy/hold/sell breakdown\n• "sector" — how ${f.sym} compares to its sector today\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" — upcoming earnings dates\n• "FOMC" / "CPI" / "jobs report" — upcoming macro releases\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
     }
 
-    return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "analyst ratings", "sector" standing, "dark pool" activity, "filings", or "earnings" — I'll pull from the live data on this page. Type "help" for the full list.`;
+    return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "analyst ratings", "sector" standing, "dark pool" activity, "filings", "earnings", or the "FOMC"/macro calendar — I'll pull from the live data on this page. Type "help" for the full list.`;
   },
   sendChat(text) {
     const input = document.getElementById('chatInputEl');

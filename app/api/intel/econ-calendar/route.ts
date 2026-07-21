@@ -12,7 +12,7 @@ const WINDOW_DAYS = 90;
 
 type EconEvent = {
   day: string;
-  date: string;
+  date: string; // "30" or, across a month boundary, "30 Jul" for clarity
   sym: string;
   event: string;
   time: string;
@@ -21,7 +21,14 @@ type EconEvent = {
   toneBorder: string;
 };
 
+// Internal-only shape carrying the full ISO date, so events can be
+// sorted correctly across month boundaries before display formatting
+// collapses them down to day-of-month (which alone can't distinguish
+// e.g. July 30 from August 30 over a 90-day window).
+type DatedEvent = EconEvent & { isoDate: string };
+
 const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // FRED release IDs: 10 = Consumer Price Index, 50 = Employment Situation
 // (contains Nonfarm Payrolls), 54 = Personal Income and Outlays (PCE).
@@ -31,17 +38,18 @@ const FRED_RELEASES: { id: number; name: string; time: string }[] = [
   { id: 54, name: "PCE Report", time: "08:30" },
 ];
 
-function toEconEvent(dateStr: string, name: string, time: string): EconEvent {
+function toEconEvent(dateStr: string, name: string, time: string): DatedEvent {
   const d = new Date(`${dateStr}T00:00:00Z`);
   return {
     day: DAY_NAMES[d.getUTCDay()],
-    date: String(d.getUTCDate()),
+    date: `${d.getUTCDate()} ${MONTH_ABBR[d.getUTCMonth()]}`,
     sym: "MACRO",
     event: name,
     time,
     imp: "HIGH",
     tone: "var(--warn)",
     toneBorder: "rgba(245,165,36,.4)",
+    isoDate: dateStr,
   };
 }
 
@@ -95,7 +103,7 @@ async function buildCalendar(fredApiKey: string): Promise<EconEvent[]> {
     fetchFomcDates(from, to),
   ]);
 
-  const events: EconEvent[] = [];
+  const events: DatedEvent[] = [];
   FRED_RELEASES.forEach((r, i) => {
     for (const date of fredResults[i]) events.push(toEconEvent(date, r.name, r.time));
   });
@@ -105,8 +113,8 @@ async function buildCalendar(fredApiKey: string): Promise<EconEvent[]> {
     }
   }
 
-  events.sort((a, b) => Number(a.date) - Number(b.date));
-  return events.slice(0, 10);
+  events.sort((a, b) => a.isoDate.localeCompare(b.isoDate));
+  return events.slice(0, 10).map(({ isoDate, ...rest }) => rest);
 }
 
 export async function GET(request: NextRequest) {
