@@ -221,6 +221,7 @@ input{font-family:var(--ui)}
               <circle id="chartEndDot" r="3.4" fill="var(--acc)"></circle>
               <g id="priceAxis"></g>
             </svg>
+            <div id="chartDateAxis" style="display:flex;justify-content:space-between;padding:2px 7.42% 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);"></div>
           </div>
         </div>
 
@@ -305,6 +306,7 @@ const vtx = {
   NEWS: [], // populated by loadNews() — real Finnhub company-news data, no seed
   CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
   ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
+  YIELD_CURVE: null, // populated by loadYieldCurve() — real FRED Treasury data, no seed
   FIL: [
     {time:'2m',sym:'NVDA',who:'J. Huang',role:'CEO',act:'SELL',shares:'120,000',value:'$141.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
     {time:'18m',sym:'PLTR',who:'S. Cohen',role:'President',act:'SELL',shares:'2.4M',value:'$149.8M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
@@ -336,7 +338,39 @@ const vtx = {
     }
     return out;
   },
-  buildChart(arr) {
+  // Real Treasury yield curve — evenly-spaced-by-maturity (not by actual
+  // time span), same convention every real yield-curve chart uses, since a
+  // linear time scale would crush the whole short end into a sliver.
+  yieldCurveSvg(points, w, h) {
+    w = w||760; h = h||130;
+    const yields = points.map(p => p.yield);
+    const min = Math.min(...yields), max = Math.max(...yields);
+    const pad = (max-min)*0.2 || 0.5;
+    const lo = min-pad, hi = max+pad;
+    const span = (hi-lo)||1;
+    const step = w/(points.length-1);
+    const y = v => h - ((v-lo)/span)*h;
+    const line = points.map((p,i) => `${i===0?'M':'L'}${(i*step).toFixed(1)},${y(p.yield).toFixed(1)}`).join(' ');
+    const area = line + ` L${w},${h} L0,${h} Z`;
+    const gridLines = [0.25,0.5,0.75].map(f => `<line x1="0" y1="${(h*f).toFixed(1)}" x2="${w}" y2="${(h*f).toFixed(1)}" stroke="rgba(255,255,255,.05)" stroke-width="1"/>`).join('');
+    const dots = points.map((p,i) => {
+      const cx=(i*step).toFixed(1), cy=y(p.yield).toFixed(1);
+      return `<circle cx="${cx}" cy="${cy}" r="3" fill="var(--acc2)"/>
+        <text x="${cx}" y="${(y(p.yield)-9).toFixed(1)}" text-anchor="middle" font-family="var(--mono)" font-size="9.5" fill="var(--txt)">${p.yield.toFixed(2)}</text>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="display:block;overflow:visible;">
+      <defs><linearGradient id="ycArea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--acc2)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="var(--acc2)" stop-opacity="0"/>
+      </linearGradient></defs>
+      ${gridLines}
+      <path d="${area}" fill="url(#ycArea)"/>
+      <path d="${line}" fill="none" stroke="var(--acc2)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+    </svg>`;
+  },
+
+  buildChart(arr, times) {
     const W=574,H=150,VB=46,AX=46;
     const s = this.state;
     const sma9 = s.indicators.sma9 ? this.sma(arr,9) : null;
@@ -359,7 +393,32 @@ const vtx = {
     };
     const axisLabels = [38,78,118].map(y => ({ y, price: (min + r*(H-7-y)/(H-14)) }));
     axisLabels.push({ y: 144, price: min });
-    return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars, sma9Path: pathFromSma(sma9), sma20Path: pathFromSma(sma20), axisLabels, W, AX};
+
+    // Real dates for the x-axis — 5 evenly-spaced-by-index ticks, rendered
+    // as a flex row below the SVG (not inside it) so justify-content:
+    // space-between lines them up with buildChart's own index-based x
+    // positions (index 0 -> x=0, last index -> x=W) without needing exact
+    // pixel math to match two separate layout systems.
+    let dateLabels = [];
+    if (times && times.length === arr.length && arr.length > 1) {
+      const tickIdxs = [...new Set([0,0.25,0.5,0.75,1].map(f => Math.round(f*(arr.length-1))))];
+      dateLabels = tickIdxs.map(i => {
+        const d = new Date(times[i]*1000);
+        let label;
+        // Only 1D is genuinely intraday (actual time-of-day in market hours
+        // matters, so convert to ET). Daily/weekly/monthly bars are dated,
+        // not timestamped — formatting those through an ET conversion risks
+        // rolling a UTC midnight back to the previous ET day (and, for
+        // year-end bars, the previous *year*), so those read the calendar
+        // date straight from UTC instead.
+        if (s.tf === '1D') label = d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/New_York'});
+        else if (s.tf === '1Y' || s.tf === 'MAX') label = d.toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'});
+        else label = d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
+        return label;
+      });
+    }
+
+    return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars, sma9Path: pathFromSma(sma9), sma20Path: pathFromSma(sma20), axisLabels, dateLabels, W, AX};
   },
   mktCap(t) { const v = t.shares*1e9*t.price; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(0)+'B'; },
   mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
@@ -497,12 +556,14 @@ const vtx = {
     this.loadHeatmap();
     this.loadCalendar();
     this.loadEconCalendar();
+    this.loadYieldCurve();
     this.loadNews();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
     setInterval(() => this.loadHeatmap(), 5 * 60 * 1000);
     setInterval(() => this.loadCalendar(), 30 * 60 * 1000);
     setInterval(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
+    setInterval(() => this.loadYieldCurve(), 6 * 60 * 60 * 1000);
     setInterval(() => this.loadNews(), 10 * 60 * 1000);
     this.renderClock();
     this.renderMarketStatus();
@@ -600,11 +661,11 @@ const vtx = {
     try {
       const r = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(tf)}`);
       if (!r.ok) return;
-      const { prices } = await r.json();
+      const { prices, times } = await r.json();
       if (!prices || prices.length < 2) return;
       if (!this._chartData) this._chartData = {};
       if (!this._chartData[sym]) this._chartData[sym] = {};
-      this._chartData[sym][tf] = prices;
+      this._chartData[sym][tf] = { prices, times: times || [] };
       if (this.state.focus === sym && this.state.tf === tf) this.render();
     } catch(e) {}
   },
@@ -895,6 +956,17 @@ const vtx = {
     } catch (e) { /* keep previous data on failure */ }
   },
 
+  async loadYieldCurve() {
+    try {
+      const res = await fetch(`/api/intel/yield-curve`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.points) return;
+      this.YIELD_CURVE = data;
+      if (this.state.tab === 'econ') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
   async loadNews() {
     try {
       const symbols = this.state.tickers.map(t => t.sym).join(',');
@@ -1164,8 +1236,10 @@ const vtx = {
     document.getElementById('indicatorButtons').innerHTML = indDefs.map(([key,label,color]) => `
       <button onclick="vtx.toggleIndicator('${key}')" style="font-family:var(--mono);font-size:10.5px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${s.indicators[key]?'rgba(var(--glow),.2)':'transparent'};color:${s.indicators[key]?color:'var(--mut)'};">${label}</button>`).join('');
 
-    const chartPrices = (this._chartData && this._chartData[f.sym] && this._chartData[f.sym][s.tf]) || f.hist;
-    const ch = this.buildChart(chartPrices);
+    const chartEntry = this._chartData && this._chartData[f.sym] && this._chartData[f.sym][s.tf];
+    const chartPrices = chartEntry ? chartEntry.prices : f.hist;
+    const chartTimes = chartEntry ? chartEntry.times : null;
+    const ch = this.buildChart(chartPrices, chartTimes);
     document.getElementById('chartAreaPath').setAttribute('d', ch.area);
     document.getElementById('chartLinePath').setAttribute('d', ch.line);
     document.getElementById('chartEndGlow').setAttribute('cx', ch.endX); document.getElementById('chartEndGlow').setAttribute('cy', ch.endY);
@@ -1176,6 +1250,7 @@ const vtx = {
     sma20El.setAttribute('d', ch.sma20Path); sma20El.setAttribute('opacity', ch.sma20Path ? '0.9' : '0');
     document.getElementById('priceAxis').innerHTML = ch.axisLabels.map(a => `
       <text x="${ch.W+6}" y="${(a.y+3).toFixed(1)}" font-family="var(--mono)" font-size="9" fill="var(--mut)">${this.fmt(a.price)}</text>`).join('');
+    document.getElementById('chartDateAxis').innerHTML = ch.dateLabels.map(l => `<span>${l}</span>`).join('');
 
     // Key stats
     // `fin` is only set once /api/stock/financials has actually returned
@@ -1499,28 +1574,51 @@ const vtx = {
           </div>`).join('') + `</div>`;
     }
     else if (s.tab === 'econ') {
-      if (!this.ECON.length) {
-        el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading economic calendar…</div>`;
-        return;
-      }
-      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
-        <div style="font-size:9px;color:var(--mut);line-height:1.5;padding:0 3px 4px;">CPI, Jobs Report, and PCE release dates from FRED · FOMC dates from the Federal Reserve.</div>` +
-        this.ECON.map(c => {
-          const [day, mon] = c.date.split(' ');
-          return `
-          <div style="display:grid;grid-template-columns:46px 1fr auto;gap:11px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
-            <div style="text-align:center;border-right:1px solid var(--line);padding-right:8px;">
-              <div style="font-size:8.5px;letter-spacing:.1em;color:var(--mut);">${c.day}</div>
-              <div style="font-family:var(--mono);font-size:15px;font-weight:800;">${day}</div>
-              <div style="font-size:8px;color:var(--mut);text-transform:uppercase;">${mon}</div>
-            </div>
-            <div>
-              <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
-              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${c.time} EST</div>
-            </div>
-            <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
+      // Yield curve and the calendar are two independent real data sources —
+      // each renders its own loading state rather than one early-returning
+      // and blocking the other from ever showing up.
+      const yc = this.YIELD_CURVE;
+      let ycHtml;
+      if (!yc) {
+        ycHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading yield curve…</div>`;
+      } else {
+        const spread = yc.spread10y2y;
+        const spreadHtml = spread!=null ? `<span style="margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;color:${yc.inverted?'var(--neg)':'var(--pos)'};">10Y−2Y ${spread>=0?'+':''}${spread.toFixed(2)}%${yc.inverted?' · INVERTED':''}</span>` : '';
+        const labelsHtml = yc.points.map(p => `<span style="font-size:8.5px;font-family:var(--mono);color:var(--mut);">${p.label}</span>`).join('');
+        ycHtml = `
+          <div style="display:flex;align-items:center;gap:8px;padding:11px 14px 2px;">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">US Treasury Yield Curve</span>
+            ${spreadHtml}
+          </div>
+          <div style="padding:14px 14px 4px;">
+            ${this.yieldCurveSvg(yc.points, 760, 130)}
+            <div style="display:flex;justify-content:space-between;margin-top:6px;">${labelsHtml}</div>
+            <div style="font-size:8.5px;color:var(--mut);margin-top:8px;">As of ${yc.points[yc.points.length-1].date} · FRED Treasury Constant Maturity Rates</div>
           </div>`;
-        }).join('') + `</div>`;
+      }
+
+      const econHtml = !this.ECON.length
+        ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading economic calendar…</div>`
+        : `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+            <div style="font-size:9px;color:var(--mut);line-height:1.5;padding:0 3px 4px;">CPI, Jobs Report, and PCE release dates from FRED · FOMC dates from the Federal Reserve.</div>` +
+            this.ECON.map(c => {
+              const [day, mon] = c.date.split(' ');
+              return `
+              <div style="display:grid;grid-template-columns:46px 1fr auto;gap:11px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+                <div style="text-align:center;border-right:1px solid var(--line);padding-right:8px;">
+                  <div style="font-size:8.5px;letter-spacing:.1em;color:var(--mut);">${c.day}</div>
+                  <div style="font-family:var(--mono);font-size:15px;font-weight:800;">${day}</div>
+                  <div style="font-size:8px;color:var(--mut);text-transform:uppercase;">${mon}</div>
+                </div>
+                <div>
+                  <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
+                  <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${c.time} EST</div>
+                </div>
+                <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
+              </div>`;
+            }).join('') + `</div>`;
+
+      el.innerHTML = `<div style="border-bottom:1px solid var(--line);">${ycHtml}</div>${econHtml}`;
     }
     else if (s.tab === 'movers') {
       const cPos='var(--pos)', cNeg='var(--neg)';
