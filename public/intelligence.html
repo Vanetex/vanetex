@@ -38,6 +38,10 @@ input{font-family:var(--ui)}
 .wlremove:hover{color:var(--neg) !important}
 .srchrow:hover{background:rgba(var(--glow),.14)}
 .newscard:hover{border-color:rgba(var(--glow),.3) !important;background:rgba(var(--glow),.05) !important}
+.symlink{cursor:pointer;border-radius:4px;transition:background .12s ease,color .12s ease;}
+.symlink:hover{background:rgba(var(--glow),.16) !important;text-decoration:underline;}
+.sectorlink{cursor:pointer;transition:background .12s ease;}
+.sectorlink:hover{background:rgba(52,211,255,.16) !important;}
 .movercard:hover{transform:translateY(-2px)}
 .qprompt:hover{background:rgba(52,211,255,.14) !important}
 .tapetrack:hover{animation-play-state:paused}
@@ -546,6 +550,21 @@ const vtx = {
   selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; this.renderRight(); },
   openSector(name) { this.state.moversSector = name; this.renderRight(); },
+  // Cross-linking: click a ticker anywhere (news, calendar, dark pools) and
+  // land on it — focus it if it's already on the watchlist, otherwise add
+  // it (same behavior as searching for it), rather than dead-ending on a
+  // plain-text symbol.
+  jumpToTicker(sym) {
+    if (!sym) return;
+    sym = sym.toUpperCase();
+    if (this.state.tickers.some(t => t.sym === sym)) { this.selectTicker(sym); return; }
+    this.addTicker(sym);
+  },
+  jumpToSector(sector) {
+    this.state.tab = 'movers';
+    this.state.moversSector = this.sectorBucket(sector);
+    this.renderRight();
+  },
   TICKER_BAR_SYMS: ['SPY','QQQ','DIA','NVDA','AAPL','MSFT','TSLA','META','AMZN','GOOGL','AMD','NFLX','COIN','PLTR','AVGO','VGT','SOXX','GLD','TLT','BTC-USD'],
 
   async loadTickerBar() {
@@ -1107,7 +1126,7 @@ const vtx = {
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
             <span style="font-family:var(--mono);font-size:30px;font-weight:800;letter-spacing:-.01em;">${f.sym}</span>
-            <span style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);border:1px solid rgba(52,211,255,.3);background:rgba(52,211,255,.08);border-radius:99px;padding:3px 10px;">${f.sector}</span>
+            <span class="sectorlink" onclick="vtx.jumpToSector(${JSON.stringify(f.sector).replace(/"/g,'&quot;')})" title="View ${f.sector} in the sector heatmap" style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);border:1px solid rgba(52,211,255,.3);background:rgba(52,211,255,.08);border-radius:99px;padding:3px 10px;">${f.sector}</span>
             <span style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--pos);"><span style="width:5px;height:5px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.5s ease infinite;"></span>LIVE</span>
           </div>
           <div style="font-size:13px;color:var(--mut);">${f.name} · NASDAQ</div>
@@ -1390,7 +1409,7 @@ const vtx = {
           this.NEWS.map(n => `
             <div class="newscard" onclick="window.open(${JSON.stringify(n.url).replace(/"/g,'&quot;')}, '_blank', 'noopener')" style="padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.02);cursor:pointer;">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);">${n.sym}</span>
+                <span class="symlink" onclick="event.stopPropagation(); vtx.jumpToTicker('${n.sym}')" style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;">${n.sym}</span>
                 <span style="font-size:10px;color:var(--mut);">${n.src}</span>
                 <span style="font-size:9.5px;color:var(--mut);margin-left:auto;">${relTime(n.time)}</span>
               </div>
@@ -1432,7 +1451,7 @@ const vtx = {
         <div style="display:flex;flex-direction:column;gap:6px;">` +
           this.DARK.map(d => `
             <div style="display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
-              <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);">${d.sym}</span>
+              <span class="symlink" onclick="vtx.jumpToTicker('${d.sym}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);padding:1px 4px;">${d.sym}</span>
               <div>
                 <div style="font-family:var(--mono);font-size:11.5px;font-weight:600;">${d.size} <span style="color:var(--mut);font-weight:400;">sh</span></div>
                 <div style="font-size:9.5px;color:var(--mut);">${d.venue} · ${d.pct} ADV</div>
@@ -1474,7 +1493,7 @@ const vtx = {
             </div>
             <div>
               <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
-              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${c.sym} · ${c.time} EST</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;"><span class="symlink" onclick="vtx.jumpToTicker('${c.sym}')" style="padding:1px 4px;">${c.sym}</span> · ${c.time} EST</div>
             </div>
             <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
           </div>`).join('') + `</div>`;

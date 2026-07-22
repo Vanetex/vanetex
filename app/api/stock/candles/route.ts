@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
   const cfg = RANGE_MAP[rangeParam] ?? RANGE_MAP["1M"];
   const { interval, range, limit } = cfg;
 
-  const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}`;
-  const cached = await kvGet<number[]>(cacheKey);
+  const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}:v2`;
+  const cached = await kvGet<{ prices: number[]; times: number[] }>(cacheKey);
   if (cached) {
-    return NextResponse.json({ prices: cached });
+    return NextResponse.json(cached);
   }
 
   try {
@@ -46,22 +46,31 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json() as {
       chart: {
-        result?: Array<{ indicators: { quote: Array<{ close: number[] }> } }>;
+        result?: Array<{ timestamp?: number[]; indicators: { quote: Array<{ close: number[] }> } }>;
         error?: { description: string };
       };
     };
 
     if (data.chart.error || !data.chart.result?.[0]) {
-      return NextResponse.json({ prices: [] });
+      return NextResponse.json({ prices: [], times: [] });
     }
 
+    const timestamps = data.chart.result[0].timestamp ?? [];
     const closes = data.chart.result[0].indicators.quote[0]?.close ?? [];
-    const prices = closes.filter((c) => c !== null && c !== undefined).slice(-limit);
+    // Filter both arrays together (not independently) so a null close at
+    // index i can't desync the price from its real timestamp.
+    const pairs = closes
+      .map((c, i) => ({ c, t: timestamps[i] }))
+      .filter((p): p is { c: number; t: number } => p.c != null && p.t != null)
+      .slice(-limit);
+    const prices = pairs.map((p) => p.c);
+    const times = pairs.map((p) => p.t); // unix seconds
 
-    await kvSet(cacheKey, prices, CACHE_TTL_S);
-    return NextResponse.json({ prices });
+    const body = { prices, times };
+    await kvSet(cacheKey, body, CACHE_TTL_S);
+    return NextResponse.json(body);
   } catch (err) {
     console.error("[stock/candles] error:", err);
-    return NextResponse.json({ prices: [] });
+    return NextResponse.json({ prices: [], times: [] });
   }
 }
