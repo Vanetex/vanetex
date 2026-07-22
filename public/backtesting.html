@@ -47,6 +47,16 @@ input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:p
 input::placeholder{color:var(--mut)}
 select{appearance:none;-webkit-appearance:none}
 .eqhover{cursor:crosshair}
+.btLayout{display:grid;grid-template-columns:340px 1fr;gap:0;}
+.btSidebar{padding:26px 22px;border-right:1px solid var(--line);}
+.btMain{padding:26px 30px;}
+@media (max-width:860px){
+  .btLayout{grid-template-columns:1fr;}
+  .btSidebar{border-right:none;border-bottom:1px solid var(--line);padding:20px 16px;}
+  .btMain{padding:20px 16px;}
+  .btDdAlloc{grid-template-columns:1fr !important;}
+  header{height:auto !important;flex-wrap:wrap;row-gap:8px;padding:12px 16px !important;}
+}
 </style>
 </head>
 <body>
@@ -77,14 +87,14 @@ select{appearance:none;-webkit-appearance:none}
     </header>
 
     <!-- BODY -->
-    <div style="display:grid;grid-template-columns:340px 1fr;gap:0;max-width:1600px;margin:0 auto;align-items:start;">
+    <div class="btLayout" style="max-width:1600px;margin:0 auto;align-items:start;">
 
       <!-- SIDEBAR -->
-      <div id="sidebar" style="padding:26px 22px;border-right:1px solid var(--line);"></div>
+      <div id="sidebar" class="btSidebar"></div>
 
       <!-- MAIN -->
-      <div style="padding:26px 30px;min-width:0;">
-        <div id="tabbar" style="display:flex;align-items:center;gap:26px;border-bottom:1px solid var(--line);margin-bottom:24px;"></div>
+      <div class="btMain" style="min-width:0;">
+        <div id="tabbar" style="display:flex;align-items:center;gap:26px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:24px;"></div>
         <div id="content"></div>
       </div>
 
@@ -102,6 +112,10 @@ const bt = {
     'Growth':       { name: 'Growth Tilt',      holdings: [['VUG',30],['QQQ',30],['SMH',20],['ARKK',20]] },
   },
   SAVED_KEY: 'vanetex_backtest_saved_v1',
+  // Fallback used only until the real rate loads (or if it fails to) —
+  // replaced with the real 3-month T-bill yield from FRED in init().
+  riskFreeRate: 0.02,
+  riskFreeIsReal: false,
 
   state: {
     name: 'Tech-Defense Mix',
@@ -134,6 +148,21 @@ const bt = {
     this.state.end = end.toISOString().slice(0,10);
     this.state.start = start.toISOString().slice(0,10);
     this.render();
+    this.loadRiskFreeRate();
+  },
+
+  loadRiskFreeRate() {
+    fetch('/api/backtest/riskfree')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data.rate === 'number') {
+          this.riskFreeRate = data.rate;
+          this.riskFreeIsReal = true;
+          // Only worth a re-render if there's already a result on screen using the old fallback.
+          if (this.state.hasResults) this.render();
+        }
+      })
+      .catch(() => {});
   },
 
   setState(patch) {
@@ -145,6 +174,17 @@ const bt = {
   // ---------- persistence ----------
   persistSaved() {
     try { localStorage.setItem(this.SAVED_KEY, JSON.stringify(this.state.saved)); } catch (e) {}
+  },
+  configKey(holdings, rebalance, start, end, initial) {
+    const hs = holdings.filter(h => h.t).map(h => ({ t: h.t.toUpperCase(), w: +h.w || 0 }));
+    return JSON.stringify({ hs, rebalance, start, end, initial: +initial || 10000 });
+  },
+  downsample(arr, n) {
+    if (arr.length <= n) return arr.slice();
+    const out = [];
+    const step = (arr.length - 1) / (n - 1);
+    for (let i = 0; i < n; i++) out.push(arr[Math.round(i * step)]);
+    return out;
   },
   save() {
     const errs = this.validate();
@@ -159,6 +199,15 @@ const bt = {
       initial: +this.state.initial || 10000,
       savedAt: Date.now(),
     };
+    // Snapshot a real preview (sparkline + total return) from the current
+    // Results run — but only if it actually corresponds to this exact
+    // config. If the holdings/dates were edited after the last run, skip
+    // it rather than attach a snapshot that doesn't match what's being saved.
+    const currentKey = this.configKey(this.state.holdings, this.state.rebalance, this.state.start, this.state.end, this.state.initial);
+    if (this.state.hasResults && this.state.results && this._lastRunKey === currentKey) {
+      const R = this.state.results;
+      entry.snapshot = { equity: this.downsample(R.equity, 30), total: R.m.total };
+    }
     // replace an existing save with the same name rather than piling up duplicates
     const existingIdx = this.state.saved.findIndex(s => s.name === entry.name);
     const saved = this.state.saved.slice();
@@ -318,7 +367,7 @@ const bt = {
     const mean = mret.reduce((a,b)=>a+b,0) / mret.length;
     const variance = mret.reduce((a,b)=>a+(b-mean)**2,0) / mret.length;
     const vol = Math.sqrt(variance) * Math.sqrt(12);
-    const sharpe = vol ? (cagr - 0.02) / vol : 0;
+    const sharpe = vol ? (cagr - this.riskFreeRate) / vol : 0;
     let peak = eq[0], maxDD = 0;
     for (const v of eq) { if (v>peak) peak=v; const dd=(v-peak)/peak; if (dd<maxDD) maxDD=dd; }
     return { total, cagr, vol, sharpe, maxDD, best: Math.max(...mret), worst: Math.min(...mret), mret, final: eq[eq.length-1] };
@@ -343,6 +392,7 @@ const bt = {
         }
         try {
           const results = this.computeFor(this.state, data.series);
+          this._lastRunKey = this.configKey(this.state.holdings, this.state.rebalance, this.state.start, this.state.end, this.state.initial);
           this.setState({ running: false, hasResults: true, tab: 'Results', results, error: null });
         } catch (e) {
           this.setState({ running: false, error: e.message || 'Failed to compute backtest.' });
@@ -375,6 +425,24 @@ const bt = {
         }
       })
       .catch(() => this.setState({ compareLoading: false, compareResult: { error: true } }));
+  },
+
+  // ---------- export ----------
+  exportResults() {
+    const R = this.state.results;
+    if (!R) return;
+    const rows = [['Date', 'Portfolio Value', 'S&P 500 Value']];
+    R.dates.forEach((d,i) => rows.push([this.monLabel(d), R.equity[i].toFixed(2), R.bench[i].toFixed(2)]));
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(this.state.name||'backtest').replace(/[^a-z0-9]+/gi,'_').toLowerCase()}_backtest.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 
   // ---------- formatting ----------
@@ -597,10 +665,15 @@ const bt = {
 
     return `
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:18px;padding:24px 28px;margin-bottom:16px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
           <span style="font-size:15px;font-weight:700;">${this.esc(s.name)}</span>
           <span style="font-family:var(--mono);font-size:11px;font-weight:700;background:rgba(var(--glow),.14);color:var(--acc2);border-radius:99px;padding:3px 10px;">${rangeLabel}</span>
           <span style="font-size:11.5px;color:var(--mut);">· ${s.rebalance==='None'?'no':s.rebalance.toLowerCase()} rebalance</span>
+          <div style="flex:1;"></div>
+          <button onclick="bt.exportResults()" style="display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:12px;font-weight:600;">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 6l3 3 3-3M2 11v1.5a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5V11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Export results
+          </button>
         </div>
         <div style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:8px;">Final portfolio value</div>
         <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
@@ -640,7 +713,7 @@ const bt = {
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;">
+      <div class="btDdAlloc" style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;">
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <span style="font-size:14px;font-weight:700;">Drawdown</span>
@@ -687,6 +760,13 @@ const bt = {
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">
         ${s.saved.map((entry,i) => {
           const chips = entry.holdings.slice(0,4).map(h => `<span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--mut);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:2px 7px;">${this.esc(h.t)} ${+h.w||0}%</span>`).join('');
+          const snap = entry.snapshot;
+          const statHtml = snap
+            ? `<div style="text-align:right;"><div style="font-family:var(--mono);font-size:16px;font-weight:800;color:${snap.total>=0?'#3ec46e':'#ef5959'};">${this.signed(snap.total,0)}</div><div style="font-size:10px;color:var(--mut);">total return</div></div>`
+            : '';
+          const sparkHtml = snap
+            ? `<div style="height:44px;margin-bottom:12px;">${this.sparkSvg(snap.equity, snap.total>=0?'#1fd397':'#ef5959', 280, 44)}</div>`
+            : `<div style="height:44px;margin-bottom:12px;display:flex;align-items:center;font-size:11px;color:var(--mut);">Run this portfolio to preview its curve here</div>`;
           return `
           <div class="savedcard" onclick="bt.loadSaved(bt.state.saved.find(x=>x.id==='${entry.id}'))" style="cursor:pointer;padding:20px 22px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));animation:rowIn .4s ease both;animation-delay:${(i*0.05).toFixed(2)}s;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">
@@ -694,10 +774,14 @@ const bt = {
                 <div style="font-size:15px;font-weight:700;margin-bottom:4px;">${this.esc(entry.name)}</div>
                 <div style="font-size:11px;color:var(--mut);">Saved ${this.relTime(entry.savedAt)} · ${entry.rebalance==='None'?'no rebalance':entry.rebalance}</div>
               </div>
-              <button class="delx" onclick="bt.deleteSaved('${entry.id}', event)" style="border:none;background:transparent;color:var(--mut);width:26px;height:26px;flex-shrink:0;">
-                <svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-              </button>
+              <div style="display:flex;align-items:flex-start;gap:10px;">
+                ${statHtml}
+                <button class="delx" onclick="bt.deleteSaved('${entry.id}', event)" style="border:none;background:transparent;color:var(--mut);width:26px;height:26px;flex-shrink:0;">
+                  <svg width="13" height="13" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </button>
+              </div>
             </div>
+            ${sparkHtml}
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">${chips}</div>
             <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--acc2);">Load &amp; run <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6.5 2.5L10 6l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           </div>`;
@@ -790,7 +874,10 @@ const bt = {
     ];
 
     const riskNote = m.sharpe>=1 ? 'efficient' : m.sharpe>=0.5 ? 'moderate' : 'volatile';
-    const insight = `A Sharpe of ${m.sharpe.toFixed(2)} with ${this.pct(m.vol,0)} annual volatility and a ${this.pct(m.maxDD,0)} max drawdown — risk profile reads as ${riskNote}. ${m.sharpe>=1 ? 'Returns comfortably compensated for the risk taken.' : 'Worth weighing whether these drawdowns fit your tolerance.'} <span style="color:var(--mut);">(Sharpe assumes a 2% annual risk-free rate.)</span>`;
+    const rfLabel = this.riskFreeIsReal
+      ? `${this.pct(this.riskFreeRate,2)} 3-month Treasury yield`
+      : `${this.pct(this.riskFreeRate,2)} (fallback — live Treasury yield unavailable)`;
+    const insight = `A Sharpe of ${m.sharpe.toFixed(2)} with ${this.pct(m.vol,0)} annual volatility and a ${this.pct(m.maxDD,0)} max drawdown — risk profile reads as ${riskNote}. ${m.sharpe>=1 ? 'Returns comfortably compensated for the risk taken.' : 'Worth weighing whether these drawdowns fit your tolerance.'} <span style="color:var(--mut);">(Sharpe assumes a ${rfLabel} risk-free rate.)</span>`;
 
     return `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
