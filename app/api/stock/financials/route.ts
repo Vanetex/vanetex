@@ -50,6 +50,25 @@ export async function GET(request: NextRequest) {
       marketCapitalization: m.marketCapitalization ?? null,
       avgVolume10D: m["10DayAverageTradingVolume"] ?? null,
       avgVolume3M: m["3MonthAverageTradingVolume"] ?? null,
+      // Extended financials — same Finnhub response, just more of it.
+      // Percent-based fields (margins, growth, ROE/ROA, price returns) are
+      // already expressed as e.g. 47.86 meaning 47.86%, not a 0-1 fraction.
+      forwardPE: m.forwardPE ?? null,
+      pegRatio: m.pegTTM ?? null,
+      priceToBook: m.pbQuarterly ?? m.pbAnnual ?? m.pb ?? null,
+      priceToSales: m.psTTM ?? null,
+      evToEbitda: m.evEbitdaTTM ?? null,
+      grossMargin: m.grossMarginTTM ?? null,
+      operatingMargin: m.operatingMarginTTM ?? null,
+      netMargin: m.netProfitMarginTTM ?? null,
+      roe: m.roeTTM ?? null,
+      roa: m.roaTTM ?? null,
+      revenueGrowthYoy: m.revenueGrowthTTMYoy ?? null,
+      epsGrowthYoy: m.epsGrowthTTMYoy ?? null,
+      currentRatio: m.currentRatioQuarterly ?? m.currentRatioAnnual ?? null,
+      debtToEquity: m["totalDebt/totalEquityQuarterly"] ?? m["totalDebt/totalEquityAnnual"] ?? null,
+      priceReturn52W: m["52WeekPriceReturnDaily"] ?? null,
+      priceReturnYtd: m.yearToDatePriceReturnDaily ?? null,
     };
 
     await kvSet(cacheKey, body, CACHE_TTL_S);
