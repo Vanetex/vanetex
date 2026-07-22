@@ -1003,16 +1003,15 @@ async function loadAssetClasses(){
       setAssetChg('ac-crypto-chg',(p>=0?'+':'')+p.toFixed(2)+'%',p>=0);
     }).catch(()=>{});
 
-  // 10-Yr Yield via US Treasury
-  fetch('https://api.fiscaldata.treasury.gov/services/api/v1/accounting/od/par_yield_curve_rates?fields=record_date,bc_10year&sort=-record_date&page[size]=2')
-    .then(r=>r.json()).then(d=>{
-      const rows=d?.data;if(!rows?.length)return;
-      const cur=parseFloat(rows[0]?.bc_10year);
-      if(isNaN(cur))return;
-      setAsset('ac-bonds',cur.toFixed(2)+'%');
-      const prev=rows[1]?parseFloat(rows[1].bc_10year):null;
-      if(prev!=null&&!isNaN(prev)){
-        const diff=cur-prev;
+  // 10-Yr Yield — real FRED Treasury Constant Maturity Rate, via our own
+  // /api/intel/yield-curve route (same route Intelligence's Macro tab uses).
+  fetch('/api/intel/yield-curve')
+    .then(r=>r.ok?r.json():null).then(d=>{
+      const pt=(d?.points||[]).find(p=>p.months===120);
+      if(!pt)return;
+      setAsset('ac-bonds',pt.yield.toFixed(2)+'%');
+      if(pt.prevYield!=null){
+        const diff=pt.yield-pt.prevYield;
         setAssetChg('ac-bonds-chg',(diff>=0?'+':'')+diff.toFixed(2),diff>=0);
       }
     }).catch(()=>{});

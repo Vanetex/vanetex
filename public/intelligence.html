@@ -394,29 +394,11 @@ const vtx = {
     const axisLabels = [38,78,118].map(y => ({ y, price: (min + r*(H-7-y)/(H-14)) }));
     axisLabels.push({ y: 144, price: min });
 
-    // Real dates for the x-axis — 5 evenly-spaced-by-index ticks, rendered
-    // as a flex row below the SVG (not inside it) so justify-content:
-    // space-between lines them up with buildChart's own index-based x
-    // positions (index 0 -> x=0, last index -> x=W) without needing exact
-    // pixel math to match two separate layout systems.
-    let dateLabels = [];
-    if (times && times.length === arr.length && arr.length > 1) {
-      const tickIdxs = [...new Set([0,0.25,0.5,0.75,1].map(f => Math.round(f*(arr.length-1))))];
-      dateLabels = tickIdxs.map(i => {
-        const d = new Date(times[i]*1000);
-        let label;
-        // Only 1D is genuinely intraday (actual time-of-day in market hours
-        // matters, so convert to ET). Daily/weekly/monthly bars are dated,
-        // not timestamped — formatting those through an ET conversion risks
-        // rolling a UTC midnight back to the previous ET day (and, for
-        // year-end bars, the previous *year*), so those read the calendar
-        // date straight from UTC instead.
-        if (s.tf === '1D') label = d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/New_York'});
-        else if (s.tf === '1Y' || s.tf === 'MAX') label = d.toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'});
-        else label = d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
-        return label;
-      });
-    }
+    // Real dates for the x-axis — rendered as a flex row below the SVG
+    // (not inside it) so justify-content:space-between lines them up with
+    // buildChart's own index-based x positions (index 0 -> x=0, last index
+    // -> x=W) without needing exact pixel math to match two layout systems.
+    const dateLabels = (times && times.length === arr.length) ? this.dateLabelsFrom(times, s.tf) : [];
 
     return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars, sma9Path: pathFromSma(sma9), sma20Path: pathFromSma(sma20), axisLabels, dateLabels, W, AX};
   },
@@ -666,7 +648,8 @@ const vtx = {
       if (!this._chartData) this._chartData = {};
       if (!this._chartData[sym]) this._chartData[sym] = {};
       this._chartData[sym][tf] = { prices, times: times || [] };
-      if (this.state.focus === sym && this.state.tf === tf) this.render();
+      const isCompareTarget = this.state.tab === 'compare' && (this.state.compareSet||[]).includes(sym);
+      if ((this.state.focus === sym || isCompareTarget) && this.state.tf === tf) this.render();
     } catch(e) {}
   },
   toggleIndicator(key) { this.state.indicators[key] = !this.state.indicators[key]; this.render(); },
@@ -704,7 +687,7 @@ const vtx = {
       this.state.tickers = this.state.tickers.map(x => {
         if (x.sym!==sym) return x;
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, hist:this.genHist(q.price,46,q.prevClose), name:q.name||upd.name, sector:q.industry||upd.sector}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, hist:this.genHist(q.price,46,q.prevClose), name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null}; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -721,9 +704,54 @@ const vtx = {
     if (this.state.tickers.length<=1) return;
     this.state.tickers = this.state.tickers.filter(t=>t.sym!==sym);
     if (this.state.focus===sym) this.state.focus = this.state.tickers[0].sym;
+    if (this.state.compareSet) this.state.compareSet = this.state.compareSet.filter(s=>s!==sym);
     this.unsubscribeSymbol(sym);
     this.saveWatchlist();
     this.render();
+  },
+  toggleCompareSymbol(sym) {
+    const set = new Set(this.state.compareSet || []);
+    if (set.has(sym)) set.delete(sym); else set.add(sym);
+    this.state.compareSet = [...set];
+    const tf = this.state.tf;
+    this.state.compareSet.forEach(s => {
+      if (!(this._chartData && this._chartData[s] && this._chartData[s][tf])) this.loadChartData(s, tf);
+    });
+    this.renderRight();
+  },
+  // Shared by the main chart and Compare tab so both timeframes format
+  // consistently: only 1D is genuinely intraday (ET matters); daily/weekly/
+  // monthly bars read the calendar date straight from UTC (see buildChart
+  // for why — an ET conversion there can roll a bar back a day, or a year).
+  dateLabelsFrom(times, tf) {
+    if (!times || times.length < 2) return [];
+    const tickIdxs = [...new Set([0,0.25,0.5,0.75,1].map(f => Math.round(f*(times.length-1))))];
+    return tickIdxs.map(i => {
+      const d = new Date(times[i]*1000);
+      if (tf === '1D') return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/New_York'});
+      if (tf === '1Y' || tf === 'MAX') return d.toLocaleDateString('en-US',{month:'short',year:'2-digit',timeZone:'UTC'});
+      return d.toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
+    });
+  },
+  compareChartSvg(series, w, h) {
+    w = w||700; h = h||220;
+    const allVals = series.flatMap(s => s.data);
+    const min = Math.min(...allVals, 0), max = Math.max(...allVals, 0);
+    const pad = (max-min)*0.12 || 1;
+    const lo = min-pad, hi = max+pad;
+    const span = (hi-lo)||1;
+    const y = v => h - ((v-lo)/span)*h;
+    const gridLines = [0.25,0.5,0.75].map(f => `<line x1="0" y1="${(h*f).toFixed(1)}" x2="${w}" y2="${(h*f).toFixed(1)}" stroke="rgba(255,255,255,.05)" stroke-width="1"/>`).join('');
+    const lines = series.map(s => {
+      const step = w/(s.data.length-1);
+      const d = s.data.map((v,i) => `${i===0?'M':'L'}${(i*step).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="display:block;">
+      ${gridLines}
+      <line x1="0" y1="${y(0).toFixed(1)}" x2="${w}" y2="${y(0).toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1" stroke-dasharray="3 3"/>
+      ${lines}
+    </svg>`;
   },
 
   results() {
@@ -847,6 +875,10 @@ const vtx = {
           changePct: q.changePct,
           name: q.name || t.name,
           sector: q.industry || t.sector,
+          exchange: q.exchange || t.exchange,
+          logo: q.logo || t.logo || null,
+          ipo: q.ipo || t.ipo || null,
+          website: q.website || t.website || null,
         };
       });
       this.render();
@@ -1197,11 +1229,16 @@ const vtx = {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;">
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+            ${f.logo ? `<img src="${f.logo}" alt="" style="width:30px;height:30px;border-radius:7px;object-fit:contain;background:#fff;padding:2px;flex-shrink:0;" onerror="this.style.display='none'">` : ''}
             <span style="font-family:var(--mono);font-size:30px;font-weight:800;letter-spacing:-.01em;">${f.sym}</span>
             <span class="sectorlink" onclick="vtx.jumpToSector(${JSON.stringify(f.sector).replace(/"/g,'&quot;')})" title="View ${f.sector} in the sector heatmap" style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);border:1px solid rgba(52,211,255,.3);background:rgba(52,211,255,.08);border-radius:99px;padding:3px 10px;">${f.sector}</span>
             <span style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--pos);"><span style="width:5px;height:5px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.5s ease infinite;"></span>LIVE</span>
           </div>
-          <div style="font-size:13px;color:var(--mut);">${f.name} · NASDAQ</div>
+          <div style="font-size:13px;color:var(--mut);">${f.name}${f.exchange ? ' · '+f.exchange : ''}</div>
+          ${(f.ipo || f.website) ? `<div style="display:flex;gap:12px;margin-top:4px;font-size:10.5px;color:var(--mut);">
+            ${f.ipo ? `<span>IPO ${f.ipo}</span>` : ''}
+            ${f.website ? `<a href="${f.website}" target="_blank" rel="noopener" style="color:var(--acc2);text-decoration:none;">${f.website.replace(/^https?:\/\/(www\.)?/,'').replace(/\/$/,'')}</a>` : ''}
+          </div>` : ''}
         </div>
         <div style="text-align:right;">
           <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${this.fmt(f.price)}</div>
@@ -1458,7 +1495,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['ai','Assistant']];
+    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['compare','Compare'],['ai','Assistant']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -1691,6 +1728,51 @@ const vtx = {
                 <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${tc.fg};margin-top:2px;">${(c.changePct>=0?'+':'')+c.changePct.toFixed(2)}%</div>
               </div>`;
             }).join('') + `</div></div>`;
+      }
+    }
+    else if (s.tab === 'compare') {
+      const compareSet = s.compareSet || [];
+      const palette = ['#2F7BFF','#1fd397','#f5a524','#9b6bff','#34d3ff','#ec4899','#64748b'];
+      const chipsHtml = T.map(t => `
+        <button onclick="vtx.toggleCompareSymbol('${t.sym}')" style="font-family:var(--mono);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:99px;border:1px solid ${compareSet.includes(t.sym)?'rgba(var(--glow),.5)':'var(--line)'};background:${compareSet.includes(t.sym)?'rgba(var(--glow),.16)':'rgba(255,255,255,.03)'};color:${compareSet.includes(t.sym)?'var(--acc2)':'var(--mut)'};margin:3px 3px 0 0;cursor:pointer;">${t.sym}</button>`).join('');
+      const header = `<div style="padding:12px 14px 0;">
+        <div style="font-size:9px;color:var(--mut);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">Compare (${s.tf}) — select 2+ tickers</div>
+        <div>${chipsHtml}</div>
+      </div>`;
+
+      if (compareSet.length < 2) {
+        el.innerHTML = header + `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Pick at least 2 tickers from your watchlist above to overlay their performance, normalized to % change.</div>`;
+      } else {
+        const seriesData = compareSet.map(sym => ({ sym, entry: this._chartData && this._chartData[sym] && this._chartData[sym][s.tf] }));
+        const missing = seriesData.filter(d => !d.entry).map(d => d.sym);
+        if (missing.length) {
+          el.innerHTML = header + `<div style="padding:40px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading ${missing.join(', ')}…</div>`;
+        } else {
+          const normSeries = seriesData.map((d,i) => {
+            const base = d.entry.prices[0];
+            return { sym: d.sym, data: d.entry.prices.map(p => (p/base - 1) * 100), color: palette[i % palette.length], times: d.entry.times };
+          });
+          const legendHtml = normSeries.map(ns => {
+            const lastVal = ns.data[ns.data.length-1];
+            return `<span style="display:flex;align-items:center;gap:6px;font-size:11px;">
+              <span style="width:9px;height:9px;border-radius:2px;background:${ns.color};"></span>
+              <span style="font-family:var(--mono);font-weight:700;color:var(--txt);">${ns.sym}</span>
+              <span style="font-family:var(--mono);color:${lastVal>=0?'var(--pos)':'var(--neg)'};">${lastVal>=0?'+':''}${lastVal.toFixed(1)}%</span>
+            </span>`;
+          }).join('');
+          // Longest-history series' times used for axis labels — with
+          // differing per-ticker start dates (e.g. a recent IPO vs. SPY on
+          // MAX), points line up by index, not by calendar date, so the
+          // axis is a close approximation, not an exact date-per-tick match.
+          const refTimes = normSeries.reduce((a,b) => b.times.length > a.times.length ? b : a).times;
+          const dateLabels = this.dateLabelsFrom(refTimes, s.tf);
+          el.innerHTML = header + `
+            <div style="padding:12px 14px;">
+              <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;">${legendHtml}</div>
+              ${this.compareChartSvg(normSeries, 700, 220)}
+              <div style="display:flex;justify-content:space-between;margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--mut);">${dateLabels.map(l=>`<span>${l}</span>`).join('')}</div>
+            </div>`;
+        }
       }
     }
     else if (s.tab === 'ai') {
