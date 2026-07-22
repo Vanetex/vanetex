@@ -5,7 +5,7 @@ import { kvGet, kvSet } from "@/lib/kvCache";
 export const runtime = "nodejs";
 
 const FRED_BASE = "https://api.stlouisfed.org/fred";
-const CACHE_KEY = "intel:yield-curve:v1";
+const CACHE_KEY = "intel:yield-curve:v2"; // v2: points now also carry prevYield for day-over-day change
 const CACHE_TTL_S = 6 * 60 * 60; // Treasury yields post once per business day
 
 // FRED's Treasury Constant Maturity series — the standard free real-yield
@@ -24,17 +24,23 @@ const MATURITIES: { id: string; label: string; months: number }[] = [
   { id: "DGS30", label: "30Y", months: 360 },
 ];
 
-type Point = { label: string; months: number; yield: number; date: string };
+type Point = { label: string; months: number; yield: number; date: string; prevYield: number | null };
 
-async function fetchLatest(seriesId: string, apiKey: string): Promise<{ value: number; date: string } | null> {
+// Keeps the 2 most recent real observations (skipping "." no-data rows) so
+// callers can show a day-over-day change, not just the latest level.
+async function fetchLatestTwo(seriesId: string, apiKey: string): Promise<{ value: number; date: string; prevValue: number | null } | null> {
   try {
     const url = `${FRED_BASE}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=5`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = (await res.json()) as { observations?: { date: string; value: string }[] };
-    const obs = (data.observations ?? []).find((o) => o.value !== ".");
-    if (!obs) return null;
-    return { value: parseFloat(obs.value), date: obs.date };
+    const real = (data.observations ?? []).filter((o) => o.value !== ".");
+    if (!real.length) return null;
+    return {
+      value: parseFloat(real[0].value),
+      date: real[0].date,
+      prevValue: real.length > 1 ? parseFloat(real[1].value) : null,
+    };
   } catch {
     return null;
   }
@@ -60,10 +66,10 @@ export async function GET(request: NextRequest) {
     // Small chunks with a gap — same fan-out lesson as every other
     // multi-symbol route in this app.
     const CHUNK = 4;
-    const results: (({ value: number; date: string }) | null)[] = [];
+    const results: (Awaited<ReturnType<typeof fetchLatestTwo>>)[] = [];
     for (let i = 0; i < MATURITIES.length; i += CHUNK) {
       const chunk = MATURITIES.slice(i, i + CHUNK);
-      const chunkResults = await Promise.all(chunk.map((m) => fetchLatest(m.id, apiKey)));
+      const chunkResults = await Promise.all(chunk.map((m) => fetchLatestTwo(m.id, apiKey)));
       results.push(...chunkResults);
       if (i + CHUNK < MATURITIES.length) await new Promise((r) => setTimeout(r, 300));
     }
@@ -71,7 +77,7 @@ export async function GET(request: NextRequest) {
     const points: Point[] = [];
     MATURITIES.forEach((m, i) => {
       const r = results[i];
-      if (r) points.push({ label: m.label, months: m.months, yield: r.value, date: r.date });
+      if (r) points.push({ label: m.label, months: m.months, yield: r.value, date: r.date, prevYield: r.prevValue });
     });
 
     if (!points.length) {

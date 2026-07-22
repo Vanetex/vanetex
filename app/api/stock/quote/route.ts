@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     };
     const profile = (await profileRes.json()) as {
       name?: string; exchange?: string; finnhubIndustry?: string;
+      logo?: string; ipo?: string; weburl?: string;
     };
 
     if (!quote.c) {
@@ -59,6 +60,9 @@ export async function GET(request: NextRequest) {
       name: profile.name ?? sym,
       exchange: profile.exchange ?? "",
       industry: profile.finnhubIndustry ?? "",
+      logo: profile.logo || null,
+      ipo: profile.ipo || null,
+      website: profile.weburl || null,
       price: quote.c,
       change: quote.d,
       changePct: quote.dp,
