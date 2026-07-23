@@ -186,6 +186,7 @@ input{font-family:var(--ui)}
       <!-- CENTER COLUMN -->
       <div style="display:flex;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;padding-right:2px;">
 
+        <div id="tickerView" style="display:contents;">
         <!-- Focus header -->
         <div id="vtx-focus" style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);transition:transform .25s ease;transform-style:preserve-3d;">
           <div id="focusHeader"></div>
@@ -264,6 +265,19 @@ input{font-family:var(--ui)}
           <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Financials</div>
           <div id="extFinancialsBody" style="padding:2px 0 8px;"></div>
         </div>
+
+        <!-- ETF holdings composition — only shown when the focused ticker resolves to real holdings data -->
+        <div id="etfHoldingsCard" style="display:none;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Holdings Composition</span>
+            <span id="etfHoldingsAsOf" style="font-size:9px;color:var(--mut);margin-left:auto;"></span>
+          </div>
+          <div id="etfHoldingsBody" style="padding:4px 0;"></div>
+        </div>
+        </div>
+
+        <!-- Market overview (shown when no ticker is drilled into) -->
+        <div id="overviewView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -295,7 +309,7 @@ input{font-family:var(--ui)}
 <script>
 const vtx = {
   state: {
-    variant: 'A', focus: 'NVDA', tab: 'news', tf: '1D',
+    variant: 'A', focus: 'NVDA', view: 'overview', tab: 'news', tf: '1D',
     query: '', searchOpen: false, remoteResults: [], tickers: [], tape: [], tickerBarData: [],
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: 12,
@@ -539,6 +553,7 @@ const vtx = {
     this.loadCalendar();
     this.loadEconCalendar();
     this.loadYieldCurve();
+    this.loadMarketSnapshot();
     this.loadNews();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
@@ -546,10 +561,12 @@ const vtx = {
     setInterval(() => this.loadCalendar(), 30 * 60 * 1000);
     setInterval(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
     setInterval(() => this.loadYieldCurve(), 6 * 60 * 60 * 1000);
+    setInterval(() => this.loadMarketSnapshot(), 60 * 1000);
     setInterval(() => this.loadNews(), 10 * 60 * 1000);
     this.renderClock();
     this.renderMarketStatus();
     this.loadChartData(this.state.focus, this.state.tf);
+    this.loadEtfHoldings(this.state.focus);
     this.loadDepth(this.state.focus);
     this.loadTickerBar();
     setInterval(() => this.loadTickerBar(), 5 * 60 * 1000);
@@ -590,7 +607,8 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); },
+  backToOverview() { this.state.view = 'overview'; this.render(); },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; this.renderRight(); },
   openSector(name) { this.state.moversSector = name; this.renderRight(); },
   // Cross-linking: click a ticker anywhere (news, calendar, dark pools) and
@@ -674,9 +692,11 @@ const vtx = {
     this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[];
     document.getElementById('searchInput').value=''; this.closeSearch();
     this.state.focus = sym;
+    this.state.view = 'ticker';
     this.render();
     this.loadChartData(sym, this.state.tf);
     this.loadDepth(sym);
+    this.loadEtfHoldings(sym);
     try {
       const [q, fin, analyst, earn] = await Promise.all([
         fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
@@ -996,6 +1016,33 @@ const vtx = {
       if (!data.points) return;
       this.YIELD_CURVE = data;
       if (this.state.tab === 'econ') this.renderRight();
+      if (this.state.view === 'overview') this.renderOverview();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  async loadMarketSnapshot() {
+    try {
+      const [spx, ndx, vix] = await Promise.all([
+        fetch('/api/market/index-quote?symbol=SPX').then(r=>r.ok?r.json():null).catch(()=>null),
+        fetch('/api/market/index-quote?symbol=NDX').then(r=>r.ok?r.json():null).catch(()=>null),
+        fetch('/api/market/index-quote?symbol=VIX').then(r=>r.ok?r.json():null).catch(()=>null),
+      ]);
+      this.MARKET_SNAPSHOT = this.MARKET_SNAPSHOT || {};
+      if (spx && !spx.error) this.MARKET_SNAPSHOT.SPX = spx;
+      if (ndx && !ndx.error) this.MARKET_SNAPSHOT.NDX = ndx;
+      if (vix && !vix.error) this.MARKET_SNAPSHOT.VIX = vix;
+      this.render();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  async loadEtfHoldings(sym) {
+    try {
+      const res = await fetch(`/api/stock/etf-holdings?symbol=${encodeURIComponent(sym)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!this._etfHoldings) this._etfHoldings = {};
+      this._etfHoldings[sym] = data;
+      if (this.state.focus === sym && this.state.view === 'ticker') this.render();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -1030,7 +1077,107 @@ const vtx = {
       if (!data || typeof data !== 'object') return;
       this.state.heatmap = data;
       if (this.state.tab === 'movers') this.renderRight();
+      if (this.state.view === 'overview') this.renderOverview();
     } catch (e) { /* keep previous data on failure */ }
+  },
+
+  // Default landing state for the center column — real market snapshot,
+  // the real Treasury yield curve, and a condensed sector-performance
+  // summary. Deliberately no fabricated composite "sentiment" score —
+  // each signal shown here is a genuine data point, not a blended guess.
+  renderOverview() {
+    const s = this.state;
+    const el = document.getElementById('overviewView');
+    if (!el) return;
+    const snap = this.MARKET_SNAPSHOT || {};
+    const yc = this.YIELD_CURVE;
+    const y10 = yc && yc.points.find(p => p.months === 120);
+
+    const cardShell = (label, body) => `
+      <div style="background:rgba(10,13,22,.6);border:1px solid var(--line);border-radius:12px;padding:14px 16px;">
+        <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin-bottom:6px;">${label}</div>
+        ${body}
+      </div>`;
+    const loadingCard = label => cardShell(label, `<div style="font-size:11px;color:var(--mut);">Loading…</div>`);
+    const quoteCard = (label, q, invertColor) => {
+      if (!q) return loadingCard(label);
+      const up = q.changePct >= 0;
+      const color = invertColor ? (up ? 'var(--warn)' : 'var(--pos)') : (up ? 'var(--pos)' : 'var(--neg)');
+      return cardShell(label, `
+        <div style="font-family:var(--mono);font-size:19px;font-weight:800;">${q.price.toFixed(2)}</div>
+        <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:${color};margin-top:3px;">${up?'+':''}${q.changePct.toFixed(2)}%</div>`);
+    };
+    const y10Card = (() => {
+      if (!y10) return loadingCard('10Y Treasury');
+      const chg = y10.prevYield != null ? y10.yield - y10.prevYield : null;
+      const color = chg == null ? 'var(--mut)' : (chg >= 0 ? 'var(--pos)' : 'var(--neg)');
+      return cardShell('10Y Treasury', `
+        <div style="font-family:var(--mono);font-size:19px;font-weight:800;">${y10.yield.toFixed(2)}%</div>
+        <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:${color};margin-top:3px;">${chg==null?'—':(chg>=0?'+':'')+chg.toFixed(2)+' pts'}</div>`);
+    })();
+
+    const snapshotHtml = `
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:16px;flex-shrink:0;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:12px;">Market Snapshot</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+          ${quoteCard('S&P 500', snap.SPX)}
+          ${quoteCard('Nasdaq', snap.NDX)}
+          ${quoteCard('VIX', snap.VIX, true)}
+          ${y10Card}
+        </div>
+      </div>`;
+
+    let ycHtml;
+    if (!yc) {
+      ycHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading yield curve…</div>`;
+    } else {
+      const spread = yc.spread10y2y;
+      const spreadHtml = spread != null ? `<span style="margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;color:${yc.inverted?'var(--neg)':'var(--pos)'};">10Y−2Y ${spread>=0?'+':''}${spread.toFixed(2)}%${yc.inverted?' · INVERTED':''}</span>` : '';
+      const labelsHtml = yc.points.map(p => `<span style="font-size:8.5px;font-family:var(--mono);color:var(--mut);">${p.label}</span>`).join('');
+      ycHtml = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">US Treasury Yield Curve</span>
+          ${spreadHtml}
+        </div>
+        ${this.yieldCurveSvg(yc.points, 760, 130)}
+        <div style="display:flex;justify-content:space-between;margin-top:6px;">${labelsHtml}</div>
+        <div style="font-size:8.5px;color:var(--mut);margin-top:8px;">As of ${yc.points[yc.points.length-1].date} · FRED Treasury Constant Maturity Rates</div>`;
+    }
+    const yieldCardHtml = `
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:16px;flex-shrink:0;">
+        ${ycHtml}
+      </div>`;
+
+    const heat = s.heatmap;
+    let sectorHtml;
+    if (!heat) {
+      sectorHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading sector heatmap…</div>`;
+    } else {
+      const sectors = Object.keys(heat).map(name => {
+        const items = heat[name];
+        const avg = items.reduce((sum,c) => sum + c.changePct, 0) / items.length;
+        return { name, avg };
+      }).sort((a, b) => b.avg - a.avg);
+      sectorHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;">` +
+        sectors.map(g => {
+          const up = g.avg >= 0;
+          return `<span class="sectorlink" onclick="vtx.jumpToSector(${JSON.stringify(g.name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;padding:6px 11px;border-radius:99px;border:1px solid ${up?'rgba(31,209,151,.3)':'rgba(255,77,94,.3)'};background:${up?'rgba(31,209,151,.08)':'rgba(255,77,94,.08)'};cursor:pointer;">
+            <span>${g.name}</span><span style="font-family:var(--mono);font-weight:800;color:${up?'var(--pos)':'var(--neg)'};">${up?'+':''}${g.avg.toFixed(2)}%</span>
+          </span>`;
+        }).join('') + `</div>`;
+    }
+    const sectorCardHtml = `
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:16px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Sector Performance</span>
+          <span style="font-size:9px;color:var(--mut);margin-left:auto;">click a sector to view movers</span>
+        </div>
+        ${sectorHtml}
+      </div>`;
+
+    const hintHtml = `<div style="text-align:center;color:var(--mut);font-size:10.5px;padding:6px 0 2px;">Select a ticker from the watchlist, or search above, to switch to per-stock research.</div>`;
+
+    el.innerHTML = snapshotHtml + yieldCardHtml + sectorCardHtml + hintHtml;
   },
 
   async checkAuth() {
@@ -1222,12 +1369,18 @@ const vtx = {
 
     this.renderTimeSales();
 
+    document.getElementById('tickerView').style.display = s.view === 'overview' ? 'none' : 'contents';
+    document.getElementById('overviewView').style.display = s.view === 'overview' ? 'flex' : 'none';
+    if (s.view === 'overview') {
+      this.renderOverview();
+    } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
     const lo=Math.min(...f.hist), hi=Math.max(...f.hist);
     document.getElementById('focusHeader').innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;">
         <div>
+          <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 8px;cursor:pointer;">← Overview</button>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
             ${f.logo ? `<img src="${f.logo}" alt="" style="width:30px;height:30px;border-radius:7px;object-fit:contain;background:#fff;padding:2px;flex-shrink:0;" onerror="this.style.display='none'">` : ''}
             <span style="font-family:var(--mono);font-size:30px;font-weight:800;letter-spacing:-.01em;">${f.sym}</span>
@@ -1457,18 +1610,47 @@ const vtx = {
         </div>`).join('');
     }
 
-    // Right panel
+    // ETF holdings — only ever populated for SPDR-family tickers (the one
+    // issuer whose daily holdings file is fetchable without a login/session
+    // gate); every other ticker correctly reports {available:false} and the
+    // card just stays hidden rather than showing an empty/fake breakdown.
+    const etf = this._etfHoldings && this._etfHoldings[f.sym];
+    const etfCard = document.getElementById('etfHoldingsCard');
+    if (etf && etf.available && etf.holdings && etf.holdings.length) {
+      etfCard.style.display = '';
+      document.getElementById('etfHoldingsAsOf').textContent = etf.asOf ? `As of ${etf.asOf}` : '';
+      const maxW = Math.max(...etf.holdings.map(h => h.weight), 1);
+      document.getElementById('etfHoldingsBody').innerHTML = etf.holdings.map(h => `
+        <div style="position:relative;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 14px;font-size:11px;">
+          <div style="position:absolute;left:0;top:2px;bottom:2px;width:${(h.weight/maxW*100).toFixed(1)}%;background:rgba(52,211,255,.08);border-radius:4px;"></div>
+          <div style="position:relative;min-width:0;display:flex;align-items:center;gap:8px;">
+            ${h.ticker ? `<span class="symlink" onclick="event.stopPropagation();vtx.jumpToTicker('${h.ticker}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);padding:1px 4px;">${h.ticker}</span>` : ''}
+            <span style="color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${h.name}</span>
+          </div>
+          <span style="position:relative;font-family:var(--mono);font-weight:700;color:var(--txt);flex-shrink:0;">${h.weight.toFixed(2)}%</span>
+        </div>`).join('') +
+        (etf.totalHoldings > etf.holdings.length ? `<div style="padding:8px 14px 4px;font-size:9.5px;color:var(--mut);">Top ${etf.holdings.length} of ${etf.totalHoldings} holdings · State Street/SPDR daily holdings file</div>` : '');
+    } else {
+      etfCard.style.display = 'none';
+    }
+    } // end view === 'ticker'
+
+    // Right panel — tabs (News, Sector, Macro, etc.) stay useful with no
+    // ticker focused, so this renders in both views.
     this.renderTabs();
     this.renderRight();
 
-    // Status bar
+    // Status bar — real index-quote data (same source the Overview and
+    // Macro-tab yield curve use), not tied to whatever happens to be on
+    // the watchlist.
     document.getElementById('latencyVal').textContent = s.latency;
-    const spy = T.find(t=>t.sym==='SPY'), qqq = T.find(t=>t.sym==='QQQ');
+    const snap = this.MARKET_SNAPSHOT || {};
+    const y10 = this.YIELD_CURVE && this.YIELD_CURVE.points.find(p => p.months === 120);
     const indices = [
-      {label:'S&P', value:spy ? this.fmt(spy.price) : '—', color:cPos},
-      {label:'NDX', value:qqq ? this.fmt(qqq.price) : '—', color:cPos},
-      {label:'VIX', value:(13+this.hashN('VIX',(Date.now()/3000|0))*0.4).toFixed(2), color:'var(--warn)'},
-      {label:'10Y', value:'4.21%', color:'var(--mut)'}
+      {label:'S&P', value: snap.SPX ? this.fmt(snap.SPX.price) : '—', color:cPos},
+      {label:'NDX', value: snap.NDX ? this.fmt(snap.NDX.price) : '—', color:cPos},
+      {label:'VIX', value: snap.VIX ? snap.VIX.price.toFixed(2) : '—', color:'var(--warn)'},
+      {label:'10Y', value: y10 ? y10.yield.toFixed(2)+'%' : '—', color:'var(--mut)'}
     ];
     document.getElementById('indicesBar').innerHTML = indices.map(i => `<span>${i.label} <span style="color:${i.color};font-weight:600;">${i.value}</span></span>`).join('');
 
