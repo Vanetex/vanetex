@@ -118,7 +118,12 @@ const bt = {
     { key:'ETFs / Index', match:/etf|index/i },
   ],
   sectorBucket(industry) {
-    if (!industry) return 'Other';
+    // Finnhub's profile2 (the only free source we have for this) returns
+    // nothing at all for ETFs/funds — confirmed even for SPY. That's a
+    // real "we don't have this," not a genuine "Other" classification, so
+    // it gets its own bucket rather than being silently folded into Other
+    // (which would misleadingly look like a real categorization result).
+    if (!industry) return 'Uncategorized (ETF/Fund)';
     for (const b of this.SECTOR_BUCKETS) if (b.match.test(industry)) return b.key;
     return 'Other';
   },
@@ -621,10 +626,14 @@ const bt = {
         </div>
         <div style="padding-left:17px;font-family:var(--mono);font-size:10px;color:var(--mut);">${s.tickers.map(t=>this.esc(t)).join(', ')}</div>
       </div>`).join('');
+    const hasUncategorized = order.includes('Uncategorized (ETF/Fund)');
+    const note = hasUncategorized
+      ? `<div style="margin-top:14px;font-size:10.5px;color:var(--mut);line-height:1.5;">ETFs and funds don't carry an industry classification the way individual stocks do — Finnhub's free tier (and every free alternative we checked) has no real per-fund sector breakdown, so those holdings are grouped here rather than guessed at.</div>`
+      : '';
     return `<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
       <div>${donut}</div>
       <div style="flex:1;min-width:180px;">${legend}</div>
-    </div>`;
+    </div>${note}`;
   },
 
   // ============================================================
