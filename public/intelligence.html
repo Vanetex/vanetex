@@ -1153,7 +1153,10 @@ const vtx = {
     if (!heat) {
       sectorHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading sector heatmap…</div>`;
     } else {
-      const sectors = Object.keys(heat).map(name => {
+      // Some sectors in the heatmap feed occasionally resolve zero
+      // constituents (upstream fetch gap) — skip those rather than
+      // showing a divide-by-zero NaN% badge.
+      const sectors = Object.keys(heat).filter(name => heat[name].length > 0).map(name => {
         const items = heat[name];
         const avg = items.reduce((sum,c) => sum + c.changePct, 0) / items.length;
         return { name, avg };
