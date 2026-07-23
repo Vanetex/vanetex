@@ -105,6 +105,23 @@ select{appearance:none;-webkit-appearance:none}
 <script>
 const bt = {
   PALETTE: ['#2F7BFF','#1fd397','#f5a524','#9b6bff','#34d3ff','#ec4899','#64748b','#22d3ee'],
+  // Same bucketing convention Intelligence uses for its sector heatmap, so a
+  // stock classified "Technology" there reads the same way here.
+  SECTOR_BUCKETS: [
+    { key:'Technology', match:/semi|software|hardware|electronic|technology/i },
+    { key:'Communication', match:/internet|media|entertainment|telecom|communication/i },
+    { key:'Consumer', match:/consumer|retail|e-commerce|auto/i },
+    { key:'Financials', match:/financ|fintech|bank|insur|capital markets/i },
+    { key:'Healthcare', match:/health|pharma|biotech/i },
+    { key:'Energy', match:/energy|oil|gas/i },
+    { key:'Industrials', match:/industrial|aerospace|defense/i },
+    { key:'ETFs / Index', match:/etf|index/i },
+  ],
+  sectorBucket(industry) {
+    if (!industry) return 'Other';
+    for (const b of this.SECTOR_BUCKETS) if (b.match.test(industry)) return b.key;
+    return 'Other';
+  },
   PRESETS: {
     'Tech-Defense': { name: 'Tech-Defense Mix', holdings: [['QTUM',20],['SHLD',20],['IUSG',20],['REMX',20],['VGT',20]] },
     'S&P 500':      { name: 'S&P 500 Index',    holdings: [['SPY',100]] },
@@ -393,6 +410,7 @@ const bt = {
         try {
           const results = this.computeFor(this.state, data.series);
           this._lastRunKey = this.configKey(this.state.holdings, this.state.rebalance, this.state.start, this.state.end, this.state.initial);
+          this.loadSectors(tickers);
           this.setState({ running: false, hasResults: true, tab: 'Results', results, error: null });
         } catch (e) {
           this.setState({ running: false, error: e.message || 'Failed to compute backtest.' });
@@ -528,15 +546,84 @@ const bt = {
       <path d="${line}" fill="none" stroke="var(--neg)" stroke-width="1.8"/>
     </svg>`;
   },
+  // Standard SVG donut-via-stroke-dasharray technique: each segment is an
+  // arc of a circle's stroke, proportional to its share of the
+  // circumference, stacked by offsetting the dash pattern's start point.
+  donutSvg(segments, opts) {
+    const size = (opts && opts.size) || 140;
+    const thickness = (opts && opts.thickness) || 24;
+    const r = (size - thickness) / 2;
+    const cx = size/2, cy = size/2;
+    const circumference = 2 * Math.PI * r;
+    let offset = 0;
+    const arcs = segments.filter(s => s.value > 0).map(seg => {
+      const len = seg.value * circumference;
+      const dasharray = `${len.toFixed(2)} ${(circumference-len).toFixed(2)}`;
+      const dashoffset = (-offset).toFixed(2);
+      offset += len;
+      return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${thickness}" stroke-dasharray="${dasharray}" stroke-dashoffset="${dashoffset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="flex-shrink:0;">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="${thickness}"/>
+      ${arcs}
+    </svg>`;
+  },
   allocationHtml(perAsset) {
-    const segs = perAsset.map(a => `<div style="width:${(a.w*100).toFixed(2)}%;background:${a.color};height:100%;"></div>`).join('');
+    const segments = perAsset.map(a => ({ value: a.w, color: a.color }));
+    const donut = this.donutSvg(segments, { size: 140, thickness: 24 });
     const legend = perAsset.map(a => `
       <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
         <span style="width:9px;height:9px;border-radius:3px;background:${a.color};flex-shrink:0;"></span>
         <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;flex:1;">${this.esc(a.t)}</span>
         <span style="font-size:12px;color:var(--mut);">${(a.w*100).toFixed(0)}%</span>
       </div>`).join('');
-    return `<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:14px;background:var(--line);">${segs}</div><div>${legend}</div>`;
+    return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
+      <div>${donut}</div>
+      <div style="flex:1;min-width:140px;">${legend}</div>
+    </div>`;
+  },
+  loadSectors(symbols) {
+    const cache = this._sectorCache || (this._sectorCache = {});
+    const missing = [...new Set(symbols)].filter(s => !(s in cache));
+    if (!missing.length) return;
+    fetch(`/api/backtest/sectors?symbols=${encodeURIComponent(missing.join(','))}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || !data.industries) return;
+        Object.assign(this._sectorCache, data.industries);
+        this.render();
+      })
+      .catch(() => {});
+  },
+  sectorBreakdownHtml(perAsset) {
+    const cache = this._sectorCache || {};
+    const allLoaded = perAsset.every(a => a.t in cache);
+    if (!allLoaded) {
+      return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real sector classification (Finnhub)…</div>`;
+    }
+    const bySector = {}; const order = [];
+    perAsset.forEach(a => {
+      const key = this.sectorBucket(cache[a.t]);
+      if (!bySector[key]) { bySector[key] = { weight: 0, tickers: [] }; order.push(key); }
+      bySector[key].weight += a.w;
+      bySector[key].tickers.push(a.t);
+    });
+    const sectorPalette = ['#2F7BFF','#1fd397','#f5a524','#9b6bff','#34d3ff','#ec4899','#64748b','#22d3ee'];
+    const segs = order.map((key,i) => ({ label: key, value: bySector[key].weight, tickers: bySector[key].tickers, color: sectorPalette[i % sectorPalette.length] }));
+    const donut = this.donutSvg(segs, { size: 140, thickness: 24 });
+    const legend = segs.map(s => `
+      <div style="padding:7px 0;border-bottom:1px solid var(--line);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="width:9px;height:9px;border-radius:3px;background:${s.color};flex-shrink:0;"></span>
+          <span style="font-weight:700;font-size:12.5px;flex:1;">${this.esc(s.label)}</span>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--mut);">${(s.value*100).toFixed(0)}%</span>
+        </div>
+        <div style="padding-left:17px;font-family:var(--mono);font-size:10px;color:var(--mut);">${s.tickers.map(t=>this.esc(t)).join(', ')}</div>
+      </div>`).join('');
+    return `<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+      <div>${donut}</div>
+      <div style="flex:1;min-width:180px;">${legend}</div>
+    </div>`;
   },
 
   // ============================================================
@@ -734,9 +821,17 @@ const bt = {
           ${this.dateAxisRow(R.dates)}
         </div>
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;">
-          <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Allocation</div>
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Allocation by Holding</div>
           ${this.allocationHtml(R.perAsset)}
         </div>
+      </div>
+
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-top:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <span style="font-size:14px;font-weight:700;">Diversification by Sector</span>
+          <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;color:var(--pos);margin-left:auto;" title="Real industry classification per holding, from Finnhub.">REAL</span>
+        </div>
+        ${this.sectorBreakdownHtml(R.perAsset)}
       </div>
     `;
   },
