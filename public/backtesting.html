@@ -209,7 +209,7 @@ const bt = {
     const entry = {
       id: Date.now() + '-' + Math.random().toString(36).slice(2,7),
       name: this.state.name || 'Untitled portfolio',
-      holdings: this.state.holdings.filter(h => h.t).map(h => ({ t: h.t.toUpperCase(), w: +h.w || 0 })),
+      holdings: this.state.holdings.filter(h => h.t).map(h => ({ t: h.t.toUpperCase(), w: +h.w || 0, color: h.color || null })),
       rebalance: this.state.rebalance,
       start: this.state.start,
       end: this.state.end,
@@ -245,7 +245,7 @@ const bt = {
   loadSaved(entry) {
     this.setState({
       name: entry.name,
-      holdings: entry.holdings.map(h => ({ t: h.t, w: h.w })),
+      holdings: entry.holdings.map(h => ({ t: h.t, w: h.w, color: h.color || undefined })),
       rebalance: entry.rebalance,
       start: entry.start,
       end: entry.end,
@@ -265,6 +265,7 @@ const bt = {
   removeHolding(i) { this.setState(s => ({ holdings: s.holdings.filter((_,j) => j !== i), preset: null })); },
   setTicker(i, v) { const h = this.state.holdings.slice(); h[i] = { ...h[i], t: v.toUpperCase() }; this.setState({ holdings: h, preset: null }); },
   setWeight(i, v) { const h = this.state.holdings.slice(); h[i] = { ...h[i], w: v === '' ? '' : +v }; this.setState({ holdings: h, preset: null }); },
+  setHoldingColor(i, color) { const h = this.state.holdings.slice(); h[i] = { ...h[i], color }; this.setState({ holdings: h }); },
   setName(v) { this.setState({ name: v }); },
   setStart(v) { this.setState({ start: v }); },
   setEnd(v) { this.setState({ end: v }); },
@@ -362,7 +363,7 @@ const bt = {
       if (reb > 0 && (i+1) % reb === 0) vals = hs.map(h => total * ((+h.w||0)/wsum));
       equity.push(total);
     }
-    const perAsset = hs.map((h,j) => ({ t: h.t.toUpperCase(), start: startVals[j], end: vals[j], color: this.PALETTE[j % this.PALETTE.length], w: (+h.w||0)/wsum }));
+    const perAsset = hs.map((h,j) => ({ t: h.t.toUpperCase(), start: startVals[j], end: vals[j], color: h.color || this.PALETTE[j % this.PALETTE.length], w: (+h.w||0)/wsum }));
 
     const bench = [initial]; let bv = initial;
     for (let i=0;i<n;i++) { bv *= (1 + benchRets[i]); bench.push(bv); }
@@ -645,7 +646,10 @@ const bt = {
 
     const holdRows = s.holdings.map((h,i) => `
       <div class="holdrow" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <span style="width:8px;height:8px;border-radius:2px;background:${this.PALETTE[i%this.PALETTE.length]};flex-shrink:0;"></span>
+        <label style="position:relative;width:12px;height:12px;flex-shrink:0;cursor:pointer;" title="Change ${this.esc(h.t)||'holding'} color">
+          <span style="display:block;width:8px;height:8px;margin:2px;border-radius:2px;background:${h.color || this.PALETTE[i%this.PALETTE.length]};"></span>
+          <input type="color" value="${h.color || this.PALETTE[i%this.PALETTE.length]}" oninput="bt.setHoldingColor(${i}, this.value)" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0;">
+        </label>
         <input value="${this.esc(h.t)}" onchange="bt.setTicker(${i}, this.value)" placeholder="TICK" style="flex:1;min-width:0;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-family:var(--mono);font-size:12.5px;font-weight:700;outline:none;">
         <div style="position:relative;width:70px;">
           <input type="number" value="${h.w}" onchange="bt.setWeight(${i}, this.value)" style="width:100%;padding:9px 20px 9px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-family:var(--mono);font-size:12.5px;font-weight:700;text-align:right;outline:none;">
