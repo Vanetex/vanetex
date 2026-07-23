@@ -704,9 +704,12 @@ window.closeModal=closeModal;
     requestAnimationFrame(renderGlobe);
   }
 
-  // Load TopoJSON world data
+  // Load TopoJSON world data — 50m (1:50,000,000), not 110m: the lower-
+  // resolution set visibly distorts borders and drops smaller features at
+  // this globe's render size. Same free CDN, same dataset family, just a
+  // more detailed cut of it.
   try{
-    const world=await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json());
+    const world=await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json').then(r=>r.json());
     countries=topojson.feature(world,world.objects.countries).features;
   }catch(e){console.warn('Globe data failed',e)}
 
