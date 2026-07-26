@@ -27,8 +27,16 @@ export async function GET(request: NextRequest) {
   const cfg = RANGE_MAP[rangeParam] ?? RANGE_MAP["1M"];
   const { interval, range, limit } = cfg;
 
-  const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}:v2`;
-  const cached = await kvGet<{ prices: number[]; times: number[] }>(cacheKey);
+  type Body = {
+    prices: number[];
+    times: number[];
+    volume: number | null;
+    week52High: number | null;
+    week52Low: number | null;
+  };
+
+  const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}:v3`;
+  const cached = await kvGet<Body>(cacheKey);
   if (cached) {
     return NextResponse.json(cached);
   }
@@ -46,17 +54,22 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json() as {
       chart: {
-        result?: Array<{ timestamp?: number[]; indicators: { quote: Array<{ close: number[] }> } }>;
+        result?: Array<{
+          timestamp?: number[];
+          indicators: { quote: Array<{ close: number[] }> };
+          meta?: { regularMarketVolume?: number; fiftyTwoWeekHigh?: number; fiftyTwoWeekLow?: number };
+        }>;
         error?: { description: string };
       };
     };
 
     if (data.chart.error || !data.chart.result?.[0]) {
-      return NextResponse.json({ prices: [], times: [] });
+      return NextResponse.json({ prices: [], times: [], volume: null, week52High: null, week52Low: null });
     }
 
-    const timestamps = data.chart.result[0].timestamp ?? [];
-    const closes = data.chart.result[0].indicators.quote[0]?.close ?? [];
+    const result = data.chart.result[0];
+    const timestamps = result.timestamp ?? [];
+    const closes = result.indicators.quote[0]?.close ?? [];
     // Filter both arrays together (not independently) so a null close at
     // index i can't desync the price from its real timestamp.
     const pairs = closes
@@ -66,11 +79,17 @@ export async function GET(request: NextRequest) {
     const prices = pairs.map((p) => p.c);
     const times = pairs.map((p) => p.t); // unix seconds
 
-    const body = { prices, times };
+    const body: Body = {
+      prices,
+      times,
+      volume: result.meta?.regularMarketVolume ?? null,
+      week52High: result.meta?.fiftyTwoWeekHigh ?? null,
+      week52Low: result.meta?.fiftyTwoWeekLow ?? null,
+    };
     await kvSet(cacheKey, body, CACHE_TTL_S);
     return NextResponse.json(body);
   } catch (err) {
     console.error("[stock/candles] error:", err);
-    return NextResponse.json({ prices: [], times: [] });
+    return NextResponse.json({ prices: [], times: [], volume: null, week52High: null, week52Low: null });
   }
 }

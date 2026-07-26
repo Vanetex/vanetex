@@ -290,7 +290,7 @@ input{font-family:var(--ui)}
     <!-- STATUS BAR -->
     <footer style="height:28px;flex-shrink:0;display:flex;align-items:center;gap:18px;padding:0 16px;border-top:1px solid var(--line);background:rgba(6,8,14,.6);font-family:var(--mono);font-size:10.5px;color:var(--mut);">
       <span style="display:flex;align-items:center;gap:6px;color:var(--pos);"><span style="width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.6s ease infinite;"></span>LIVE FEED</span>
-      <span>LATENCY <span id="latencyVal">12</span>ms</span>
+      <span>LATENCY <span id="latencyVal">—</span>ms</span>
       <span id="dataModeLabel" style="color:var(--warn);">◆ SIMULATED DEMO DATA</span>
       <div style="flex:1;"></div>
       <span id="indicesBar" style="display:flex;gap:18px;"></span>
@@ -312,7 +312,7 @@ const vtx = {
     variant: 'A', focus: 'NVDA', view: 'overview', tab: 'news', tf: '1D',
     query: '', searchOpen: false, remoteResults: [], tickers: [], tape: [], tickerBarData: [],
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
-    chatInput: '', aiTyping: false, latency: 12,
+    chatInput: '', aiTyping: false, latency: null, // set by loadQuotes() from a real measured round-trip time
     indicators: { sma9: false, sma20: false },
     moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null
   },
@@ -321,22 +321,8 @@ const vtx = {
   CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
   ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
   YIELD_CURVE: null, // populated by loadYieldCurve() — real FRED Treasury data, no seed
-  FIL: [
-    {time:'2m',sym:'NVDA',who:'J. Huang',role:'CEO',act:'SELL',shares:'120,000',value:'$141.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
-    {time:'18m',sym:'PLTR',who:'S. Cohen',role:'President',act:'SELL',shares:'2.4M',value:'$149.8M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
-    {time:'1h',sym:'COIN',who:'B. Armstrong',role:'CEO',act:'BUY',shares:'50,000',value:'$12.2M',tone:'var(--pos)',toneBorder:'rgba(31,209,151,.4)'},
-    {time:'2h',sym:'META',who:'M. Zuckerberg',role:'CEO',act:'SELL',shares:'90,000',value:'$52.6M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'},
-    {time:'3h',sym:'AMD',who:'L. Su',role:'CEO',act:'BUY',shares:'25,000',value:'$4.1M',tone:'var(--pos)',toneBorder:'rgba(31,209,151,.4)'},
-    {time:'5h',sym:'AAPL',who:'K. Adams',role:'CFO',act:'SELL',shares:'30,000',value:'$6.9M',tone:'var(--neg)',toneBorder:'rgba(255,77,94,.4)'}
-  ],
-  DARK: [
-    {time:'09:42:11',sym:'NVDA',size:'248,500',notional:'$293.7M',venue:'UBS ATS',pct:'4.1%'},
-    {time:'09:41:50',sym:'AAPL',size:'612,000',notional:'$139.9M',venue:'Sigma X',pct:'2.6%'},
-    {time:'09:41:08',sym:'MSFT',size:'180,300',notional:'$84.9M',venue:'JPM-X',pct:'1.9%'},
-    {time:'09:40:33',sym:'TSLA',size:'420,750',notional:'$124.1M',venue:'IEX D-Peg',pct:'3.4%'},
-    {time:'09:39:55',sym:'AVGO',size:'66,200',notional:'$114.1M',venue:'MS Pool',pct:'5.2%'},
-    {time:'09:39:12',sym:'META',size:'95,400',notional:'$55.7M',venue:'CrossFinder',pct:'2.1%'}
-  ],
+  FIL: null, // populated by loadFilings() — real SEC EDGAR Form 4 data; null = not loaded yet, [] = loaded and genuinely empty
+  DARK: null, // populated by loadDarkPool() — real FINRA weekly dark-pool data; null = not loaded yet, [] = loaded and genuinely empty
 
   hashN(str, salt) { let h = salt || 0; for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return (h % 1000) / 1000; },
   hhmmss() { return new Date().toTimeString().slice(0, 8); },
@@ -415,7 +401,6 @@ const vtx = {
 
     return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars, sma9Path: pathFromSma(sma9), sma20Path: pathFromSma(sma20), axisLabels, dateLabels, W, AX};
   },
-  mktCap(t) { const v = t.shares*1e9*t.price; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(0)+'B'; },
   mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
   pctOf(t) { if (t.changePct != null) return t.changePct; const base = t.prevClose || t.open; return base ? (t.price - base) / base * 100 : 0; },
   fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); },
@@ -463,9 +448,6 @@ const vtx = {
       sym:a[0], name:a[1], sector:a[2], price:a[3] || 100,
       open: (a[3]||100)*(1-(this.hashN(a[0],3)*0.032-0.013)),
       hist: [a[3]||100, a[3]||100], // flat placeholder until loadSparklines() fetches the real intraday path
-      vol: Math.round(this.hashN(a[0],5)*70+6),
-      pe: Math.round(this.hashN(a[0],9)*44+12),
-      shares: this.hashN(a[0],11)*3.6+0.5
     }));
     if (!this.state.tickers.some(t=>t.sym===this.state.focus)) this.state.focus = this.state.tickers[0].sym;
     if (this.isMarketOpen()) { for (let i=0;i<16;i++) { this.state.tape.push(this.mkPrint(this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)])); } }
@@ -523,7 +505,6 @@ const vtx = {
         const hist = t.hist.concat(np); if (hist.length>46) hist.shift();
         return {...t, price:np, hist};
       });
-      this.state.latency = 8+Math.floor(Math.random()*14);
       this.render();
     }, 1100);
 
@@ -683,9 +664,6 @@ const vtx = {
     const t = {
       sym, name: name || sym, sector: sector || '—', price: 100,
       open: 100, hist: [100,100], // flat placeholder until loadSparklines() fetches the real intraday path
-      vol: Math.round(this.hashN(sym,5)*70+6),
-      pe: Math.round(this.hashN(sym,9)*44+12),
-      shares: this.hashN(sym,11)*3.6+0.5
     };
     this.state.tickers.push(t);
     this.subscribeSymbol(sym);
@@ -880,11 +858,16 @@ const vtx = {
 
   async loadQuotes() {
     try {
+      const t0 = performance.now();
       const results = await Promise.all(this.state.tickers.map(t =>
         fetch(`/api/stock/quote?symbol=${encodeURIComponent(t.sym)}`)
           .then(r => r.ok ? r.json() : null)
           .catch(() => null)
       ));
+      // Real measured round-trip time for this refresh, replacing the old
+      // Math.random()-based latency figure that was never tied to an
+      // actual request.
+      this.state.latency = Math.round(performance.now() - t0);
       this.state.tickers = this.state.tickers.map((t, i) => {
         const q = results[i];
         if (!q || !q.price) return t;
@@ -929,8 +912,16 @@ const vtx = {
       targets.forEach((sym, i) => { bySym[sym] = results[i]; });
       this.state.tickers = this.state.tickers.map(t => {
         const d = bySym[t.sym];
-        if (!d || !d.prices || d.prices.length < 2) return t;
-        return { ...t, hist: d.prices.slice(-46) };
+        if (!d) return t;
+        const upd = { ...t };
+        if (d.prices && d.prices.length >= 2) upd.hist = d.prices.slice(-46);
+        // Real current-session volume and 52-week range, from the same
+        // Yahoo chart call — replaces the old hashN()-fabricated volume
+        // and feeds a second real source for 52W high/low alongside Finnhub.
+        if (d.volume != null) upd.volume = d.volume;
+        if (d.week52High != null) upd.week52High = d.week52High;
+        if (d.week52Low != null) upd.week52Low = d.week52Low;
+        return upd;
       });
       this.render();
     } catch (e) { /* keep previous hist on failure */ }
@@ -989,7 +980,10 @@ const vtx = {
       const res = await fetch('/api/intel/filings');
       if (!res.ok) return;
       const data = await res.json();
-      if (!data.filings || !data.filings.length) return;
+      // A real empty array (no qualifying filings right now) is a valid
+      // result and must clear any previous data — only a malformed/error
+      // response (no filings key at all) keeps what's already on screen.
+      if (!data.filings) return;
       const toneMap = {
         BUY: { tone: 'var(--pos)', toneBorder: 'rgba(31,209,151,.4)' },
         SELL: { tone: 'var(--neg)', toneBorder: 'rgba(255,77,94,.4)' },
@@ -1006,7 +1000,9 @@ const vtx = {
       const res = await fetch(`/api/intel/darkpool?symbols=${encodeURIComponent(symbols)}`);
       if (!res.ok) return;
       const data = await res.json();
-      if (!data.rows || !data.rows.length) return;
+      // Same rule as loadFilings(): a real empty array is a valid result
+      // and must clear stale data; only bail on a malformed/error response.
+      if (!data.rows) return;
       this.DARK = data.rows.map(d => {
         const dt = new Date(d.time + 'T00:00:00Z');
         const label = isNaN(dt) ? d.time : `Week of ${dt.getMonth()+1}/${dt.getDate()}`;
@@ -1313,8 +1309,11 @@ const vtx = {
           if (priceChanged) {
             const side = d.price >= prev ? 'B' : 'S';
             const time = this.hhmmss();
-            const estVol = Math.floor(Math.random() * 400 + 100);
-            this.state.tape = [{ id: Math.random(), time, sym, price: d.price.toFixed(2), size: estVol.toLocaleString(), side }, ...this.state.tape].slice(0, 26);
+            // Quote polling only tells us the price moved, not the real
+            // trade size (that's only available from the Finnhub WS feed,
+            // handled in handleTrade()) — show it honestly as unknown
+            // rather than inventing a number.
+            this.state.tape = [{ id: Math.random(), time, sym, price: d.price.toFixed(2), size: '—', side }, ...this.state.tape].slice(0, 26);
           }
           this.state.tickers = this.state.tickers.map(x => {
             if (x.sym !== sym) return x;
@@ -1440,9 +1439,9 @@ const vtx = {
       {label:'Open',value:this.fmt(f.open),color:'var(--txt)'},
       {label:'Day Low',value:this.fmt(lo),color:'var(--txt)'},
       {label:'Day High',value:this.fmt(hi),color:'var(--txt)'},
-      {label:'Volume',value:f.vol+'M',color:'var(--txt)'},
-      {label:'Avg Vol',value:(f.fin && f.fin.avgVolume3M ? f.fin.avgVolume3M.toFixed(1) : (f.vol*1.2).toFixed(0))+'M',color:'var(--mut)'},
-      {label:'Mkt Cap',value:(f.fin && f.fin.marketCapitalization) ? this.mktCapFromFin(f.fin.marketCapitalization) : this.mktCap(f),color:'var(--acc2)'}
+      {label:'Volume',value:f.volume != null ? (f.volume/1e6).toFixed(1)+'M' : '—',color:'var(--txt)'},
+      {label:'Avg Vol',value:(f.fin && f.fin.avgVolume3M) ? f.fin.avgVolume3M.toFixed(1)+'M' : '—',color:'var(--mut)'},
+      {label:'Mkt Cap',value:(f.fin && f.fin.marketCapitalization) ? this.mktCapFromFin(f.fin.marketCapitalization) : '—',color:'var(--acc2)'}
     ];
     document.getElementById('headStats').innerHTML = headStats.map(st => `
       <div style="background:rgba(10,13,22,.6);padding:9px 11px;">
@@ -1486,12 +1485,12 @@ const vtx = {
     const fin = f.fin || null;
     const metrics = [
       {label:'Prev Close',value:this.fmt(f.prevClose || f.open),color:'var(--txt)'},
-      {label:'P/E Ratio',value:fin?.peTTM ? fin.peTTM.toFixed(1)+'x' : f.pe+'x',color:'var(--txt)'},
-      {label:'52W High',value:this.fmt(fin?.week52High ?? hi*1.18),color:'var(--pos)'},
-      {label:'52W Low',value:this.fmt(fin?.week52Low ?? lo*0.74),color:'var(--neg)'},
-      {label:'Beta',value:fin?.beta ? fin.beta.toFixed(2) : (0.7+this.hashN(f.sym,21)*1.1).toFixed(2),color:'var(--txt)'},
-      {label:'Div Yield',value:(fin ? (fin.dividendYield ?? 0) : this.hashN(f.sym,33)*1.6).toFixed(2)+'%',color:'var(--txt)'},
-      {label:'EPS (ttm)',value:'$'+(fin?.epsTTM ?? (f.price/f.pe)).toFixed(2),color:'var(--txt)'},
+      {label:'P/E Ratio',value:fin?.peTTM != null ? fin.peTTM.toFixed(1)+'x' : '—',color:'var(--txt)'},
+      {label:'52W High',value:(fin?.week52High ?? f.week52High) != null ? this.fmt(fin?.week52High ?? f.week52High) : '—',color:'var(--pos)'},
+      {label:'52W Low',value:(fin?.week52Low ?? f.week52Low) != null ? this.fmt(fin?.week52Low ?? f.week52Low) : '—',color:'var(--neg)'},
+      {label:'Beta',value:fin?.beta != null ? fin.beta.toFixed(2) : '—',color:'var(--txt)'},
+      {label:'Div Yield',value:fin ? (fin.dividendYield ?? 0).toFixed(2)+'%' : '—',color:'var(--txt)'},
+      {label:'EPS (ttm)',value:fin?.epsTTM != null ? '$'+fin.epsTTM.toFixed(2) : '—',color:'var(--txt)'},
     ];
     document.getElementById('keyStats').innerHTML = metrics.map(m => `
       <div style="background:rgba(10,13,22,.55);padding:10px 13px;display:flex;justify-content:space-between;align-items:center;">
@@ -1677,7 +1676,7 @@ const vtx = {
     // Status bar — real index-quote data (same source the Overview and
     // Macro-tab yield curve use), not tied to whatever happens to be on
     // the watchlist.
-    document.getElementById('latencyVal').textContent = s.latency;
+    document.getElementById('latencyVal').textContent = s.latency != null ? s.latency : '—';
     const snap = this.MARKET_SNAPSHOT || {};
     const y10 = this.YIELD_CURVE && this.YIELD_CURVE.points.find(p => p.months === 120);
     const indices = [
@@ -1777,7 +1776,11 @@ const vtx = {
         </div>
         <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:4px 2px 8px;">Recent Block Prints</div>
         <div style="display:flex;flex-direction:column;gap:6px;">` +
-          this.DARK.map(d => `
+          (!this.DARK
+            ? `<div style="padding:20px 4px;text-align:center;color:var(--mut);font-size:11px;">Loading dark-pool prints…</div>`
+            : !this.DARK.length
+            ? `<div style="padding:20px 4px;text-align:center;color:var(--mut);font-size:11px;">No dark-pool prints cleared FINRA's reporting threshold this week for your watchlist.</div>`
+            : this.DARK.map(d => `
             <div style="display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
               <span class="symlink" onclick="vtx.jumpToTicker('${d.sym}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);padding:1px 4px;">${d.sym}</span>
               <div>
@@ -1788,11 +1791,15 @@ const vtx = {
                 <div style="font-family:var(--mono);font-size:11.5px;font-weight:700;">${d.notional}</div>
                 <div style="font-family:var(--mono);font-size:9px;color:var(--mut);">${d.time}</div>
               </div>
-            </div>`).join('') + `</div></div>`;
+            </div>`).join('')) + `</div></div>`;
     }
     else if (s.tab === 'filings') {
       el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
-        this.FIL.map(f => `
+        (!this.FIL
+          ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading insider filings…</div>`
+          : !this.FIL.length
+          ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">No qualifying Form 4 insider filings in the current SEC EDGAR feed.</div>`
+          : this.FIL.map(f => `
           <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
             <div>
               <div style="display:flex;align-items:center;gap:7px;">
@@ -1805,7 +1812,7 @@ const vtx = {
               <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${f.tone};">${f.value}</div>
               <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);">${f.shares} sh · ${f.time}</div>
             </div>
-          </div>`).join('') + `</div>`;
+          </div>`).join('')) + `</div>`;
     }
     else if (s.tab === 'calendar') {
       if (!this.CAL.length) {
@@ -2078,15 +2085,16 @@ const vtx = {
     if (/financ|fundamental|pe |p\/e|valuation|eps|dividend|beta|market cap/.test(q)) {
       const peStr = fin.peTTM ? fin.peTTM.toFixed(1)+'x' : 'n/a';
       const epsStr = fin.epsTTM != null ? '$'+fin.epsTTM.toFixed(2) : 'n/a';
-      const mcStr = fin.marketCapitalization ? this.mktCapFromFin(fin.marketCapitalization) : this.mktCap(f);
+      const mcStr = fin.marketCapitalization ? this.mktCapFromFin(fin.marketCapitalization) : 'n/a';
       const divStr = fin.dividendYield != null ? fin.dividendYield.toFixed(2)+'%' : '0.00%';
       const betaStr = fin.beta != null ? fin.beta.toFixed(2) : 'n/a';
-      const w52 = (fin.week52Low!=null && fin.week52High!=null) ? `$${this.fmt(fin.week52Low)} – $${this.fmt(fin.week52High)}` : `$${this.fmt(lo*0.74)} – $${this.fmt(hi*1.18)}`;
+      const w52Low = fin.week52Low ?? f.week52Low, w52High = fin.week52High ?? f.week52High;
+      const w52 = (w52Low!=null && w52High!=null) ? `$${this.fmt(w52Low)} – $${this.fmt(w52High)}` : 'n/a';
       return `${f.sym} — ${f.name}\n\nPrice ${this.fmt(f.price)} (${(p>=0?'+':'')+p.toFixed(2)}% today)\nP/E (ttm): ${peStr}\nEPS (ttm): ${epsStr}\nBeta: ${betaStr}\nDividend yield: ${divStr}\nMarket cap: ${mcStr}\n52-week range: ${w52}`;
     }
 
     if (/summar|overview|how.+(doing|look)|what.+(happening|going on)/.test(q)) {
-      const peStr = fin.peTTM ? fin.peTTM.toFixed(1)+'x' : `${f.pe}x (estimated)`;
+      const peStr = fin.peTTM ? fin.peTTM.toFixed(1)+'x' : 'n/a';
       const darkLine = dark.length ? `• Last dark-pool print: ${dark[0].size} sh via ${dark[0].venue} (${dark[0].time})` : '• No recent dark-pool print on file';
       const filLine = filings.length ? `• Recent insider activity: ${filings[0].who} ${filings[0].act} ${filings[0].shares} sh` : '• No recent insider filings on file';
       return `${f.sym} — ${f.name}\n\nTrading ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session. Sector: ${f.sector}. P/E ${peStr}.\n\n${darkLine}\n${filLine}\n\nSession range: $${this.fmt(lo)} – $${this.fmt(hi)}.`;
