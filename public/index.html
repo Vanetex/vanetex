@@ -876,74 +876,50 @@ function tick(){const el=document.getElementById('clock');if(el)el.textContent='
 setInterval(tick,1000);tick();
 
 // ── Market Session Timers ─────────────────────
+// Shared session-hours calculator — open/close hours are weekday-only
+// (Mon-Fri); the three duplicated per-session blocks this replaced each
+// checked hour/minute but never day-of-week, so on weekends a session
+// still read "Open" whenever the current hour happened to fall inside
+// its trading window (this is why NY showed "Open" on a Sunday while
+// the unrelated top-bar badge, which does check weekday, correctly
+// said "Markets Closed").
+function sessionTimerInfo(zoneNow,openH,openM,closeH,closeM){
+  const day=zoneNow.getDay(); // 0=Sun..6=Sat
+  const mins=zoneNow.getHours()*60+zoneNow.getMinutes();
+  const openMins=openH*60+openM, closeMins=closeH*60+closeM;
+  const isWeekday=day>=1&&day<=5;
+  let status,countdownMins;
+  if(isWeekday&&mins>=openMins&&mins<closeMins){
+    status='Open';
+    countdownMins=closeMins-mins;
+  }else{
+    status='Closed';
+    if(isWeekday&&mins<openMins){
+      countdownMins=openMins-mins;
+    }else{
+      let addDays=1;
+      while([0,6].includes((day+addDays)%7))addDays++;
+      countdownMins=addDays*24*60+(openMins-mins);
+    }
+  }
+  const hrs=Math.floor(countdownMins/60),m=countdownMins%60;
+  return {status,countdown:`${hrs}h ${m}m`};
+}
+
 function updateSessionTimers(){
   const now=new Date();
 
-  // Tokyo (JST): 9:00 AM - 3:00 PM (0:00 - 6:00 UTC, next day)
+  // Tokyo (JST): 9:00 AM - 3:00 PM
   const tokyoTime=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));
-  const tokyoHour=tokyoTime.getHours();
-  const tokyoMin=tokyoTime.getMinutes();
-  const tokyoOpen=9,tokyoClose=15;
-  let tokyoStatus,tokyoCountdown;
-  if(tokyoHour>=tokyoOpen&&tokyoHour<tokyoClose){
-    tokyoStatus='Open';
-    const minToClose=(tokyoClose-tokyoHour)*60-(tokyoMin);
-    const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
-    tokyoCountdown=`${hrs}h ${mins}m`;
-  }else{
-    tokyoStatus='Closed';
-    const nextOpen=tokyoHour<tokyoOpen?tokyoOpen-tokyoHour:(24-tokyoHour)+tokyoOpen;
-    const minToOpen=nextOpen*60-(tokyoMin);
-    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
-    tokyoCountdown=`${hrs}h ${mins}m`;
-  }
+  const {status:tokyoStatus,countdown:tokyoCountdown}=sessionTimerInfo(tokyoTime,9,0,15,0);
 
   // London (GMT/BST): 8:00 AM - 4:30 PM
   const londonTime=new Date(now.toLocaleString('en-US',{timeZone:'Europe/London'}));
-  const londonHour=londonTime.getHours();
-  const londonMin=londonTime.getMinutes();
-  const londonOpen=8,londonClose=16,londonCloseMin=30;
-  let londonStatus,londonCountdown;
-  const londonOpenMin=0;
-  if(londonHour>londonOpen||(londonHour===londonOpen&&londonMin>=londonOpenMin)||(londonHour<londonClose||(londonHour===londonClose&&londonMin<londonCloseMin))){
-    if(londonHour>=londonOpen&&(londonHour<londonClose||(londonHour===londonClose&&londonMin<londonCloseMin))){
-      londonStatus='Open';
-      const minToClose=(londonClose-londonHour)*60+(londonCloseMin-londonMin);
-      const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
-      londonCountdown=`${hrs}h ${mins}m`;
-    }else{
-      londonStatus='Closed';
-      const nextOpen=londonHour<londonOpen?londonOpen-londonHour:(24-londonHour)+londonOpen;
-      const minToOpen=nextOpen*60-(londonMin);
-      const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
-      londonCountdown=`${hrs}h ${mins}m`;
-    }
-  }else{
-    londonStatus='Closed';
-    const nextOpen=londonHour<londonOpen?londonOpen-londonHour:(24-londonHour)+londonOpen;
-    const minToOpen=nextOpen*60-(londonMin);
-    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
-    londonCountdown=`${hrs}h ${mins}m`;
-  }
+  const {status:londonStatus,countdown:londonCountdown}=sessionTimerInfo(londonTime,8,0,16,30);
 
   // New York (ET): 9:30 AM - 4:00 PM
   const nyTime=new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
-  const nyHour=nyTime.getHours();
-  const nyMin=nyTime.getMinutes();
-  const nyOpen=9,nyOpenMin=30,nyClose=16;
-  let nyStatus,nyCountdown;
-  if((nyHour>nyOpen||(nyHour===nyOpen&&nyMin>=nyOpenMin))&&(nyHour<nyClose)){
-    nyStatus='Open';
-    const minToClose=(nyClose-nyHour)*60-(nyMin);
-    const hrs=Math.floor(minToClose/60);const mins=minToClose%60;
-    nyCountdown=`${hrs}h ${mins}m`;
-  }else{
-    nyStatus='Closed';
-    const nextOpen=nyHour<nyOpen?(nyOpen-nyHour):(24-nyHour)+nyOpen;
-    const minToOpen=nextOpen*60+(nyOpenMin-nyMin);
-    const hrs=Math.floor(minToOpen/60);const mins=minToOpen%60;
-    nyCountdown=`${hrs}h ${mins}m`;
-  }
+  const {status:nyStatus,countdown:nyCountdown}=sessionTimerInfo(nyTime,9,30,16,0);
 
   // Update DOM
   const setTimer=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
