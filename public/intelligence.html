@@ -339,7 +339,6 @@ const vtx = {
   ],
 
   hashN(str, salt) { let h = salt || 0; for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return (h % 1000) / 1000; },
-  genHist(price, n, prevClose) { const start = (prevClose && prevClose > 0) ? prevClose : price; const a = []; let p = start; const drift = (price - start) / (n - 1); for (let i = 0; i < n - 1; i++) { p += drift + (Math.random() - 0.5) * price * 0.003; a.push(p); } a.push(price); return a; },
   hhmmss() { return new Date().toTimeString().slice(0, 8); },
   mkPrint(t) { const sizes = [100,100,200,200,300,400,500,800,1200,2000]; return {id:Math.random(), time:this.hhmmss(), sym:t.sym, price:t.price.toFixed(2), size:sizes[Math.floor(Math.random()*sizes.length)].toLocaleString(), side: Math.random()>0.5?'B':'S'}; },
   sparkPath(arr) { const w=104,h=30,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1; return 'M '+arr.map((v,i)=>((i/(arr.length-1))*w).toFixed(1)+' '+(h-((v-min)/r)*(h-5)-2.5).toFixed(1)).join(' L '); },
@@ -463,7 +462,7 @@ const vtx = {
     this.state.tickers = list.map(a => ({
       sym:a[0], name:a[1], sector:a[2], price:a[3] || 100,
       open: (a[3]||100)*(1-(this.hashN(a[0],3)*0.032-0.013)),
-      hist: this.genHist(a[3]||100,46),
+      hist: [a[3]||100, a[3]||100], // flat placeholder until loadSparklines() fetches the real intraday path
       vol: Math.round(this.hashN(a[0],5)*70+6),
       pe: Math.round(this.hashN(a[0],9)*44+12),
       shares: this.hashN(a[0],11)*3.6+0.5
@@ -506,10 +505,12 @@ const vtx = {
 
     this.render();
     this.loadQuotes();
+    this.loadSparklines();
     this.loadFinancials();
     this.loadAnalystRatings();
     this.loadEarningsHistory();
     setInterval(() => this.loadQuotes(), 60 * 1000);
+    setInterval(() => this.loadSparklines(), 5 * 60 * 1000);
     setInterval(() => this.loadFinancials(), 30 * 60 * 1000);
     setInterval(() => this.loadAnalystRatings(), 30 * 60 * 1000);
     setInterval(() => this.loadEarningsHistory(), 30 * 60 * 1000);
@@ -681,7 +682,7 @@ const vtx = {
     if (this.state.tickers.some(t=>t.sym===sym)) { this.selectTicker(sym); return; }
     const t = {
       sym, name: name || sym, sector: sector || '—', price: 100,
-      open: 100, hist: this.genHist(100,46),
+      open: 100, hist: [100,100], // flat placeholder until loadSparklines() fetches the real intraday path
       vol: Math.round(this.hashN(sym,5)*70+6),
       pe: Math.round(this.hashN(sym,9)*44+12),
       shares: this.hashN(sym,11)*3.6+0.5
@@ -697,6 +698,7 @@ const vtx = {
     this.loadChartData(sym, this.state.tf);
     this.loadDepth(sym);
     this.loadEtfHoldings(sym);
+    this.loadSparklines([sym]);
     try {
       const [q, fin, analyst, earn] = await Promise.all([
         fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
@@ -707,7 +709,7 @@ const vtx = {
       this.state.tickers = this.state.tickers.map(x => {
         if (x.sym!==sym) return x;
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, hist:this.genHist(q.price,46,q.prevClose), name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null}; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -886,12 +888,18 @@ const vtx = {
       this.state.tickers = this.state.tickers.map((t, i) => {
         const q = results[i];
         if (!q || !q.price) return t;
+        // Append this real quote onto the real intraday history fetched by
+        // loadSparklines(), rather than fabricating a new random-walk shape
+        // on every refresh (the sparkline used to visibly redraw itself
+        // into an unrelated fake shape every 60s).
+        const hist = (t.hist || []).concat(q.price);
+        if (hist.length > 46) hist.shift();
         return {
           ...t,
           price: q.price,
           open: (q.open && q.open > 0 ? q.open : null) || q.prevClose || q.price,
           prevClose: q.prevClose,
-          hist: this.genHist(q.price, 46, q.prevClose),
+          hist,
           changePct: q.changePct,
           name: q.name || t.name,
           sector: q.industry || t.sector,
@@ -903,6 +911,29 @@ const vtx = {
       });
       this.render();
     } catch (e) { /* keep previous prices on failure */ }
+  },
+
+  // Real intraday history for the watchlist sparklines (same Yahoo candles
+  // route the main chart uses), replacing the old genHist() fabrication.
+  // Pass a subset of symbols (e.g. a newly-added ticker) or omit to refresh
+  // the whole watchlist.
+  async loadSparklines(symbols) {
+    const targets = symbols || this.state.tickers.map(t => t.sym);
+    try {
+      const results = await Promise.all(targets.map(sym =>
+        fetch(`/api/stock/candles?symbol=${encodeURIComponent(sym)}&range=1D`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      ));
+      const bySym = {};
+      targets.forEach((sym, i) => { bySym[sym] = results[i]; });
+      this.state.tickers = this.state.tickers.map(t => {
+        const d = bySym[t.sym];
+        if (!d || !d.prices || d.prices.length < 2) return t;
+        return { ...t, hist: d.prices.slice(-46) };
+      });
+      this.render();
+    } catch (e) { /* keep previous hist on failure */ }
   },
 
   async loadFinancials() {
