@@ -405,8 +405,8 @@ body{font-family:'Inter',-apple-system,sans-serif;background:#030508;color:#e8ed
       <div class="demo-header">NVDA — Last 5D</div>
       <svg viewBox="0 0 320 120" class="demo-chart">
         <defs><linearGradient id="grad-blue" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>
-        <path d="M20,90 L60,60 L100,70 L140,40 L180,50 L220,30 L260,45 L300,35" stroke="#3b82f6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M20,90 L60,60 L100,70 L140,40 L180,50 L220,30 L260,45 L300,35 L300,120 L20,120 Z" fill="url(#grad-blue)"/>
+        <path id="bt-line-path" stroke="#3b82f6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path id="bt-area-path" fill="url(#grad-blue)"/>
         <line x1="20" y1="110" x2="300" y2="110" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
       </svg>
       <div class="demo-stats" id="backtest-stats">
@@ -804,7 +804,6 @@ const MKT=[
   {id:'GLD', idx:'GOLD', fmt:'usd'},
   {id:'VIXY', idx:'VIX', fmt:'plain'},
 ];
-const MKT_FALLBACK={'SPY':{price:7443.28,changePct:-0.29},'QQQ':{price:25508.07,changePct:0.45},'GLD':{price:4011.80,changePct:-0.12},'VIXY':{price:18.65,changePct:2.15}};
 function fmtMktValue(price,fmt){
   const s=price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   return fmt==='usd' ? '$'+s : s;
@@ -821,27 +820,38 @@ async function loadMarket(){
     r.forEach((d,i)=>{ if(d&&d.price)renderMktCell(MKT[i].id,MKT[i].fmt,d); });
   }catch(e){console.warn('Market load error',e);}
 }
-// Load immediately with fallback
-MKT.forEach(m=>renderMktCell(m.id,m.fmt,MKT_FALLBACK[m.id]));
+// Neutral loading state — real data replaces this as soon as loadMarket() resolves
+MKT.forEach(m=>{
+  const v=document.getElementById('mv-'+m.id); if(v)v.textContent='—';
+  const c=document.getElementById('mc-'+m.id); if(c){c.textContent='';c.className='mkt-chg';}
+});
 loadMarket();
 setInterval(loadMarket,30000);
 
 // ── Ticker ────────────────────────────────────
 const TSYMS=['SPY','QQQ','DIA','IWM','NVDA','AAPL','MSFT','AMZN','META','TSLA','GOOGL','GLD','TLT','AMD','PLTR','BRK.B','COIN','SOFI'];
-const MOCK_TICKER={SPY:{c:737.45,p:-0.29},QQQ:{c:515.22,p:0.45},DIA:{c:421.30,p:-0.15},IWM:{c:234.56,p:0.82},NVDA:{c:142.30,p:1.22},AAPL:{c:234.56,p:-0.45},MSFT:{c:441.20,p:0.78},AMZN:{c:198.75,p:-0.34},META:{c:612.45,p:1.12},TSLA:{c:312.22,p:2.34},GOOGL:{c:168.90,p:0.56},GLD:{c:195.68,p:-0.12},TLT:{c:98.45,p:-0.78},AMD:{c:198.34,p:1.45},PLTR:{c:45.67,p:2.12},"BRK.B":{c:424.56,p:0.23},COIN:{c:156.78,p:3.45},SOFI:{c:8.92,p:1.23}};
+// Caches the last real quote per symbol so a single failed refresh shows
+// stale-but-real data instead of snapping back to a fabricated price.
+const tickerLastReal={};
 function setTickerHtml(dataArray){
   const tape=document.getElementById('ttape');
   if(!tape)return;
-  const html=TSYMS.map((s,i)=>{const raw=dataArray[i];const d=(!raw?.c&&MOCK_TICKER[s])?MOCK_TICKER[s]:raw;if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;const p=(d.p||d.dp)||0;return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+  const html=TSYMS.map((s,i)=>{
+    const raw=dataArray[i];
+    if(raw&&raw.c!=null)tickerLastReal[s]=raw;
+    const d=tickerLastReal[s];
+    if(!d?.c)return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">—</span></div>`;
+    const p=(d.p||d.dp)||0;
+    return`<div class="ti"><span class="ti-s">${s}</span><span class="ti-p">$${d.c.toFixed(2)}</span><span class="ti-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`;
+  }).join('');
   tape.innerHTML=html+html;
   tape.style.animationDuration=(TSYMS.length*4.5)+'s';
   tape.classList.add('go');
 }
-// Load immediately with fallback
-setTickerHtml(TSYMS.map(s=>MOCK_TICKER[s]));
+setTickerHtml(TSYMS.map(()=>null));
 async function loadTicker(){
   try{
-    const r=await Promise.all(TSYMS.map(s=>fetch(`/api/stock/quote?symbol=${encodeURIComponent(s)}`).then(r=>r.ok?r.json():null).then(d=>d&&d.price?{c:d.price,dp:d.changePct}:MOCK_TICKER[s]).catch(()=>MOCK_TICKER[s])));
+    const r=await Promise.all(TSYMS.map(s=>fetch(`/api/stock/quote?symbol=${encodeURIComponent(s)}`).then(r=>r.ok?r.json():null).then(d=>d&&d.price?{c:d.price,dp:d.changePct}:null).catch(()=>null)));
     setTickerHtml(r);
   }catch(e){console.error('Ticker error:',e);}
 }
@@ -849,22 +859,60 @@ loadTicker();setInterval(loadTicker,30000);
 
 // ── Intelligence preview ──────────────────────
 const PSYMS=['NVDA','AAPL','MSFT','AMZN','META','TSLA'];
-const MOCK_PREVIEW={NVDA:{c:142.30,dp:1.22},AAPL:{c:234.56,dp:-0.45},MSFT:{c:441.20,dp:0.78},AMZN:{c:198.75,dp:-0.34},META:{c:612.45,dp:1.12},TSLA:{c:312.22,dp:2.34}};
+// Same stale-but-real caching as the ticker tape above.
+const previewLastReal={};
 async function loadPreview(){
   const r=await Promise.all(PSYMS.map(s=>fetch(`/api/stock/quote?symbol=${s}`).then(r=>r.ok?r.json():null).then(d=>d&&d.price?{c:d.price,dp:d.changePct}:null).catch(()=>null)));
   const grid=document.getElementById('data-grid');if(!grid)return;
-  grid.innerHTML=PSYMS.map((s,i)=>{const d=r[i]||MOCK_PREVIEW[s];if(!d?.c)return'';const p=d.dp||0;return`<div class="data-row"><span class="dr-s">${s}</span><span class="dr-p">$${d.c.toFixed(2)}</span><span class="dr-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`}).join('');
+  grid.innerHTML=PSYMS.map((s,i)=>{
+    if(r[i])previewLastReal[s]=r[i];
+    const d=previewLastReal[s];
+    if(!d?.c)return'';
+    const p=d.dp||0;
+    return`<div class="data-row"><span class="dr-s">${s}</span><span class="dr-p">$${d.c.toFixed(2)}</span><span class="dr-c ${p>=0?'up':'dn'}">${p>=0?'+':''}${p.toFixed(2)}%</span></div>`;
+  }).join('');
 }
 loadPreview();setInterval(loadPreview,15000);
 
 // ── Demo Data Loading ─────────────────────────
+// Real NVDA 5-day hourly candles (same /api/stock/candles route the
+// Intelligence and Backtesting modules use) — Return and Sharpe are
+// genuinely computed from those prices, not randomized, and the chart
+// path is drawn from the actual series instead of a fixed illustration.
 async function loadDemoData(){
   try{
-    const nvda=await fetch(`/api/stock/quote?symbol=NVDA`).then(r=>r.ok?r.json():null).catch(()=>null);
+    const [nvda,candles]=await Promise.all([
+      fetch(`/api/stock/quote?symbol=NVDA`).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(`/api/stock/candles?symbol=NVDA&range=5D`).then(r=>r.ok?r.json():null).catch(()=>null),
+    ]);
     if(nvda?.price){
       document.getElementById('bt-price').textContent='$'+nvda.price.toFixed(2);
-      const ret=Math.random()*20-5;document.getElementById('bt-return').innerHTML=(ret>=0?'<span class="up">+':'<span class="dn">−')+Math.abs(ret).toFixed(1)+'%</span>';
-      const sharpe=(Math.random()*2+1).toFixed(2);document.getElementById('bt-sharpe').textContent=sharpe;
+    }
+    const prices=candles?.prices;
+    if(prices && prices.length>1){
+      const ret=(prices[prices.length-1]/prices[0]-1)*100;
+      document.getElementById('bt-return').innerHTML=(ret>=0?'<span class="up">+':'<span class="dn">−')+Math.abs(ret).toFixed(1)+'%</span>';
+
+      const rets=[];
+      for(let i=1;i<prices.length;i++)rets.push(prices[i]/prices[i-1]-1);
+      const mean=rets.reduce((a,b)=>a+b,0)/rets.length;
+      const variance=rets.reduce((a,b)=>a+(b-mean)**2,0)/rets.length;
+      const stdev=Math.sqrt(variance);
+      // ~6.5 trading hours/day * 252 trading days = hourly bars per year
+      const sharpe=stdev>0?(mean/stdev)*Math.sqrt(6.5*252):0;
+      document.getElementById('bt-sharpe').textContent=sharpe.toFixed(2);
+
+      const w=280,h=90,x0=20,y0=20;
+      const lo=Math.min(...prices),hi=Math.max(...prices),range=(hi-lo)||1;
+      const pts=prices.map((p,i)=>{
+        const x=x0+(i/(prices.length-1))*w;
+        const y=y0+h-((p-lo)/range)*h;
+        return [x,y];
+      });
+      const linePath='M'+pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
+      const areaPath=linePath+` L${pts[pts.length-1][0].toFixed(1)},120 L${x0},120 Z`;
+      document.getElementById('bt-line-path').setAttribute('d',linePath);
+      document.getElementById('bt-area-path').setAttribute('d',areaPath);
     }
   }catch(e){console.error('Demo data error:',e);}
 }
@@ -952,7 +1000,6 @@ function updateMarketBadge(){
 updateMarketBadge();setInterval(updateMarketBadge,60000);
 
 // ── Asset Classes (live data) ──────────────────
-const INDICES_MOCK={SPX:7321.45,SPXchg:0.72,FTSE:7942.30,FTSEchg:-0.15,Nikkei:28456.32,Nikkeichg:0.45,HSI:18234.56,HSIchg:-0.92};
 async function loadAssetClasses(){
   const setAsset=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
   const setAssetChg=(id,chg,up)=>{const el=document.getElementById(id);if(el){el.textContent=chg;el.className='asset-change '+(up?'up':'dn')}};
@@ -995,12 +1042,15 @@ async function loadAssetClasses(){
       }
     }).catch(()=>{});
 }
-const IDX_LIST=[{id:'spx',sym:'SPX',mockVal:INDICES_MOCK.SPX,mockChg:INDICES_MOCK.SPXchg},{id:'ftse',sym:'FTSE',mockVal:INDICES_MOCK.FTSE,mockChg:INDICES_MOCK.FTSEchg},{id:'nikkei',sym:'NIKKEI',mockVal:INDICES_MOCK.Nikkei,mockChg:INDICES_MOCK.Nikkeichg},{id:'hsi',sym:'HSI',mockVal:INDICES_MOCK.HSI,mockChg:INDICES_MOCK.HSIchg}];
+const IDX_LIST=[{id:'spx',sym:'SPX'},{id:'ftse',sym:'FTSE'},{id:'nikkei',sym:'NIKKEI'},{id:'hsi',sym:'HSI'}];
 function setIdx(id,val){const el=document.getElementById('idx-'+id);if(el)el.textContent=val.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function setIdxChg(id,chg){const el=document.getElementById('idx-'+id+'-chg');if(el){el.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';el.className='index-change '+(chg>=0?'up':'dn')}}
 function loadIndices(){
-  // Load immediately with fallback, then replace with real data
-  IDX_LIST.forEach(x=>{setIdx(x.id,x.mockVal);setIdxChg(x.id,x.mockChg);});
+  // Neutral loading state — real data replaces this as soon as the fetch below resolves
+  IDX_LIST.forEach(x=>{
+    const v=document.getElementById('idx-'+x.id); if(v)v.textContent='—';
+    const c=document.getElementById('idx-'+x.id+'-chg'); if(c){c.textContent='';c.className='index-change';}
+  });
   Promise.all(IDX_LIST.map(x=>fetch(`/api/market/index-quote?symbol=${x.sym}`).then(r=>r.ok?r.json():null).catch(()=>null)))
     .then(results=>{
       results.forEach((d,i)=>{
