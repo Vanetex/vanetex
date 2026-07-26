@@ -393,7 +393,15 @@ const bt = {
     const sharpe = vol ? (cagr - this.riskFreeRate) / vol : 0;
     let peak = eq[0], maxDD = 0;
     for (const v of eq) { if (v>peak) peak=v; const dd=(v-peak)/peak; if (dd<maxDD) maxDD=dd; }
-    return { total, cagr, vol, sharpe, maxDD, best: Math.max(...mret), worst: Math.min(...mret), mret, final: eq[eq.length-1] };
+    // Sortino: same risk-adjusted-return idea as Sharpe, but only penalizes
+    // downside volatility (returns below 0) rather than volatility in
+    // either direction.
+    const downsideVariance = mret.reduce((a,b) => a + Math.min(0,b)**2, 0) / mret.length;
+    const downsideDev = Math.sqrt(downsideVariance) * Math.sqrt(12);
+    const sortino = downsideDev ? (cagr - this.riskFreeRate) / downsideDev : 0;
+    // Calmar: annualized return per unit of the worst drawdown actually experienced.
+    const calmar = maxDD !== 0 ? cagr / Math.abs(maxDD) : 0;
+    return { total, cagr, vol, sharpe, sortino, calmar, maxDD, best: Math.max(...mret), worst: Math.min(...mret), mret, final: eq[eq.length-1] };
   },
 
   // ---------- run ----------
@@ -768,6 +776,8 @@ const bt = {
       { label: 'CAGR', value: this.signed(m.cagr,1), color: m.cagr>=0?'#3ec46e':'#ef5959', dot: 'var(--pos)', sub: 'annualized' },
       { label: 'Total return', value: this.signed(m.total,1), color: m.total>=0?'#3ec46e':'#ef5959', dot: 'var(--acc2)', sub: this.money(m.final) },
       { label: 'Sharpe', value: m.sharpe.toFixed(2), color: '#FAFAF7', dot: '#9b6bff', sub: 'risk-adjusted' },
+      { label: 'Sortino', value: m.sortino.toFixed(2), color: '#FAFAF7', dot: '#9b6bff', sub: 'downside risk-adjusted' },
+      { label: 'Calmar', value: m.calmar.toFixed(2), color: '#FAFAF7', dot: '#9b6bff', sub: 'return / max drawdown' },
       { label: 'Max drawdown', value: this.pct(m.maxDD,1), color: '#ef5959', dot: 'var(--neg)', sub: 'peak to trough' },
       { label: 'Volatility', value: this.pct(m.vol,1), color: '#FAFAF7', dot: 'var(--acc2)', sub: 'annualized' },
       { label: 'vs S&P 500', value: this.signed(alpha,1), color: alpha>=0?'#3ec46e':'#ef5959', dot: '#ec4899', sub: 'CAGR alpha' },
