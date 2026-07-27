@@ -1661,6 +1661,11 @@ const vtx = {
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
+    // Separate flag: the dollar figure is price vs. today's open, which
+    // can have the opposite sign from fp (change vs. prev close) — reusing
+    // fup for both was prepending a stray "+" onto an already-negative
+    // number (e.g. "+-5.38") whenever the two disagreed.
+    const dollarChange = f.price - f.open, dollarUp = dollarChange >= 0;
     const lo=Math.min(...f.hist), hi=Math.max(...f.hist);
     document.getElementById('focusHeader').innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;">
@@ -1681,7 +1686,7 @@ const vtx = {
         <div style="text-align:right;">
           <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${this.fmt(f.price)}</div>
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:7px;">
-            <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${fup?cPos:cNeg};">${(fup?'+':'')+(f.price-f.open).toFixed(2)}</span>
+            <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${dollarUp?cPos:cNeg};">${(dollarUp?'+':'')+dollarChange.toFixed(2)}</span>
             <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${fup?cPos:cNeg};background:${fup?'rgba(31,209,151,.1)':'rgba(255,77,94,.1)'};border:1px solid ${fup?'rgba(31,209,151,.3)':'rgba(255,77,94,.3)'};border-radius:99px;padding:3px 9px;">${(fup?'+':'')+fp.toFixed(2)}% ${fup?'▲':'▼'}</span>
           </div>
         </div>
