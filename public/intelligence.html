@@ -537,6 +537,7 @@ const vtx = {
     this.loadYieldCurve();
     this.loadMarketSnapshot();
     this.loadCryptoSnapshot();
+    this.loadVixHistory();
     this.loadNews();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
@@ -546,6 +547,7 @@ const vtx = {
     setInterval(() => this.loadYieldCurve(), 6 * 60 * 60 * 1000);
     setInterval(() => this.loadMarketSnapshot(), 60 * 1000);
     setInterval(() => this.loadCryptoSnapshot(), 60 * 1000);
+    setInterval(() => this.loadVixHistory(), 6 * 60 * 60 * 1000);
     setInterval(() => this.loadNews(), 10 * 60 * 1000);
     this.renderClock();
     this.renderMarketStatus();
@@ -1073,6 +1075,21 @@ const vtx = {
     } catch (e) { /* keep previous data on failure */ }
   },
 
+  // Real 1-year daily VIX closes, reusing the same /api/stock/candles
+  // route already used for watchlist sparklines/charts — feeds the
+  // Fear & Greed panel's VIX-percentile component (today's live VIX,
+  // from MARKET_SNAPSHOT, ranked against this real history).
+  async loadVixHistory() {
+    try {
+      const res = await fetch('/api/stock/candles?symbol=' + encodeURIComponent('^VIX') + '&range=1Y');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.prices || data.prices.length < 10) return;
+      this.VIX_HISTORY = data.prices;
+      if (this.state.view === 'overview') this.renderOverview();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
   async loadEtfHoldings(sym) {
     try {
       const res = await fetch(`/api/stock/etf-holdings?symbol=${encodeURIComponent(sym)}`);
@@ -1188,6 +1205,68 @@ const vtx = {
         <div style="font-size:8px;color:var(--mut);margin-top:9px;opacity:.7;">Equities/rates/commodities/FX: Yahoo Finance · Crypto: CoinGecko · VIX doubles as the options-market signal (it's computed from real S&amp;P 500 options pricing) — real per-contract options chains aren't available from any free source we could verify.</div>
       </div>`;
 
+    // Fear & Greed — Vanetex's own composite, not a reproduction of CNN's
+    // proprietary index. Three real, disclosed inputs, equally weighted:
+    // (1) today's live VIX ranked against its own real 1-year daily
+    // history, (2) % of the same heatmap-tracked stock universe used in
+    // Sector Performance that's up today, (3) the real 10Y-2Y Treasury
+    // spread. A put/call ratio component was considered and deliberately
+    // left out — CBOE gates it behind a paid product even on the same
+    // free endpoint that serves real-time VIX/SPX, and no other free,
+    // reliable source could be found.
+    const fgReady = snap.VIX && this.VIX_HISTORY && this.VIX_HISTORY.length >= 10 && s.heatmap && yc && yc.spread10y2y != null;
+    let fgHtml;
+    if (!fgReady) {
+      fgHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading fear &amp; greed signals…</div>`;
+    } else {
+      const hist = this.VIX_HISTORY;
+      const vixPercentile = (hist.filter(v => v <= snap.VIX.price).length / hist.length) * 100;
+      const vixScore = 100 - vixPercentile; // low VIX vs its own history => more greed
+
+      const allStocks = Object.values(s.heatmap).flat();
+      const breadthScore = allStocks.length ? (allStocks.filter(c => c.changePct > 0).length / allStocks.length) * 100 : 50;
+
+      const spread = yc.spread10y2y;
+      const clamped = Math.max(-1.5, Math.min(2.5, spread));
+      const curveScore = ((clamped + 1.5) / 4) * 100; // -1.5%..+2.5% mapped to 0..100
+
+      const composite = (vixScore + breadthScore + curveScore) / 3;
+      const zone = composite < 25 ? { label: 'Extreme Fear', color: '#ef4444' }
+        : composite < 45 ? { label: 'Fear', color: '#f59e0b' }
+        : composite < 56 ? { label: 'Neutral', color: '#eab308' }
+        : composite < 76 ? { label: 'Greed', color: '#84cc16' }
+        : { label: 'Extreme Greed', color: '#22c55e' };
+
+      const subChip = (label, score) => `
+        <div style="flex:1;min-width:0;background:rgba(255,255,255,.03);border-radius:8px;padding:7px 9px;">
+          <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:800;margin-top:2px;">${Math.round(score)}</div>
+        </div>`;
+
+      fgHtml = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Fear &amp; Greed</span>
+          <span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 6px;" title="Vanetex's own real-data composite — not CNN's Fear &amp; Greed Index.">VANETEX METHODOLOGY</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:10px;">
+          <span style="font-family:var(--mono);font-size:30px;font-weight:800;">${Math.round(composite)}</span>
+          <span style="font-size:13px;font-weight:700;color:${zone.color};">${zone.label}</span>
+        </div>
+        <div style="position:relative;height:8px;border-radius:5px;background:linear-gradient(90deg,#ef4444,#f59e0b,#eab308,#84cc16,#22c55e);margin:10px 0 3px;">
+          <div style="position:absolute;left:${composite.toFixed(1)}%;top:-3px;width:2px;height:14px;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.6);"></div>
+        </div>
+        <div style="display:flex;gap:7px;margin-top:9px;">
+          ${subChip('VIX vs 52W', vixScore)}
+          ${subChip('Breadth Up', breadthScore)}
+          ${subChip('Yield Curve', curveScore)}
+        </div>
+        <div style="font-size:8px;color:var(--mut);margin-top:9px;opacity:.7;">Equal-weighted average of: VIX's percentile rank vs its real 1-year range, % of heatmap-tracked stocks up today, and the real 10Y−2Y Treasury spread. A put/call ratio input was considered and left out — CBOE doesn't expose it for free (even though the identical endpoint serves real-time VIX/SPX at no cost), and no other reliable free source exists.</div>`;
+    }
+    const fearGreedHtml = `
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;flex-shrink:0;">
+        ${fgHtml}
+      </div>`;
+
     let ycHtml;
     if (!yc) {
       ycHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading yield curve…</div>`;
@@ -1241,7 +1320,7 @@ const vtx = {
 
     const hintHtml = `<div style="text-align:center;color:var(--mut);font-size:10px;padding:3px 0 1px;">Select a ticker from the watchlist, or search above, to switch to per-stock research.</div>`;
 
-    el.innerHTML = globalMarketsHtml + yieldCardHtml + sectorCardHtml + hintHtml;
+    el.innerHTML = globalMarketsHtml + fearGreedHtml + yieldCardHtml + sectorCardHtml + hintHtml;
   },
 
   async checkAuth() {
