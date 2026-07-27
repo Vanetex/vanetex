@@ -17,6 +17,13 @@ const SYMBOL_MAP: Record<string, string> = {
   FTSE: "^FTSE",
   NIKKEI: "^N225",
   HSI: "^HSI",
+  OIL: "CL=F",
+  SILVER: "SI=F",
+  NATGAS: "NG=F",
+  COPPER: "HG=F",
+  EURUSD: "EURUSD=X",
+  USDJPY: "USDJPY=X",
+  GBPUSD: "GBPUSD=X",
 };
 
 export async function GET(request: NextRequest) {
