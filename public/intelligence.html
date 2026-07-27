@@ -326,7 +326,17 @@ const vtx = {
   DARK: null, // populated by loadDarkPool() — real FINRA weekly dark-pool data; null = not loaded yet, [] = loaded and genuinely empty
 
   hashN(str, salt) { let h = salt || 0; for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return (h % 1000) / 1000; },
-  hhmmss() { return new Date().toTimeString().slice(0, 8); },
+  // Every trade print in the tape needs to read in ET, same as the header
+  // clock and "MKT OPEN/CLOSED" status right next to it — toTimeString()
+  // renders in the viewer's own local timezone instead, so anyone outside
+  // US Eastern saw trade times shifted from the market clock on the same
+  // screen (ahead of ET, that reads as trades from "the future").
+  fmtET(date) {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).formatToParts(date);
+    const map = {}; parts.forEach(p=>map[p.type]=p.value);
+    return `${map.hour}:${map.minute}:${map.second}`;
+  },
+  hhmmss() { return this.fmtET(new Date()); },
   mkPrint(t) { const sizes = [100,100,200,200,300,400,500,800,1200,2000]; return {id:Math.random(), time:this.hhmmss(), sym:t.sym, price:t.price.toFixed(2), size:sizes[Math.floor(Math.random()*sizes.length)].toLocaleString(), side: Math.random()>0.5?'B':'S'}; },
   sparkPath(arr) { const w=104,h=30,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1; return 'M '+arr.map((v,i)=>((i/(arr.length-1))*w).toFixed(1)+' '+(h-((v-min)/r)*(h-5)-2.5).toFixed(1)).join(' L '); },
   sma(arr, period) {
@@ -1597,7 +1607,7 @@ const vtx = {
       return { ...x, price, hist };
     });
 
-    const time = ts ? new Date(ts).toTimeString().slice(0, 8) : this.hhmmss();
+    const time = ts ? this.fmtET(new Date(ts)) : this.hhmmss();
     this.state.tape = [{ id: Math.random(), time, sym, price: price.toFixed(2), size: Math.max(1, Math.round(vol || 0)).toLocaleString(), side }, ...this.state.tape].slice(0, 26);
     this.renderTimeSales();
     this._renderPending = true;
