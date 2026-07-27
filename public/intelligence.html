@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <style>
 :root{
   --bg0:#04050a; --bg1:#0a0d17;
@@ -538,6 +539,7 @@ const vtx = {
     this.loadMarketSnapshot();
     this.loadCryptoSnapshot();
     this.loadVixHistory();
+    this.initWorldMap();
     this.loadNews();
     setInterval(() => this.loadFilings(), 5 * 60 * 1000);
     setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
@@ -1051,7 +1053,7 @@ const vtx = {
     } catch (e) { /* keep previous data on failure */ }
   },
 
-  MARKET_SNAPSHOT_SYMS: ['SPX','NDX','VIX','GOLD','OIL','SILVER','NATGAS','COPPER','EURUSD','USDJPY','GBPUSD'],
+  MARKET_SNAPSHOT_SYMS: ['SPX','NDX','VIX','GOLD','OIL','SILVER','NATGAS','COPPER','EURUSD','USDJPY','GBPUSD','FTSE','NIKKEI','HSI'],
   async loadMarketSnapshot() {
     try {
       const syms = this.MARKET_SNAPSHOT_SYMS;
@@ -1088,6 +1090,104 @@ const vtx = {
       this.VIX_HISTORY = data.prices;
       if (this.state.view === 'overview') this.renderOverview();
     } catch (e) { /* keep previous data on failure */ }
+  },
+
+  // World Markets globe — a smaller, simplified version of the homepage's
+  // orthographic-projection globe (same real TopoJSON country borders, same
+  // CDN), tinted by real regional index performance instead of a fixed
+  // decorative fill. Countries only exist to draw ~4 highlighted regions;
+  // there's no click/tooltip/GDP feature here, unlike the homepage's globe.
+  //
+  // Started exactly once from init(), not from renderOverview() — the
+  // Overview's innerHTML gets fully replaced on every data refresh (market
+  // snapshot every 60s, heatmap every 5min, etc.), which would destroy and
+  // leak a new requestAnimationFrame loop each time if this ran per-render.
+  // Instead the single persistent loop below re-queries the canvas by id
+  // every frame: it draws when the canvas exists (Overview visible), and
+  // just keeps ticking harmlessly when it doesn't (ticker view, or before
+  // first render) so it resumes on its own once the canvas reappears.
+  async initWorldMap() {
+    const SIZE = 150;
+    const CX = SIZE / 2, CY = SIZE / 2, R = SIZE * .44;
+    const NEUTRAL_FILL = { fill: 'rgba(59,130,246,0.16)', border: 'rgba(96,165,250,0.32)' };
+    // TopoJSON numeric country ids -> the real index we have for that region.
+    const REGION_BY_COUNTRY_ID = { 840: 'SPX', 826: 'FTSE', 392: 'NIKKEI', 344: 'HSI' };
+
+    let rotY = 0;
+    let countries = null;
+    try {
+      const world = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json').then(r => r.json());
+      countries = topojson.feature(world, world.objects.countries).features;
+    } catch (e) { /* highlighted regions just won't render; real quote tiles are unaffected */ }
+
+    const ll2xyz = (lat, lon) => {
+      const phi = lat * Math.PI / 180, lambda = lon * Math.PI / 180;
+      return { x: R * Math.cos(phi) * Math.sin(lambda), y: -R * Math.sin(phi), z: R * Math.cos(phi) * Math.cos(lambda) };
+    };
+    const proj3d = (x, y, z) => {
+      const c = Math.cos(rotY), s = Math.sin(rotY);
+      const rx = x * c + z * s, rz = -x * s + z * c;
+      const fov = R * 9, sc = fov / (fov - rz);
+      return { px: CX + rx * sc, py: CY + y * sc, pz: rz };
+    };
+    const drawRing = (ctx, ring) => {
+      let inFront = false;
+      const EDGE_TOLERANCE = 0.1 * R;
+      ring.forEach(([lon, lat]) => {
+        const { x, y, z } = ll2xyz(lat, lon);
+        const { px, py, pz } = proj3d(x, y, z);
+        if (pz <= EDGE_TOLERANCE) { inFront = false; return; }
+        if (!inFront) { ctx.moveTo(px, py); inFront = true; } else { ctx.lineTo(px, py); }
+      });
+    };
+    const colorForChange = p => {
+      if (p == null) return NEUTRAL_FILL;
+      const up = p >= 0, inten = Math.min(1, Math.abs(p) / 3);
+      return {
+        fill: up ? `rgba(31,209,151,${(0.22 + inten * 0.5).toFixed(3)})` : `rgba(255,77,94,${(0.22 + inten * 0.5).toFixed(3)})`,
+        border: up ? 'rgba(31,209,151,.6)' : 'rgba(255,77,94,.6)',
+      };
+    };
+
+    const frame = () => {
+      requestAnimationFrame(frame);
+      if (this.state.view !== 'overview') return; // don't bother drawing while hidden
+      const cvs = document.getElementById('worldMapCanvas');
+      if (!cvs) return;
+      const ctx = cvs.getContext('2d');
+      if (!ctx) return;
+      rotY += 0.0022;
+
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      const ocean = ctx.createRadialGradient(CX - R * .2, CY - R * .25, R * .05, CX, CY, R);
+      ocean.addColorStop(0, 'rgba(10,28,70,0.85)');
+      ocean.addColorStop(0.65, 'rgba(4,12,40,0.9)');
+      ocean.addColorStop(1, 'rgba(2,6,20,0.95)');
+      ctx.fillStyle = ocean; ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2); ctx.fill();
+
+      ctx.save();
+      ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2); ctx.clip();
+      if (countries) {
+        const snap = this.MARKET_SNAPSHOT || {};
+        countries.forEach(f => {
+          const region = REGION_BY_COUNTRY_ID[f.id];
+          const col = region ? colorForChange(snap[region] ? snap[region].changePct : null) : NEUTRAL_FILL;
+          const geom = f.geometry;
+          const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+          polys.forEach(poly => {
+            ctx.beginPath();
+            poly.forEach(ring => drawRing(ctx, ring));
+            ctx.fillStyle = col.fill; ctx.fill('evenodd');
+            ctx.strokeStyle = col.border; ctx.lineWidth = 0.5; ctx.stroke();
+          });
+        });
+      }
+      ctx.restore();
+
+      ctx.beginPath(); ctx.arc(CX, CY, R, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(80,130,220,0.5)'; ctx.lineWidth = 1.1; ctx.stroke();
+    };
+    frame();
   },
 
   async loadEtfHoldings(sym) {
@@ -1267,6 +1367,35 @@ const vtx = {
         ${fgHtml}
       </div>`;
 
+    // World Markets — a real regional globe (see initWorldMap(), started
+    // once from init() so its animation loop survives this method's
+    // wholesale innerHTML replacement on every data refresh). Only the
+    // four regions we have a genuine benchmark index for get tinted;
+    // FTSE/Nikkei/Hang Seng live here instead of in the Global Markets
+    // tile wall above so nothing is shown twice.
+    const regionRow = (country, indexName, q) => {
+      const color = q ? (q.changePct >= 0 ? 'var(--pos)' : 'var(--neg)') : 'var(--mut)';
+      const valStr = q ? `${q.price.toLocaleString('en-US',{maximumFractionDigits:2})} · ${q.changePct>=0?'+':''}${q.changePct.toFixed(2)}%` : '—';
+      return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+        <span style="font-size:10.5px;color:var(--txt);">${country}<span style="color:var(--mut);font-size:9px;"> · ${indexName}</span></span>
+        <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${color};white-space:nowrap;">${valStr}</span>
+      </div>`;
+    };
+    const worldMapHtml = `
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;flex-shrink:0;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:10px;">World Markets</div>
+        <div style="display:flex;gap:16px;align-items:center;">
+          <canvas id="worldMapCanvas" width="150" height="150" style="flex-shrink:0;"></canvas>
+          <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;">
+            ${regionRow('United States', 'S&amp;P 500', snap.SPX)}
+            ${regionRow('United Kingdom', 'FTSE 100', snap.FTSE)}
+            ${regionRow('Japan', 'Nikkei 225', snap.NIKKEI)}
+            ${regionRow('Hong Kong', 'Hang Seng', snap.HSI)}
+          </div>
+        </div>
+        <div style="font-size:8px;color:var(--mut);margin-top:9px;opacity:.7;">Regions tinted by their real benchmark index's change today (Yahoo Finance). Borders: Natural Earth via world-atlas, public domain.</div>
+      </div>`;
+
     let ycHtml;
     if (!yc) {
       ycHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading yield curve…</div>`;
@@ -1320,7 +1449,7 @@ const vtx = {
 
     const hintHtml = `<div style="text-align:center;color:var(--mut);font-size:10px;padding:3px 0 1px;">Select a ticker from the watchlist, or search above, to switch to per-stock research.</div>`;
 
-    el.innerHTML = globalMarketsHtml + fearGreedHtml + yieldCardHtml + sectorCardHtml + hintHtml;
+    el.innerHTML = globalMarketsHtml + fearGreedHtml + worldMapHtml + yieldCardHtml + sectorCardHtml + hintHtml;
   },
 
   async checkAuth() {
