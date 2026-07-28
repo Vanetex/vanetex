@@ -622,8 +622,14 @@ const vtx = {
     const inst = this.INSTRUMENTS[code];
     if (!inst) return;
     try {
+      // Crypto's real quote already comes from the live CoinGecko snapshot
+      // (loadCryptoSnapshot) — reuse it rather than hitting index-quote,
+      // which only knows the Yahoo-proxied symbols.
+      const quotePromise = inst.category === 'Crypto'
+        ? Promise.resolve((this.CRYPTO_SNAPSHOT||[]).find(c => c.symbol === code) || null)
+        : fetch(`/api/market/index-quote?symbol=${encodeURIComponent(code)}`).then(r=>r.ok?r.json():null).catch(()=>null);
       const [quote, chart] = await Promise.all([
-        fetch(`/api/market/index-quote?symbol=${encodeURIComponent(code)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+        quotePromise,
         fetch(`/api/stock/candles?symbol=${encodeURIComponent(inst.yahooSymbol)}&range=${this.state.tf}`).then(r=>r.ok?r.json():null).catch(()=>null),
       ]);
       this._instrumentData = this._instrumentData || {};
@@ -1127,6 +1133,17 @@ const vtx = {
     COFFEE: { label:'Coffee', category:'Agriculture', yahooSymbol:'KC=F' },
     COTTON: { label:'Cotton', category:'Agriculture', yahooSymbol:'CT=F' },
     SUGAR: { label:'Sugar', category:'Agriculture', yahooSymbol:'SB=F' },
+    EURUSD: { label:'EUR/USD', category:'Forex', yahooSymbol:'EURUSD=X' },
+    USDJPY: { label:'USD/JPY', category:'Forex', yahooSymbol:'USDJPY=X' },
+    GBPUSD: { label:'GBP/USD', category:'Forex', yahooSymbol:'GBPUSD=X' },
+    // Crypto quote comes from the live CoinGecko snapshot already being
+    // fetched (loadCryptoSnapshot) — yahooSymbol here is only used for the
+    // real historical chart, since Yahoo carries these tickers too.
+    BTC: { label:'Bitcoin', category:'Crypto', yahooSymbol:'BTC-USD' },
+    ETH: { label:'Ethereum', category:'Crypto', yahooSymbol:'ETH-USD' },
+    SOL: { label:'Solana', category:'Crypto', yahooSymbol:'SOL-USD' },
+    XRP: { label:'XRP', category:'Crypto', yahooSymbol:'XRP-USD' },
+    DOGE: { label:'Dogecoin', category:'Crypto', yahooSymbol:'DOGE-USD' },
   },
   async loadMarketSnapshot() {
     try {
@@ -1375,10 +1392,10 @@ const vtx = {
           ${quoteTile('Nasdaq Futures', snap.NQ, {code:'NQ', sub:'NQ'})}
           ${quoteTile('Dow Futures', snap.YM, {code:'YM', sub:'YM'})}
           ${quoteTile('Russell Futures', snap.RTY, {code:'RTY', sub:'RTY'})}
-          ${quoteTile('EUR/USD', snap.EURUSD, {decimals:4})}
-          ${quoteTile('USD/JPY', snap.USDJPY, {decimals:2})}
-          ${quoteTile('GBP/USD', snap.GBPUSD, {decimals:4})}
-          ${crypto ? ['BTC','ETH','SOL','XRP','DOGE'].map(sym => quoteTile(sym, cryptoBySym[sym] ? {price: cryptoBySym[sym].price, changePct: cryptoBySym[sym].changePct} : null)).join('') : ['BTC','ETH','SOL','XRP','DOGE'].map(sym => loadingTile(sym)).join('')}
+          ${quoteTile('EUR/USD', snap.EURUSD, {decimals:4, code:'EURUSD'})}
+          ${quoteTile('USD/JPY', snap.USDJPY, {decimals:2, code:'USDJPY'})}
+          ${quoteTile('GBP/USD', snap.GBPUSD, {decimals:4, code:'GBPUSD'})}
+          ${crypto ? ['BTC','ETH','SOL','XRP','DOGE'].map(sym => quoteTile(sym, cryptoBySym[sym] ? {price: cryptoBySym[sym].price, changePct: cryptoBySym[sym].changePct} : null, {code:sym})).join('') : ['BTC','ETH','SOL','XRP','DOGE'].map(sym => loadingTile(sym)).join('')}
         </div>
         <div style="font-size:8px;color:var(--mut);margin-top:9px;opacity:.7;">Equities/rates/futures/FX: Yahoo Finance · Crypto: CoinGecko · click an index or future for its real chart · VIX doubles as the options-market signal (it's computed from real S&amp;P 500 options pricing) — real per-contract options chains aren't available from any free source we could verify.</div>
       </div>`;
@@ -1649,7 +1666,7 @@ const vtx = {
         <div style="padding:8px 6px 4px;position:relative;">${chartHtml}</div>
       </div>
       ${statsHtml}
-      <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">Real-time quote &amp; historical chart: Yahoo Finance. ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
+      <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
   },
 
