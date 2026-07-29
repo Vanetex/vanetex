@@ -624,9 +624,19 @@ const vtx = {
     try {
       // Crypto's real quote already comes from the live CoinGecko snapshot
       // (loadCryptoSnapshot) — reuse it rather than hitting index-quote,
-      // which only knows the Yahoo-proxied symbols.
+      // which only knows the Yahoo-proxied symbols. Treasury's real yield
+      // + real day-over-day change already comes from the FRED-sourced
+      // yield curve (loadYieldCurve) — matched by maturity in months —
+      // rather than Yahoo's own real-time yield index, so the headline
+      // number stays consistent with the Yield Curve section below it.
       const quotePromise = inst.category === 'Crypto'
         ? Promise.resolve((this.CRYPTO_SNAPSHOT||[]).find(c => c.symbol === code) || null)
+        : inst.category === 'Treasury'
+        ? Promise.resolve((() => {
+            const p = this.YIELD_CURVE && this.YIELD_CURVE.points.find(pt => pt.months === inst.months);
+            if (!p) return null;
+            return { price: p.yield, ptsChange: p.prevYield != null ? p.yield - p.prevYield : null };
+          })())
         : fetch(`/api/market/index-quote?symbol=${encodeURIComponent(code)}`).then(r=>r.ok?r.json():null).catch(()=>null);
       const [quote, chart] = await Promise.all([
         quotePromise,
@@ -1133,6 +1143,16 @@ const vtx = {
     COFFEE: { label:'Coffee', category:'Agriculture', yahooSymbol:'KC=F' },
     COTTON: { label:'Cotton', category:'Agriculture', yahooSymbol:'CT=F' },
     SUGAR: { label:'Sugar', category:'Agriculture', yahooSymbol:'SB=F' },
+    // Current yield comes from the already-fetched real FRED curve
+    // (YIELD_CURVE.points, matched by months) — only these four
+    // maturities get a historical chart, since they're the only ones
+    // with a verified real Yahoo yield-index ticker (no clean free
+    // ticker exists for 2Y, 7Y, etc.); the full curve across every
+    // maturity is still shown in the Yield Curve section below.
+    UST3M: { label:'3-Month Treasury', category:'Treasury', yahooSymbol:'^IRX', months:3 },
+    UST5Y: { label:'5-Year Treasury', category:'Treasury', yahooSymbol:'^FVX', months:60 },
+    UST10Y: { label:'10-Year Treasury', category:'Treasury', yahooSymbol:'^TNX', months:120 },
+    UST30Y: { label:'30-Year Treasury', category:'Treasury', yahooSymbol:'^TYX', months:360 },
     EURUSD: { label:'EUR/USD', category:'Forex', yahooSymbol:'EURUSD=X' },
     USDJPY: { label:'USD/JPY', category:'Forex', yahooSymbol:'USDJPY=X' },
     GBPUSD: { label:'GBP/USD', category:'Forex', yahooSymbol:'GBPUSD=X' },
@@ -1344,7 +1364,6 @@ const vtx = {
     const cryptoBySym = {};
     if (crypto) crypto.forEach(c => { cryptoBySym[c.symbol] = c; });
     const yc = this.YIELD_CURVE;
-    const y10 = yc && yc.points.find(p => p.months === 120);
 
     // Compact tile — deliberately smaller than the old 4-card layout so a
     // lot more real data fits on screen without scrolling. Pass `code` (an
@@ -1371,12 +1390,16 @@ const vtx = {
       const color = opts.invert ? (up ? 'var(--warn)' : 'var(--pos)') : (up ? 'var(--pos)' : 'var(--neg)');
       return tile(label, fmtPrice(q.price, opts.decimals), `${up?'+':''}${q.changePct.toFixed(2)}%`, color, opts.sub, opts.code);
     };
-    const y10Tile = (() => {
-      if (!y10) return loadingTile('10Y Treasury');
-      const chg = y10.prevYield != null ? y10.yield - y10.prevYield : null;
+    // Real FRED yield + real day-over-day change for one maturity — reused
+    // for every Treasury tile below, clickable into its own real chart.
+    const treasuryTile = (label, months, code) => {
+      if (!yc) return loadingTile(label);
+      const p = yc.points.find(pt => pt.months === months);
+      if (!p) return loadingTile(label);
+      const chg = p.prevYield != null ? p.yield - p.prevYield : null;
       const color = chg == null ? 'var(--mut)' : (chg >= 0 ? 'var(--pos)' : 'var(--neg)');
-      return tile('10Y Treasury', y10.yield.toFixed(2)+'%', chg==null?'—':(chg>=0?'+':'')+chg.toFixed(2)+' pts', color);
-    })();
+      return tile(label, p.yield.toFixed(2)+'%', chg==null?'—':(chg>=0?'+':'')+chg.toFixed(2)+' pts', color, null, code);
+    };
 
     const globalMarketsHtml = `
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;flex-shrink:0;">
@@ -1387,7 +1410,10 @@ const vtx = {
           ${quoteTile('Dow Jones', snap.DOW, {code:'DOW'})}
           ${quoteTile('Russell 2000', snap.RUSSELL2000, {code:'RUSSELL2000'})}
           ${quoteTile('VIX', snap.VIX, {invert:true, sub:'options', code:'VIX'})}
-          ${y10Tile}
+          ${treasuryTile('3M Treasury', 3, 'UST3M')}
+          ${treasuryTile('5Y Treasury', 60, 'UST5Y')}
+          ${treasuryTile('10Y Treasury', 120, 'UST10Y')}
+          ${treasuryTile('30Y Treasury', 360, 'UST30Y')}
           ${quoteTile('S&P Futures', snap.ES, {code:'ES', sub:'ES'})}
           ${quoteTile('Nasdaq Futures', snap.NQ, {code:'NQ', sub:'NQ'})}
           ${quoteTile('Dow Futures', snap.YM, {code:'YM', sub:'YM'})}
@@ -1593,9 +1619,16 @@ const vtx = {
     const tfButtonsHtml = tfList.map(l => `
       <button onclick="vtx.setInstrumentTf('${l}')" style="font-family:var(--mono);font-size:10.5px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${l===s.tf?'rgba(var(--glow),.2)':'transparent'};color:${l===s.tf?'var(--acc2)':'var(--mut)'};">${l}</button>`).join('');
 
+    const isTreasury = inst.category === 'Treasury';
     let priceHtml;
     if (!quote) {
       priceHtml = `<div style="font-size:13px;color:var(--mut);">Loading real quote…</div>`;
+    } else if (isTreasury) {
+      const chg = quote.ptsChange;
+      const color = chg == null ? 'var(--mut)' : (chg >= 0 ? cPos : cNeg);
+      priceHtml = `
+        <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${quote.price.toFixed(2)}%</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${color};margin-top:6px;">${chg==null?'—':(chg>=0?'+':'')+chg.toFixed(2)+' pts'}</div>`;
     } else {
       const up = quote.changePct >= 0;
       priceHtml = `
@@ -1620,20 +1653,24 @@ const vtx = {
           ${ch.sma20Path ? `<path d="${ch.sma20Path}" fill="none" stroke="#9b6bff" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path>` : ''}
           <circle cx="${ch.endX}" cy="${ch.endY}" r="6.5" fill="var(--acc)" opacity="0.2"></circle>
           <circle cx="${ch.endX}" cy="${ch.endY}" r="3.4" fill="var(--acc)"></circle>
-          ${ch.axisLabels.map(a => `<text x="${ch.W+6}" y="${(a.y+3).toFixed(1)}" font-family="var(--mono)" font-size="9" fill="var(--mut)">${this.fmt(a.price)}</text>`).join('')}
+          ${ch.axisLabels.map(a => `<text x="${ch.W+6}" y="${(a.y+3).toFixed(1)}" font-family="var(--mono)" font-size="9" fill="var(--mut)">${this.fmt(a.price)}${isTreasury?'%':''}</text>`).join('')}
         </svg>
         <div style="display:flex;justify-content:space-between;padding:2px 7.42% 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);">${ch.dateLabels.map(l => `<span>${l}</span>`).join('')}</div>`;
 
       const dayLo = Math.min(...chart.prices), dayHi = Math.max(...chart.prices);
+      const pctSuffix = isTreasury ? '%' : '';
       const stats = [
-        { label: s.tf==='1D' ? 'Day Low' : 'Period Low', value: this.fmt(dayLo) },
-        { label: s.tf==='1D' ? 'Day High' : 'Period High', value: this.fmt(dayHi) },
-        { label: '52W Low', value: chart.week52Low != null ? this.fmt(chart.week52Low) : '—' },
-        { label: '52W High', value: chart.week52High != null ? this.fmt(chart.week52High) : '—' },
-        { label: 'Volume', value: chart.volume != null ? (chart.volume/1e6).toFixed(1)+'M' : '—' },
+        { label: s.tf==='1D' ? 'Day Low' : 'Period Low', value: this.fmt(dayLo)+pctSuffix },
+        { label: s.tf==='1D' ? 'Day High' : 'Period High', value: this.fmt(dayHi)+pctSuffix },
+        { label: '52W Low', value: chart.week52Low != null ? this.fmt(chart.week52Low)+pctSuffix : '—' },
+        { label: '52W High', value: chart.week52High != null ? this.fmt(chart.week52High)+pctSuffix : '—' },
+        // Volume is meaningless for a synthetic yield index (Yahoo genuinely
+        // returns 0, not a placeholder) — omit the tile rather than show a
+        // real-but-confusing "0.0M".
+        ...(isTreasury ? [] : [{ label: 'Volume', value: chart.volume != null ? (chart.volume/1e6).toFixed(1)+'M' : '—' }]),
       ];
       statsHtml = `
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:16px;">
+        <div style="display:grid;grid-template-columns:repeat(${stats.length},1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:16px;">
           ${stats.map(st => `
             <div style="background:rgba(10,13,22,.6);padding:9px 11px;">
               <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:3px;">${st.label}</div>
@@ -1666,7 +1703,7 @@ const vtx = {
         <div style="padding:8px 6px 4px;position:relative;">${chartHtml}</div>
       </div>
       ${statsHtml}
-      <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
+      <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
   },
 
