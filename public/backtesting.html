@@ -375,7 +375,14 @@ const bt = {
       };
     }
     this.setState({ voice: { ...this.state.voice, listening: true, message: null, isError: false } });
-    try { this._recognition.start(); } catch (e) { /* already started */ }
+    try {
+      this._recognition.start();
+    } catch (e) {
+      // Chrome can throw synchronously (InvalidStateError) if start() is
+      // called before a prior session has fully torn down — without this,
+      // the mic shows "listening" forever with nothing actually running.
+      this.setState({ voice: { ...this.state.voice, listening: false, message: 'Voice input failed to start — try again.', isError: true } });
+    }
   },
   stopVoiceInput() {
     if (this._recognition) this._recognition.stop();
