@@ -160,6 +160,7 @@ const bt = {
     compareLoading: false,
     hoverIdx: null,
     voice: { supported: false, listening: false, message: null, isError: false },
+    diversificationView: 'Sector',
   },
 
   init() {
@@ -518,6 +519,10 @@ const bt = {
       equity.push(total);
     }
     const perAsset = hs.map((h,j) => ({ t: h.t.toUpperCase(), start: startVals[j], end: vals[j], color: h.color || this.PALETTE[j % this.PALETTE.length], w: (+h.w||0)/wsum }));
+    // Per-holding monthly return series, for the correlation matrix — same
+    // retSeries already computed above for the equity simulation, just
+    // paired with its ticker label.
+    const perAssetReturns = hs.map((h,j) => ({ t: h.t.toUpperCase(), rets: retSeries[j] }));
 
     const bench = [initial]; let bv = initial;
     for (let i=0;i<n;i++) { bv *= (1 + benchRets[i]); bench.push(bv); }
@@ -525,9 +530,10 @@ const bt = {
     const dates = monthKeys.map(k => this.fromKey(k));
     const m = this.metrics(equity, n);
     const bm = this.metrics(bench, n);
+    m.beta = this.beta(m.mret, bm.mret);
     const truncated = firstKey > this.toKey(cfg.start);
 
-    return { equity, bench, perAsset, dates, m, bm, n, initial, truncated, effStart: this.fromKey(firstKey), effEnd: this.fromKey(lastKey) };
+    return { equity, bench, perAsset, perAssetReturns, dates, m, bm, n, initial, truncated, effStart: this.fromKey(firstKey), effEnd: this.fromKey(lastKey) };
   },
 
   metrics(eq, n) {
@@ -541,7 +547,8 @@ const bt = {
     const vol = Math.sqrt(variance) * Math.sqrt(12);
     const sharpe = vol ? (cagr - this.riskFreeRate) / vol : 0;
     let peak = eq[0], maxDD = 0;
-    for (const v of eq) { if (v>peak) peak=v; const dd=(v-peak)/peak; if (dd<maxDD) maxDD=dd; }
+    const drawdowns = [];
+    for (const v of eq) { if (v>peak) peak=v; const dd=(v-peak)/peak; drawdowns.push(dd); if (dd<maxDD) maxDD=dd; }
     // Sortino: same risk-adjusted-return idea as Sharpe, but only penalizes
     // downside volatility (returns below 0) rather than volatility in
     // either direction.
@@ -550,7 +557,54 @@ const bt = {
     const sortino = downsideDev ? (cagr - this.riskFreeRate) / downsideDev : 0;
     // Calmar: annualized return per unit of the worst drawdown actually experienced.
     const calmar = maxDD !== 0 ? cagr / Math.abs(maxDD) : 0;
-    return { total, cagr, vol, sharpe, sortino, calmar, maxDD, best: Math.max(...mret), worst: Math.min(...mret), mret, final: eq[eq.length-1] };
+    const winRate = mret.length ? mret.filter(r => r > 0).length / mret.length : 0;
+    // Ulcer Index: root-mean-square of the drawdown at every point in time,
+    // not just the single worst one — penalizes deep AND long drawdowns,
+    // where max drawdown alone only captures depth.
+    const ulcer = Math.sqrt(drawdowns.reduce((a,d) => a + d*d, 0) / drawdowns.length);
+    return { total, cagr, vol, sharpe, sortino, calmar, maxDD, best: Math.max(...mret), worst: Math.min(...mret), mret, final: eq[eq.length-1], winRate, ulcer };
+  },
+  // Beta: portfolio's sensitivity to benchmark moves (covariance of returns
+  // over benchmark variance). 1.0 = moves with the market, >1 = amplifies
+  // it, <1 = dampens it.
+  beta(rets, benchRets) {
+    const n = Math.min(rets.length, benchRets.length);
+    if (!n) return 0;
+    const meanA = rets.slice(0,n).reduce((a,b)=>a+b,0)/n;
+    const meanB = benchRets.slice(0,n).reduce((a,b)=>a+b,0)/n;
+    let cov = 0, varB = 0;
+    for (let i=0;i<n;i++) { cov += (rets[i]-meanA)*(benchRets[i]-meanB); varB += (benchRets[i]-meanB)**2; }
+    return varB ? cov/varB : 0;
+  },
+  correlation(a, b) {
+    const n = Math.min(a.length, b.length);
+    if (!n) return 0;
+    const meanA = a.slice(0,n).reduce((x,y)=>x+y,0)/n;
+    const meanB = b.slice(0,n).reduce((x,y)=>x+y,0)/n;
+    let cov=0, varA=0, varB=0;
+    for (let i=0;i<n;i++) { const da=a[i]-meanA, db=b[i]-meanB; cov+=da*db; varA+=da*da; varB+=db*db; }
+    const denom = Math.sqrt(varA*varB);
+    return denom ? cov/denom : 0;
+  },
+  yearlyReturns(dates, values) {
+    const out = [];
+    let yearStartIdx = 0;
+    for (let i = 1; i <= dates.length; i++) {
+      const isLast = i === dates.length;
+      const yearChanged = !isLast && dates[i].y !== dates[yearStartIdx].y;
+      if (isLast || yearChanged) {
+        const endIdx = i - 1;
+        // Baseline is the END of the prior year, not this year's own first
+        // value — using the first value as its own baseline would exclude
+        // that first month's return. Only the very first year (no prior
+        // data) falls back to its own start.
+        const baseIdx = yearStartIdx > 0 ? yearStartIdx - 1 : 0;
+        const partial = dates[yearStartIdx].m !== 0 || (isLast && dates[endIdx].m !== 11);
+        out.push({ year: dates[yearStartIdx].y, ret: values[endIdx] / values[baseIdx] - 1, partial });
+        yearStartIdx = i;
+      }
+    }
+    return out;
   },
 
   // ---------- run ----------
@@ -752,27 +806,27 @@ const bt = {
     fetch(`/api/backtest/sectors?symbols=${encodeURIComponent(missing.join(','))}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (!data || !data.industries) return;
-        Object.assign(this._sectorCache, data.industries);
+        if (!data || !data.profiles) return;
+        Object.assign(this._sectorCache, data.profiles);
         this.render();
       })
       .catch(() => {});
   },
-  sectorBreakdownHtml(perAsset) {
-    const cache = this._sectorCache || {};
-    const allLoaded = perAsset.every(a => a.t in cache);
-    if (!allLoaded) {
-      return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real sector classification (Finnhub)…</div>`;
-    }
-    const bySector = {}; const order = [];
+  // Shared donut+legend renderer for sector/market-cap/geography — all
+  // three group holdings by a bucket key and weight, differing only in
+  // what the key is and the caveat note for whatever falls in an
+  // "uncategorized" bucket.
+  groupedBreakdownHtml(perAsset, keyFn, opts) {
+    const { uncategorizedKey, uncategorizedNote } = opts || {};
+    const groups = {}; const order = [];
     perAsset.forEach(a => {
-      const key = this.sectorBucket(cache[a.t]);
-      if (!bySector[key]) { bySector[key] = { weight: 0, tickers: [] }; order.push(key); }
-      bySector[key].weight += a.w;
-      bySector[key].tickers.push(a.t);
+      const key = keyFn(a);
+      if (!groups[key]) { groups[key] = { weight: 0, tickers: [] }; order.push(key); }
+      groups[key].weight += a.w;
+      groups[key].tickers.push(a.t);
     });
-    const sectorPalette = ['#2F7BFF','#1fd397','#f5a524','#9b6bff','#34d3ff','#ec4899','#64748b','#22d3ee'];
-    const segs = order.map((key,i) => ({ label: key, value: bySector[key].weight, tickers: bySector[key].tickers, color: sectorPalette[i % sectorPalette.length] }));
+    const palette = ['#2F7BFF','#1fd397','#f5a524','#9b6bff','#34d3ff','#ec4899','#64748b','#22d3ee'];
+    const segs = order.map((key,i) => ({ label: key, value: groups[key].weight, tickers: groups[key].tickers, color: palette[i % palette.length] }));
     const donut = this.donutSvg(segs, { size: 140, thickness: 24 });
     const legend = segs.map(s => `
       <div style="padding:7px 0;border-bottom:1px solid var(--line);">
@@ -783,14 +837,60 @@ const bt = {
         </div>
         <div style="padding-left:17px;font-family:var(--mono);font-size:10px;color:var(--mut);">${s.tickers.map(t=>this.esc(t)).join(', ')}</div>
       </div>`).join('');
-    const hasUncategorized = order.includes('Uncategorized (ETF/Fund)');
-    const note = hasUncategorized
-      ? `<div style="margin-top:14px;font-size:10.5px;color:var(--mut);line-height:1.5;">ETFs and funds don't carry an industry classification the way individual stocks do — Finnhub's free tier (and every free alternative we checked) has no real per-fund sector breakdown, so those holdings are grouped here rather than guessed at.</div>`
-      : '';
+    const note = uncategorizedKey && order.includes(uncategorizedKey) ? uncategorizedNote : '';
     return `<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
       <div>${donut}</div>
       <div style="flex:1;min-width:180px;">${legend}</div>
     </div>${note}`;
+  },
+  sectorBreakdownHtml(perAsset) {
+    const cache = this._sectorCache || {};
+    if (!perAsset.every(a => a.t in cache)) {
+      return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real sector classification (Finnhub)…</div>`;
+    }
+    return this.groupedBreakdownHtml(perAsset, a => this.sectorBucket(cache[a.t]?.industry), {
+      uncategorizedKey: 'Uncategorized (ETF/Fund)',
+      uncategorizedNote: `<div style="margin-top:14px;font-size:10.5px;color:var(--mut);line-height:1.5;">ETFs and funds don't carry an industry classification the way individual stocks do — Finnhub's free tier (and every free alternative we checked) has no real per-fund sector breakdown, so those holdings are grouped here rather than guessed at.</div>`,
+    });
+  },
+  // Standard, widely-cited US market-cap breakpoints (Mega $200B+, Large
+  // $10B-200B, Mid $2B-10B, Small $300M-2B, Micro under $300M) — not a
+  // fabricated scheme, just the common convention.
+  MARKET_CAP_BANDS: [
+    { key: 'Mega-cap (≥$200B)', min: 200000 },
+    { key: 'Large-cap ($10B–$200B)', min: 10000 },
+    { key: 'Mid-cap ($2B–$10B)', min: 2000 },
+    { key: 'Small-cap ($300M–$2B)', min: 300 },
+    { key: 'Micro-cap (<$300M)', min: 0 },
+  ],
+  marketCapBucket(marketCapUsdM) {
+    if (marketCapUsdM == null) return 'Not available (ETF/fund or non-USD listing)';
+    for (const band of this.MARKET_CAP_BANDS) if (marketCapUsdM >= band.min) return band.key;
+    return this.MARKET_CAP_BANDS[this.MARKET_CAP_BANDS.length-1].key;
+  },
+  marketCapBreakdownHtml(perAsset) {
+    const cache = this._sectorCache || {};
+    if (!perAsset.every(a => a.t in cache)) {
+      return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real market cap data (Finnhub)…</div>`;
+    }
+    return this.groupedBreakdownHtml(perAsset, a => this.marketCapBucket(cache[a.t]?.marketCapUsdM), {
+      uncategorizedKey: 'Not available (ETF/fund or non-USD listing)',
+      uncategorizedNote: `<div style="margin-top:14px;font-size:10.5px;color:var(--mut);line-height:1.5;">ETFs/funds don't carry a market cap the way individual stocks do, and Finnhub reports market cap in each company's local listing currency — non-USD listings are grouped here rather than shown with an FX-converted estimate.</div>`,
+    });
+  },
+  COUNTRY_NAMES: { US:'United States', CA:'Canada', GB:'United Kingdom', JP:'Japan', CN:'China', TW:'Taiwan', KR:'South Korea', DE:'Germany', FR:'France', NL:'Netherlands', CH:'Switzerland', IE:'Ireland', IN:'India', AU:'Australia', BR:'Brazil', HK:'Hong Kong', SE:'Sweden', IL:'Israel', SG:'Singapore', ES:'Spain', IT:'Italy', BM:'Bermuda', KY:'Cayman Islands' },
+  countryBreakdownHtml(perAsset) {
+    const cache = this._sectorCache || {};
+    if (!perAsset.every(a => a.t in cache)) {
+      return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real headquarters/listing data (Finnhub)…</div>`;
+    }
+    return this.groupedBreakdownHtml(perAsset, a => {
+      const code = cache[a.t]?.country;
+      return code ? (this.COUNTRY_NAMES[code] || code) : 'Not available (ETF/fund)';
+    }, {
+      uncategorizedKey: 'Not available (ETF/fund)',
+      uncategorizedNote: `<div style="margin-top:14px;font-size:10.5px;color:var(--mut);line-height:1.5;">ETFs and funds don't carry a single country of domicile the way individual stocks do, so those holdings are grouped here rather than guessed at.</div>`,
+    });
   },
 
   // ============================================================
@@ -898,6 +998,7 @@ const bt = {
       </button>`).join('');
   },
   setTab(id) { this.setState({ tab: id }); },
+  setDiversificationView(v) { this.setState({ diversificationView: v }); },
 
   renderContent() {
     const s = this.state;
@@ -936,6 +1037,7 @@ const bt = {
       { label: 'Max drawdown', value: this.pct(m.maxDD,1), color: '#ef5959', dot: 'var(--neg)', sub: 'peak to trough' },
       { label: 'Volatility', value: this.pct(m.vol,1), color: '#FAFAF7', dot: 'var(--acc2)', sub: 'annualized' },
       { label: 'vs S&P 500', value: this.signed(alpha,1), color: alpha>=0?'#3ec46e':'#ef5959', dot: '#ec4899', sub: 'CAGR alpha' },
+      { label: 'Beta', value: m.beta.toFixed(2), color: '#FAFAF7', dot: '#f5a524', sub: m.beta>=1 ? 'amplifies the market' : 'dampens the market' },
     ];
 
     return `
@@ -1005,11 +1107,17 @@ const bt = {
       </div>
 
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-top:16px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <span style="font-size:14px;font-weight:700;">Diversification by Sector</span>
-          <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;color:var(--pos);margin-left:auto;" title="Real industry classification per holding, from Finnhub.">REAL</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:700;">Diversification</span>
+          <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;color:var(--pos);" title="Real classification per holding, from Finnhub.">REAL</span>
+          <div style="display:flex;gap:6px;margin-left:auto;">
+            ${['Sector','Market Cap','Geography'].map(v => `
+              <button onclick="bt.setDiversificationView('${v}')" style="font-size:11px;font-weight:600;padding:5px 11px;border-radius:99px;border:1px solid ${s.diversificationView===v?'rgba(var(--glow),.5)':'var(--line)'};background:${s.diversificationView===v?'rgba(var(--glow),.14)':'rgba(255,255,255,.03)'};color:${s.diversificationView===v?'var(--acc2)':'var(--mut)'};">${v}</button>`).join('')}
+          </div>
         </div>
-        ${this.sectorBreakdownHtml(R.perAsset)}
+        ${s.diversificationView==='Market Cap' ? this.marketCapBreakdownHtml(R.perAsset)
+          : s.diversificationView==='Geography' ? this.countryBreakdownHtml(R.perAsset)
+          : this.sectorBreakdownHtml(R.perAsset)}
       </div>
     `;
   },
@@ -1155,6 +1263,8 @@ const bt = {
     const stats = [
       { label: 'Best month', value: this.signed(m.best,1), color: '#3ec46e' },
       { label: 'Worst month', value: this.signed(m.worst,1), color: '#ef5959' },
+      { label: 'Win rate', value: this.pct(m.winRate,0), color: '#FAFAF7' },
+      { label: 'Ulcer Index', value: m.ulcer.toFixed(3), color: '#FAFAF7' },
       { label: 'Assets', value: String(R.perAsset.length), color: '#FAFAF7' },
       { label: 'Rebalance', value: s.rebalance==='None'?'None':s.rebalance, color: '#FAFAF7' },
     ];
@@ -1180,8 +1290,61 @@ const bt = {
         </div>
         ${contribRows}
       </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;">Calendar-year returns</div>
+        ${this.yearlyReturnsHtml(R)}
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:14px;">Correlation between holdings</div>
+        ${this.correlationMatrixHtml(R.perAssetReturns)}
+      </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:18px 22px;font-size:13px;line-height:1.6;color:var(--txt);">${insight}</div>
     `;
+  },
+  yearlyReturnsHtml(R) {
+    const portYears = this.yearlyReturns(R.dates, R.equity);
+    const benchYears = this.yearlyReturns(R.dates, R.bench);
+    const rows = portYears.map((y,i) => {
+      const by = benchYears[i];
+      return `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:9px 0;align-items:center;border-bottom:1px solid var(--line);">
+          <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;">${y.year}${y.partial ? ' <span style="color:var(--mut);font-weight:400;font-size:10px;">(partial)</span>' : ''}</span>
+          <span style="text-align:right;font-family:var(--mono);font-size:12px;color:${y.ret>=0?'#3ec46e':'#ef5959'};">${this.signed(y.ret,1)}</span>
+          <span style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--mut);">${this.signed(by.ret,1)}</span>
+        </div>`;
+    }).join('');
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding-bottom:8px;border-bottom:1px solid var(--line);">
+        <span>Year</span><span style="text-align:right;">Portfolio</span><span style="text-align:right;">S&amp;P 500</span>
+      </div>
+      ${rows}`;
+  },
+  // Grid rendering is only legible up to a point — beyond 12 holdings, fall
+  // back to a single average-pairwise-correlation summary rather than an
+  // unreadable wall of tiny cells.
+  CORR_MATRIX_MAX: 12,
+  correlationMatrixHtml(perAssetReturns) {
+    const n = perAssetReturns.length;
+    if (n < 2) return `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Add at least two holdings to see correlation.</div>`;
+    const matrix = perAssetReturns.map(a => perAssetReturns.map(b => this.correlation(a.rets, b.rets)));
+    if (n > this.CORR_MATRIX_MAX) {
+      let sum = 0, count = 0;
+      for (let i=0;i<n;i++) for (let j=0;j<n;j++) if (i!==j) { sum += matrix[i][j]; count++; }
+      const avg = count ? sum/count : 0;
+      return `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11.5px;line-height:1.6;">Full correlation grid hidden for portfolios over ${this.CORR_MATRIX_MAX} holdings (currently ${n}).<br>Average pairwise correlation: <span style="font-family:var(--mono);font-weight:700;color:var(--txt);">${avg.toFixed(2)}</span></div>`;
+    }
+    const cellColor = (v) => v >= 0 ? `rgba(31,163,74,${0.12 + v*0.55})` : `rgba(220,38,38,${0.12 + (-v)*0.55})`;
+    const header = `<div style="display:grid;grid-template-columns:60px repeat(${n},1fr);gap:3px;">
+      <div></div>
+      ${perAssetReturns.map(a => `<div style="text-align:center;font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--mut);padding:4px 0;">${this.esc(a.t)}</div>`).join('')}
+    </div>`;
+    const rows = perAssetReturns.map((a,i) => `
+      <div style="display:grid;grid-template-columns:60px repeat(${n},1fr);gap:3px;margin-top:3px;">
+        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--mut);display:flex;align-items:center;">${this.esc(a.t)}</div>
+        ${matrix[i].map((v,j) => `<div title="${this.esc(a.t)} vs ${this.esc(perAssetReturns[j].t)}: ${v.toFixed(2)}" style="aspect-ratio:1;border-radius:4px;background:${cellColor(v)};display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:700;color:var(--txt);">${v.toFixed(1)}</div>`).join('')}
+      </div>`).join('');
+    return `<div style="overflow-x:auto;">${header}${rows}</div>
+      <div style="margin-top:12px;font-size:10.5px;color:var(--mut);">1.0 = always moves together · 0 = unrelated · -1.0 = always moves opposite</div>`;
   },
 };
 
