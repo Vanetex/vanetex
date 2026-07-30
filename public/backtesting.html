@@ -429,7 +429,7 @@ const bt = {
   // silently drops any unique ticker past this count with no per-ticker
   // error, so without this check the backtest fails downstream with a
   // misleading "no price history" error on a holding that's actually fine.
-  MAX_HOLDINGS: 12,
+  MAX_HOLDINGS: 50,
   validate(s) {
     s = s || this.state;
     const errs = [];

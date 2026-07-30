@@ -57,6 +57,19 @@ const nextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      {
+        // Voice input on the backtesting page needs microphone access —
+        // the site-wide policy above blocks it outright regardless of
+        // what the user clicks in the browser's own permission prompt.
+        // Scoped to this one page; every other route keeps mic disabled.
+        source: "/backtesting.html",
+        headers: [
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
+          },
+        ],
+      },
     ];
   },
 };

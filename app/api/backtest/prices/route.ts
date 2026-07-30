@@ -3,10 +3,14 @@ import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 import { kvGet, kvSet } from "@/lib/kvCache";
 
 export const runtime = "nodejs";
+// A cold-cache fetch of the max symbol count (chunked at 4 concurrent
+// with a 300ms gap) measured at ~7-10s worst case — safely under this,
+// but set explicitly since Vercel's default function timeout is 10s.
+export const maxDuration = 60;
 
 const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
 const CACHE_TTL_S = 6 * 60 * 60; // monthly bars barely move intraday; the in-progress month is the only one that goes stale
-const MAX_SYMBOLS = 12;
+const MAX_SYMBOLS = 50;
 const BENCHMARK = "SPY";
 
 type SeriesPoint = { t: number; v: number }; // unix seconds, dividend/split-adjusted close
