@@ -14,11 +14,7 @@ type SeriesPoint = { t: number; v: number }; // unix seconds, dividend/split-adj
 // Real monthly history per symbol, back to inception — cached per symbol
 // (not per requested date range) so every caller's request range slices
 // the same cached series instead of fragmenting the cache by range.
-async function fetchMonthlySeries(symbol: string): Promise<SeriesPoint[] | null> {
-  const cacheKey = `backtest:prices:${symbol}`;
-  const cached = await kvGet<SeriesPoint[]>(cacheKey);
-  if (cached) return cached;
-
+async function fetchYahooSeries(symbol: string): Promise<SeriesPoint[] | null> {
   try {
     const res = await fetch(
       `${YAHOO_CHART}/${encodeURIComponent(symbol)}?interval=1mo&range=max`,
@@ -45,12 +41,31 @@ async function fetchMonthlySeries(symbol: string): Promise<SeriesPoint[] | null>
       points.push({ t: r.timestamp[i], v });
     }
     if (!points.length) return null;
-
-    await kvSet(cacheKey, points, CACHE_TTL_S);
     return points;
   } catch {
     return null;
   }
+}
+
+async function fetchMonthlySeries(symbol: string): Promise<SeriesPoint[] | null> {
+  const cacheKey = `backtest:prices:${symbol}`;
+  const cached = await kvGet<SeriesPoint[]>(cacheKey);
+  if (cached) return cached;
+
+  let points = await fetchYahooSeries(symbol);
+  // Yahoo represents US dual-class shares with a dash (BRK-B) rather than
+  // the dot notation most people actually type (BRK.B). Try the symbol
+  // as given first — this keeps dot-suffixed international tickers like
+  // 7203.T working unchanged — and only fall back to a dash conversion
+  // when the as-typed lookup genuinely comes back empty, rather than
+  // guessing up front which dotted tickers are share classes.
+  if (!points && symbol.includes(".")) {
+    points = await fetchYahooSeries(symbol.replace(/\./g, "-"));
+  }
+  if (!points) return null;
+
+  await kvSet(cacheKey, points, CACHE_TTL_S);
+  return points;
 }
 
 export async function GET(request: NextRequest) {

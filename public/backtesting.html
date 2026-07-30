@@ -27,6 +27,8 @@ a{color:inherit;text-decoration:none}
 @keyframes auroraDrift{0%{transform:translate(-4%,-2%) scale(1)}50%{transform:translate(5%,4%) scale(1.18)}100%{transform:translate(-4%,-2%) scale(1)}}
 @keyframes rowIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 @keyframes vx-spin{to{transform:rotate(360deg)}}
+@keyframes vx-pulse{0%{box-shadow:0 0 0 0 rgba(255,77,94,.45)}70%{box-shadow:0 0 0 9px rgba(255,77,94,0)}100%{box-shadow:0 0 0 0 rgba(255,77,94,0)}}
+.mic-listening{animation:vx-pulse 1.4s ease-out infinite;}
 button{font-family:var(--ui);cursor:pointer}
 input,select{font-family:var(--ui)}
 .logolink{transition:opacity .15s ease}
@@ -157,6 +159,7 @@ const bt = {
     compareResult: null,
     compareLoading: false,
     hoverIdx: null,
+    voice: { supported: false, listening: false, message: null, isError: false },
   },
 
   init() {
@@ -169,6 +172,7 @@ const bt = {
     const start = new Date(end); start.setFullYear(start.getFullYear() - 5);
     this.state.end = end.toISOString().slice(0,10);
     this.state.start = start.toISOString().slice(0,10);
+    this.state.voice.supported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
     this.render();
     this.loadRiskFreeRate();
   },
@@ -271,6 +275,123 @@ const bt = {
   setTicker(i, v) { const h = this.state.holdings.slice(); h[i] = { ...h[i], t: v.toUpperCase() }; this.setState({ holdings: h, preset: null }); },
   setWeight(i, v) { const h = this.state.holdings.slice(); h[i] = { ...h[i], w: v === '' ? '' : +v }; this.setState({ holdings: h, preset: null }); },
   setHoldingColor(i, color) { const h = this.state.holdings.slice(); h[i] = { ...h[i], color }; this.setState({ holdings: h }); },
+
+  // ---------- voice input ----------
+  // Word-to-number parsing for spoken portfolio weights ("twenty five
+  // percent" -> 25) plus digit-based ("20%") since browser speech
+  // recognition transcribes numbers as digits as often as words.
+  VOICE_ONES: { zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9,
+    ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19 },
+  VOICE_TENS: { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 },
+  VOICE_FILLER: new Set(['percent','percentage','pct','at','to','for','and','add','buy','invest','put','set',
+    'weight','ticker','symbol','stock','shares','of','the','with','allocate','allocated','allocation','into','in','on',
+    'my','is','equals','equal','please','okay','ok']),
+
+  voiceTokenize(transcript) {
+    let t = transcript.toLowerCase();
+    t = t.replace(/%/g, ' percent ');
+    t = t.replace(/[^a-z0-9.\s]/g, ' ');
+    return t.split(/\s+/).filter(Boolean);
+  },
+  voiceExtractNumber(tokens) {
+    for (let i = 0; i < tokens.length; i++) {
+      if (/^\d+(\.\d+)?$/.test(tokens[i])) {
+        return { value: parseFloat(tokens[i]), rest: tokens.slice(0, i).concat(tokens.slice(i + 1)) };
+      }
+    }
+    const ONES = this.VOICE_ONES, TENS = this.VOICE_TENS;
+    for (let i = 0; i < tokens.length; i++) {
+      if (!(tokens[i] in ONES) && !(tokens[i] in TENS) && tokens[i] !== 'hundred') continue;
+      let j = i, whole = 0, sawAny = false;
+      while (j < tokens.length && (tokens[j] in ONES || tokens[j] in TENS || tokens[j] === 'hundred')) {
+        if (tokens[j] === 'hundred') whole = (whole || 1) * 100;
+        else if (tokens[j] in TENS) whole += TENS[tokens[j]];
+        else whole += ONES[tokens[j]];
+        sawAny = true;
+        j++;
+      }
+      let decStr = '';
+      if (tokens[j] === 'point') {
+        let k = j + 1;
+        while (k < tokens.length && tokens[k] in ONES) { decStr += String(ONES[tokens[k]]); k++; }
+        if (decStr) j = k;
+      }
+      if (!sawAny) continue;
+      const value = decStr ? whole + parseFloat('0.' + decStr) : whole;
+      return { value, rest: tokens.slice(0, i).concat(tokens.slice(j)) };
+    }
+    return { value: null, rest: tokens };
+  },
+  voiceExtractTicker(tokens) {
+    const rest = tokens.filter(t => !this.VOICE_FILLER.has(t));
+    if (rest.length === 0) return null;
+    if (rest.every(t => t.length === 1)) return rest.join('').toUpperCase();
+    if (rest.length === 1 && /^[a-z0-9]{1,6}$/.test(rest[0])) return rest[0].toUpperCase();
+    if (rest.length === 2 && rest[1].length === 1) return rest[0].toUpperCase() + '-' + rest[1].toUpperCase();
+    return null;
+  },
+  // Pure parser, deliberately expects an actual ticker symbol to be spoken
+  // (letter-by-letter or as one word) rather than a company name — a
+  // reliable name-to-ticker dictionary isn't something we can guarantee
+  // correct for every possible company, and guessing wrong here would be
+  // worse than asking the user to say the symbol.
+  parseVoiceCommand(transcript) {
+    const tokens = this.voiceTokenize(transcript);
+    const { value: weight, rest } = this.voiceExtractNumber(tokens);
+    const ticker = this.voiceExtractTicker(rest);
+    if (weight == null) return { ok: false, reason: `Didn't catch a percentage — try saying it clearly, like "AAPL twenty percent."` };
+    if (!ticker) return { ok: false, reason: `Didn't catch a clear ticker — try spelling it out, like "V O O twenty percent."` };
+    if (weight <= 0 || weight > 100) return { ok: false, reason: `Heard ${weight}% — portfolio weight must be between 0 and 100.` };
+    return { ok: true, ticker, weight };
+  },
+  startVoiceInput() {
+    if (this.state.voice.listening) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { this.setState({ voice: { ...this.state.voice, message: "Voice input isn't supported in this browser — try Chrome, Edge, or Safari.", isError: true } }); return; }
+    if (!this._recognition) {
+      this._recognition = new SR();
+      this._recognition.lang = 'en-US';
+      this._recognition.interimResults = false;
+      this._recognition.maxAlternatives = 1;
+      this._recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        this.applyVoiceResult(transcript);
+      };
+      this._recognition.onerror = (e) => {
+        const msg = e.error === 'not-allowed' || e.error === 'permission-denied'
+          ? 'Microphone access was denied — allow it in your browser settings to use voice input.'
+          : e.error === 'no-speech'
+          ? "Didn't hear anything — try again."
+          : 'Voice input failed — try again.';
+        this.setState({ voice: { ...this.state.voice, listening: false, message: msg, isError: true } });
+      };
+      this._recognition.onend = () => {
+        if (this.state.voice.listening) this.setState({ voice: { ...this.state.voice, listening: false } });
+      };
+    }
+    this.setState({ voice: { ...this.state.voice, listening: true, message: null, isError: false } });
+    try { this._recognition.start(); } catch (e) { /* already started */ }
+  },
+  stopVoiceInput() {
+    if (this._recognition) this._recognition.stop();
+    this.setState({ voice: { ...this.state.voice, listening: false } });
+  },
+  applyVoiceResult(transcript) {
+    const result = this.parseVoiceCommand(transcript);
+    if (!result.ok) {
+      this.setState({ voice: { ...this.state.voice, listening: false, message: `Heard: "${transcript}" — ${result.reason}`, isError: true } });
+      return;
+    }
+    const holdings = this.state.holdings.slice();
+    const emptyIdx = holdings.findIndex(h => !h.t);
+    if (emptyIdx >= 0) holdings[emptyIdx] = { ...holdings[emptyIdx], t: result.ticker, w: result.weight };
+    else holdings.push({ t: result.ticker, w: result.weight });
+    this.setState({
+      holdings,
+      preset: null,
+      voice: { ...this.state.voice, listening: false, message: `Heard: "${transcript}" → added ${result.ticker} @ ${result.weight}%`, isError: false },
+    });
+  },
   setName(v) { this.setState({ name: v }); },
   setStart(v) { this.setState({ start: v }); },
   setEnd(v) { this.setState({ end: v }); },
@@ -691,8 +812,14 @@ const bt = {
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Holdings</span>
-        <span style="font-size:10.5px;color:var(--mut);">${s.holdings.length} asset${s.holdings.length===1?'':'s'}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:10.5px;color:var(--mut);">${s.holdings.length} asset${s.holdings.length===1?'':'s'}</span>
+          <button onclick="bt.${s.voice.listening ? 'stopVoiceInput' : 'startVoiceInput'}()" title="${s.voice.supported ? (s.voice.listening ? 'Listening… click to stop' : 'Speak a ticker and portfolio %, e.g. \'AAPL twenty percent\'') : 'Voice input not supported in this browser'}" class="${s.voice.listening ? 'mic-listening' : ''}" style="width:24px;height:24px;flex-shrink:0;border:1px solid ${s.voice.listening?'rgba(255,77,94,.5)':'var(--line)'};background:${s.voice.listening?'rgba(255,77,94,.12)':'rgba(255,255,255,.03)'};color:${s.voice.listening?'var(--neg)':(s.voice.supported?'var(--mut)':'rgba(124,132,153,.4)')};border-radius:7px;display:flex;align-items:center;justify-content:center;">
+            <svg width="11" height="11" viewBox="0 0 12 16" fill="none"><path d="M6 0a2.5 2.5 0 0 0-2.5 2.5v5a2.5 2.5 0 0 0 5 0v-5A2.5 2.5 0 0 0 6 0z" fill="currentColor"/><path d="M1.5 7v.5a4.5 4.5 0 0 0 9 0V7M6 12v3.5M4 15.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg>
+          </button>
+        </div>
       </div>
+      ${s.voice.message ? `<div style="margin-bottom:10px;padding:8px 10px;border-radius:8px;background:${s.voice.isError?'rgba(255,77,94,.08)':'rgba(31,211,151,.08)'};border:1px solid ${s.voice.isError?'rgba(255,77,94,.25)':'rgba(31,211,151,.25)'};color:${s.voice.isError?'#ff8a94':'#3ec46e'};font-size:11px;line-height:1.5;">${this.esc(s.voice.message)}</div>` : ''}
       ${holdRows}
       <button onclick="bt.addHolding()" style="width:100%;padding:9px;border-radius:9px;border:1px dashed var(--line);background:transparent;color:var(--mut);font-size:12.5px;font-weight:600;margin-bottom:8px;">+ Add holding</button>
       <div style="text-align:right;font-size:11.5px;color:${weightOk?'#3ec46e':'var(--warn)'};margin-bottom:22px;">${wt.toFixed(1)}% allocated</div>
