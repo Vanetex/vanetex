@@ -353,30 +353,39 @@ const bt = {
     if (this.state.voice.listening) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { this.setState({ voice: { ...this.state.voice, message: "Voice input isn't supported in this browser — try Chrome, Edge, or Safari.", isError: true } }); return; }
-    if (!this._recognition) {
-      this._recognition = new SR();
-      this._recognition.lang = 'en-US';
-      this._recognition.interimResults = false;
-      this._recognition.maxAlternatives = 1;
-      this._recognition.onresult = (e) => {
-        const transcript = e.results[0][0].transcript;
-        this.applyVoiceResult(transcript);
-      };
-      this._recognition.onerror = (e) => {
-        const msg = e.error === 'not-allowed' || e.error === 'permission-denied'
-          ? 'Microphone access was denied — allow it in your browser settings to use voice input.'
-          : e.error === 'no-speech'
-          ? "Didn't hear anything — try again."
-          : 'Voice input failed — try again.';
-        this.setState({ voice: { ...this.state.voice, listening: false, message: msg, isError: true } });
-      };
-      this._recognition.onend = () => {
-        if (this.state.voice.listening) this.setState({ voice: { ...this.state.voice, listening: false } });
-      };
-    }
+    // A fresh instance every attempt, deliberately not cached/reused: some
+    // browsers keep replaying a stale "not-allowed" result on a recognition
+    // object that was created before the user granted mic permission, even
+    // after they approve the prompt — so a stale instance can get a real
+    // user stuck in a "denied" loop that a page reload (but not a retry)
+    // would clear. Recreating each time removes that stale state entirely.
+    const recognition = new SR();
+    this._recognition = recognition;
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      this.applyVoiceResult(transcript);
+    };
+    recognition.onerror = (e) => {
+      const msg = e.error === 'not-allowed' || e.error === 'service-not-allowed'
+        ? "Microphone access was denied. Allow it for this site, then try again — on Mac, also check System Settings → Privacy & Security → Microphone allows your browser."
+        : e.error === 'audio-capture'
+        ? "No microphone found — check that one is connected and not in use by another app."
+        : e.error === 'no-speech'
+        ? "Didn't hear anything — try again."
+        : e.error === 'network'
+        ? 'Voice recognition needs an internet connection — try again.'
+        : 'Voice input failed — try again.';
+      this.setState({ voice: { ...this.state.voice, listening: false, message: msg, isError: true } });
+    };
+    recognition.onend = () => {
+      if (this.state.voice.listening) this.setState({ voice: { ...this.state.voice, listening: false } });
+    };
     this.setState({ voice: { ...this.state.voice, listening: true, message: null, isError: false } });
     try {
-      this._recognition.start();
+      recognition.start();
     } catch (e) {
       // Chrome can throw synchronously (InvalidStateError) if start() is
       // called before a prior session has fully torn down — without this,
