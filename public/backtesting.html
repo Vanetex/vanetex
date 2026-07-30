@@ -291,7 +291,12 @@ const bt = {
     let t = transcript.toLowerCase();
     t = t.replace(/%/g, ' percent ');
     t = t.replace(/[^a-z0-9.\s]/g, ' ');
-    return t.split(/\s+/).filter(Boolean);
+    return t.split(/\s+/).filter(Boolean)
+      // Speech engines often append a trailing "." to a complete-sounding
+      // utterance ("aapl twenty percent.") — strip stray dots from any
+      // token that isn't itself a decimal number, so "percent." still
+      // matches the filler word "percent".
+      .map(tok => /^\d+\.\d+$/.test(tok) ? tok : tok.replace(/\./g, ''));
   },
   voiceExtractNumber(tokens) {
     for (let i = 0; i < tokens.length; i++) {
@@ -404,11 +409,18 @@ const bt = {
   },
   setRebalance(v) { this.setState({ rebalance: v }); },
 
+  // Mirrors MAX_SYMBOLS in app/api/backtest/prices/route.ts — that route
+  // silently drops any unique ticker past this count with no per-ticker
+  // error, so without this check the backtest fails downstream with a
+  // misleading "no price history" error on a holding that's actually fine.
+  MAX_HOLDINGS: 12,
   validate(s) {
     s = s || this.state;
     const errs = [];
     const hs = s.holdings.filter(h => h.t);
     if (!hs.length) errs.push('Add at least one holding.');
+    const uniqueTickers = new Set(hs.map(h => h.t.toUpperCase()));
+    if (uniqueTickers.size > this.MAX_HOLDINGS) errs.push(`A backtest can include up to ${this.MAX_HOLDINGS} holdings (currently ${uniqueTickers.size}).`);
     if (hs.some(h => !(+h.w) || +h.w <= 0)) errs.push('Every holding needs a weight greater than 0%.');
     const wt = s.holdings.reduce((a,h) => a + (+h.w || 0), 0);
     if (Math.abs(wt - 100) > 0.5) errs.push(`Weights must total 100% (currently ${wt.toFixed(1)}%).`);
