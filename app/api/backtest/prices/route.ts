@@ -11,7 +11,7 @@ export const maxDuration = 60;
 const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
 const CACHE_TTL_S = 6 * 60 * 60; // monthly bars barely move intraday; the in-progress month is the only one that goes stale
 const MAX_SYMBOLS = 50;
-const BENCHMARK = "SPY";
+const DEFAULT_BENCHMARK = "SPY";
 
 type SeriesPoint = { t: number; v: number }; // unix seconds, dividend/split-adjusted close
 
@@ -84,7 +84,11 @@ export async function GET(request: NextRequest) {
   const requested = [...new Set(symbolsParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, MAX_SYMBOLS);
   if (!requested.length) return NextResponse.json({ error: "symbols is required" }, { status: 400 });
 
-  const withBench = requested.includes(BENCHMARK) ? requested : [...requested, BENCHMARK];
+  // Same fetch path as any holding — this route already accepts arbitrary
+  // caller-supplied symbols for `symbols`, so a custom benchmark isn't a
+  // new open-proxy surface, just the same one already in place.
+  const benchmark = request.nextUrl.searchParams.get("benchmark")?.trim().toUpperCase() || DEFAULT_BENCHMARK;
+  const withBench = requested.includes(benchmark) ? requested : [...requested, benchmark];
 
   // Small chunks with a gap between them — bursting many concurrent
   // Yahoo requests at once is the same lesson learned with Finnhub
@@ -106,7 +110,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json(
-    { series, errors, benchmark: BENCHMARK },
+    { series, errors, benchmark },
     { headers: { "Cache-Control": "private, max-age=300" } },
   );
 }

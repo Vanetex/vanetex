@@ -135,6 +135,21 @@ const bt = {
     '60/40':        { name: '60/40 Balanced',   holdings: [['VTI',60],['BND',40]] },
     'Growth':       { name: 'Growth Tilt',      holdings: [['VUG',30],['QQQ',30],['SMH',20],['ARKK',20]] },
   },
+  // Every option verified live against Yahoo before shipping — all have
+  // real, sufficiently long monthly history for backtest comparisons.
+  BENCHMARK_OPTIONS: [
+    { key: 'SPY', label: 'S&P 500' },
+    { key: 'QQQ', label: 'Nasdaq 100' },
+    { key: 'VTI', label: 'Total US Market' },
+    { key: 'IWM', label: 'Russell 2000' },
+    { key: 'DIA', label: 'Dow Jones' },
+    { key: 'AGG', label: 'US Aggregate Bonds' },
+    { key: 'VXUS', label: 'International (ex-US)' },
+  ],
+  benchmarkLabel(key) {
+    const found = this.BENCHMARK_OPTIONS.find(b => b.key === key);
+    return found ? found.label : key;
+  },
   SAVED_KEY: 'vanetex_backtest_saved_v1',
   // Fallback used only until the real rate loads (or if it fails to) —
   // replaced with the real 3-month T-bill yield from FRED in init().
@@ -149,6 +164,7 @@ const bt = {
     end: new Date().toISOString().slice(0,10),
     initial: 10000,
     rebalance: 'Quarterly',
+    benchmark: 'SPY',
     tab: 'Results',
     running: false,
     hasResults: false,
@@ -425,6 +441,7 @@ const bt = {
     this.setState({ initial: n });
   },
   setRebalance(v) { this.setState({ rebalance: v }); },
+  setBenchmark(v) { this.setState({ benchmark: v }); },
 
   // Mirrors MAX_SYMBOLS in app/api/backtest/prices/route.ts — that route
   // silently drops any unique ticker past this count with no per-ticker
@@ -469,7 +486,8 @@ const bt = {
       const sym = h.t.toUpperCase();
       if (!maps[sym]) maps[sym] = this.seriesToMap(seriesMap[sym]);
     }
-    const benchMap = this.seriesToMap(seriesMap['SPY']);
+    const benchSym = (cfg.benchmark || 'SPY').toUpperCase();
+    const benchMap = this.seriesToMap(seriesMap[benchSym]);
 
     const nowKey = this.monthKeyFromUnix(Date.now()/1000);
     let firstKey = this.toKey(cfg.start);
@@ -531,10 +549,17 @@ const bt = {
     const m = this.metrics(equity, n);
     const bm = this.metrics(bench, n);
     m.beta = this.beta(m.mret, bm.mret);
+    m.trackingError = this.trackingError(m.mret, bm.mret);
+    m.infoRatio = this.informationRatio(m.cagr, bm.cagr, m.trackingError);
+    m.upCapture = this.captureRatio(m.mret, bm.mret, 'up');
+    m.downCapture = this.captureRatio(m.mret, bm.mret, 'down');
     const truncated = firstKey > this.toKey(cfg.start);
     const monteCarlo = this.monteCarlo(m.mret, m.final);
+    const weights = hs.map(h => (+h.w||0)/wsum);
+    const riskContribution = hs.length > 1 ? this.riskContribution(perAssetReturns, weights) : null;
+    const rolling = this.rollingMetrics(equity, 12, this.riskFreeRate);
 
-    return { equity, bench, perAsset, perAssetReturns, dates, m, bm, n, initial, truncated, monteCarlo, effStart: this.fromKey(firstKey), effEnd: this.fromKey(lastKey) };
+    return { equity, bench, perAsset, perAssetReturns, dates, m, bm, n, initial, truncated, monteCarlo, riskContribution, rolling, benchmark: benchSym, effStart: this.fromKey(firstKey), effEnd: this.fromKey(lastKey) };
   },
 
   metrics(eq, n) {
@@ -587,6 +612,80 @@ const bt = {
     const denom = Math.sqrt(varA*varB);
     return denom ? cov/denom : 0;
   },
+  // Tracking error: annualized volatility of the month-by-month gap between
+  // portfolio and benchmark returns. Zero only when that gap is constant
+  // (even a portfolio that's always +0.5%/mo ahead has zero tracking
+  // error) — it measures consistency of the deviation, not its size.
+  trackingError(rets, benchRets) {
+    const n = Math.min(rets.length, benchRets.length);
+    if (!n) return 0;
+    const diffs = [];
+    for (let i=0;i<n;i++) diffs.push(rets[i]-benchRets[i]);
+    const mean = diffs.reduce((a,b)=>a+b,0)/n;
+    const variance = diffs.reduce((a,b)=>a+(b-mean)**2,0)/n;
+    return Math.sqrt(variance) * Math.sqrt(12);
+  },
+  informationRatio(cagr, benchCagr, te) {
+    return te ? (cagr - benchCagr) / te : 0;
+  },
+  // Up/down capture: average portfolio return during benchmark-up (or
+  // -down) months, as a ratio of the benchmark's own average over those
+  // same months. 100% = moves exactly with the market in that direction;
+  // the ideal profile is up capture > 100% and down capture < 100%.
+  captureRatio(rets, benchRets, direction) {
+    const n = Math.min(rets.length, benchRets.length);
+    const idxs = [];
+    for (let i=0;i<n;i++) if (direction==='up' ? benchRets[i] > 0 : benchRets[i] < 0) idxs.push(i);
+    if (!idxs.length) return null;
+    const portAvg = idxs.reduce((a,i)=>a+rets[i],0)/idxs.length;
+    const benchAvg = idxs.reduce((a,i)=>a+benchRets[i],0)/idxs.length;
+    return benchAvg !== 0 ? portAvg/benchAvg : null;
+  },
+  // Risk (not return) contribution per holding — a risk-budgeting view:
+  // which holdings actually drive portfolio volatility, accounting for how
+  // they move together. Uses the standard Euler decomposition, where each
+  // holding's contribution-to-risk sums exactly to total portfolio vol.
+  riskContribution(perAssetReturns, weights) {
+    const n = perAssetReturns.length;
+    const vols = perAssetReturns.map(a => {
+      const r = a.rets;
+      const mean = r.reduce((x,y)=>x+y,0)/r.length;
+      const variance = r.reduce((x,y)=>x+(y-mean)**2,0)/r.length;
+      return Math.sqrt(variance) * Math.sqrt(12);
+    });
+    const corr = perAssetReturns.map(a => perAssetReturns.map(b => this.correlation(a.rets, b.rets)));
+    let portVar = 0;
+    for (let i=0;i<n;i++) for (let j=0;j<n;j++) portVar += weights[i]*weights[j]*vols[i]*vols[j]*corr[i][j];
+    const portVol = Math.sqrt(Math.max(portVar,0));
+    const mcr = [];
+    for (let i=0;i<n;i++) {
+      let sum = 0;
+      for (let j=0;j<n;j++) sum += weights[j]*vols[i]*vols[j]*corr[i][j];
+      mcr.push(portVol ? sum/portVol : 0);
+    }
+    const ctr = weights.map((w,i) => w*mcr[i]);
+    const pctCtr = ctr.map(c => portVol ? c/portVol : 0);
+    return { portVol, vols, ctr, pctCtr };
+  },
+  // Trailing 12-month return/Sharpe at every point in the backtest — shows
+  // whether performance was steady or driven by one strong stretch, which
+  // a single whole-period Sharpe can't distinguish.
+  ROLLING_WINDOW_MONTHS: 12,
+  rollingMetrics(equity, windowMonths, riskFreeRate) {
+    const out = [];
+    for (let i = windowMonths; i < equity.length; i++) {
+      const windowEq = equity.slice(i-windowMonths, i+1);
+      const ret = windowEq[windowEq.length-1]/windowEq[0] - 1;
+      const rets = [];
+      for (let j=1;j<windowEq.length;j++) rets.push(windowEq[j]/windowEq[j-1]-1);
+      const mean = rets.reduce((a,b)=>a+b,0)/rets.length;
+      const variance = rets.reduce((a,b)=>a+(b-mean)**2,0)/rets.length;
+      const vol = Math.sqrt(variance)*Math.sqrt(12);
+      const sharpe = vol ? (ret - riskFreeRate)/vol : 0;
+      out.push({ idx: i, ret, sharpe });
+    }
+    return out;
+  },
   yearlyReturns(dates, values) {
     const out = [];
     let yearStartIdx = 0;
@@ -616,13 +715,17 @@ const bt = {
     this.setState({ running: true, error: null });
 
     const tickers = [...new Set(this.state.holdings.filter(h=>h.t).map(h=>h.t.toUpperCase()))];
-    fetch(`/api/backtest/prices?symbols=${encodeURIComponent(tickers.join(','))}`)
+    fetch(`/api/backtest/prices?symbols=${encodeURIComponent(tickers.join(','))}&benchmark=${encodeURIComponent(this.state.benchmark)}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) { this.setState({ running: false, error: data.error }); return; }
         const missing = tickers.filter(t => (data.errors||[]).includes(t));
         if (missing.length) {
           this.setState({ running: false, error: `Couldn't find price history for ${missing.join(', ')} — check the ticker${missing.length>1?'s':''}.` });
+          return;
+        }
+        if ((data.errors||[]).includes(data.benchmark)) {
+          this.setState({ running: false, error: `Couldn't find price history for benchmark ${data.benchmark}.` });
           return;
         }
         try {
@@ -648,7 +751,7 @@ const bt = {
     if (!entry) return;
     this.setState({ compareWith: id, compareResult: null, compareLoading: true });
     const tickers = [...new Set(entry.holdings.map(h => h.t.toUpperCase()))];
-    fetch(`/api/backtest/prices?symbols=${encodeURIComponent(tickers.join(','))}`)
+    fetch(`/api/backtest/prices?symbols=${encodeURIComponent(tickers.join(','))}&benchmark=${encodeURIComponent(this.state.benchmark)}`)
       .then(r => r.json())
       .then(data => {
         if (data.error || (data.errors||[]).some(t => tickers.includes(t))) {
@@ -656,8 +759,8 @@ const bt = {
           return;
         }
         try {
-          // compare on the SAME window/initial as the current Results run, for a fair comparison
-          const cfg = { ...entry, start: this.state.results.effStart ? this.dateStr(this.state.results.effStart) : this.state.start, end: this.state.results.effEnd ? this.dateStr(this.state.results.effEnd) : this.state.end, initial: this.state.results.initial };
+          // compare on the SAME window/initial/benchmark as the current Results run, for a fair comparison
+          const cfg = { ...entry, start: this.state.results.effStart ? this.dateStr(this.state.results.effStart) : this.state.start, end: this.state.results.effEnd ? this.dateStr(this.state.results.effEnd) : this.state.end, initial: this.state.results.initial, benchmark: this.state.benchmark };
           const result = this.computeFor(cfg, data.series);
           this.setState({ compareLoading: false, compareResult: result });
         } catch (e) {
@@ -671,7 +774,7 @@ const bt = {
   exportResults() {
     const R = this.state.results;
     if (!R) return;
-    const rows = [['Date', 'Portfolio Value', 'S&P 500 Value']];
+    const rows = [['Date', 'Portfolio Value', `${this.benchmarkLabel(R.benchmark)} Value`]];
     R.dates.forEach((d,i) => rows.push([this.monLabel(d), R.equity[i].toFixed(2), R.bench[i].toFixed(2)]));
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1034,6 +1137,17 @@ const bt = {
       ${arcs}
     </svg>`;
   },
+  statTilesHtml(tiles) {
+    return tiles.map(t => `
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:14px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:${t.dot};"></span>
+          <span style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">${this.esc(t.label)}</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:21px;font-weight:800;color:${t.color};">${t.value}</div>
+        <div style="font-size:10.5px;color:var(--mut);margin-top:2px;">${t.sub}</div>
+      </div>`).join('');
+  },
   allocationHtml(perAsset) {
     const segments = perAsset.map(a => ({ value: a.w, color: a.color }));
     const donut = this.donutSvg(segments, { size: 140, thickness: 24 });
@@ -1218,8 +1332,12 @@ const bt = {
         <input type="number" min="1" max="10000000" value="${s.initial}" onchange="bt.setInitial(this.value)" onblur="bt.clampInitial()" style="width:100%;padding:9px 11px 9px 24px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-family:var(--mono);font-size:13px;font-weight:700;outline:none;">
       </div>
       <label style="display:block;font-size:11px;color:var(--mut);margin-bottom:6px;">Rebalance</label>
-      <select onchange="bt.setRebalance(this.value)" style="width:100%;padding:10px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:13px;margin-bottom:20px;outline:none;">
+      <select onchange="bt.setRebalance(this.value)" style="width:100%;padding:10px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:13px;margin-bottom:12px;outline:none;">
         ${['None','Monthly','Quarterly','Annually'].map(r => `<option value="${r}" ${s.rebalance===r?'selected':''}>${r==='None'?'No rebalancing':r}</option>`).join('')}
+      </select>
+      <label style="display:block;font-size:11px;color:var(--mut);margin-bottom:6px;">Benchmark</label>
+      <select onchange="bt.setBenchmark(this.value)" style="width:100%;padding:10px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-size:13px;margin-bottom:20px;outline:none;">
+        ${this.BENCHMARK_OPTIONS.map(b => `<option value="${b.key}" ${s.benchmark===b.key?'selected':''}>${b.label} (${b.key})</option>`).join('')}
       </select>
 
       <button onclick="bt.run()" class="runbtn" style="width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#0B0C0F 0%,var(--acc) 165%);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:10px;">${runIcon}${runLabel}</button>
@@ -1269,7 +1387,7 @@ const bt = {
     if (!s.hasResults) {
       return `<div style="padding:100px 20px;text-align:center;">
         <div style="font-size:15px;font-weight:700;margin-bottom:8px;">Ready to test your edge</div>
-        <div style="font-size:13px;color:var(--mut);max-width:360px;margin:0 auto;line-height:1.6;">Tune your holdings and settings, then hit <span style="color:var(--acc2);font-weight:600;">Run backtest</span> to simulate this portfolio against the S&amp;P 500 using real historical prices.</div>
+        <div style="font-size:13px;color:var(--mut);max-width:360px;margin:0 auto;line-height:1.6;">Tune your holdings and settings, then hit <span style="color:var(--acc2);font-weight:600;">Run backtest</span> to simulate this portfolio against ${this.esc(this.benchmarkLabel(s.benchmark))} using real historical prices.</div>
       </div>`;
     }
     const R = s.results, m = R.m, bm = R.bm;
@@ -1277,6 +1395,7 @@ const bt = {
     const rangeLabel = `${this.monLabel(R.effStart)} – ${this.monLabel(R.effEnd)}`;
     const truncNote = R.truncated ? `<div style="margin-top:8px;font-size:11.5px;color:var(--warn);">Data starts ${this.monLabel(R.effStart)} — one or more holdings don't have history back to ${s.start}. Showing ${rangeLabel} instead.</div>` : '';
 
+    const benchLabel = this.benchmarkLabel(R.benchmark);
     const tiles = [
       { label: 'CAGR', value: this.signed(m.cagr,1), color: m.cagr>=0?'#3ec46e':'#ef5959', dot: 'var(--pos)', sub: 'annualized' },
       { label: 'Total return', value: this.signed(m.total,1), color: m.total>=0?'#3ec46e':'#ef5959', dot: 'var(--acc2)', sub: this.money(m.final) },
@@ -1285,8 +1404,14 @@ const bt = {
       { label: 'Calmar', value: m.calmar.toFixed(2), color: '#FAFAF7', dot: '#9b6bff', sub: 'return / max drawdown' },
       { label: 'Max drawdown', value: this.pct(m.maxDD,1), color: '#ef5959', dot: 'var(--neg)', sub: 'peak to trough' },
       { label: 'Volatility', value: this.pct(m.vol,1), color: '#FAFAF7', dot: 'var(--acc2)', sub: 'annualized' },
-      { label: 'vs S&P 500', value: this.signed(alpha,1), color: alpha>=0?'#3ec46e':'#ef5959', dot: '#ec4899', sub: 'CAGR alpha' },
+    ];
+    const benchTiles = [
+      { label: 'Alpha', value: this.signed(alpha,1), color: alpha>=0?'#3ec46e':'#ef5959', dot: '#ec4899', sub: 'CAGR alpha' },
       { label: 'Beta', value: m.beta.toFixed(2), color: '#FAFAF7', dot: '#f5a524', sub: m.beta>=1 ? 'amplifies the market' : 'dampens the market' },
+      { label: 'Tracking error', value: this.pct(m.trackingError,1), color: '#FAFAF7', dot: '#34d3ff', sub: 'annualized deviation' },
+      { label: 'Information ratio', value: m.infoRatio.toFixed(2), color: '#FAFAF7', dot: '#34d3ff', sub: 'alpha per unit of TE' },
+      { label: 'Up capture', value: m.upCapture!=null ? this.pct(m.upCapture,0) : '—', color: m.upCapture!=null && m.upCapture>=1?'#3ec46e':'#FAFAF7', dot: '#3ec46e', sub: `${benchLabel} up months` },
+      { label: 'Down capture', value: m.downCapture!=null ? this.pct(m.downCapture,0) : '—', color: m.downCapture!=null && m.downCapture<1?'#3ec46e':'#ef5959', dot: '#ef5959', sub: `${benchLabel} down months` },
     ];
 
     return `
@@ -1306,31 +1431,29 @@ const bt = {
           <span style="font-family:var(--mono);font-size:42px;font-weight:800;">${this.money(m.final)}</span>
           <span style="font-family:var(--mono);font-size:14px;font-weight:800;color:${m.total>=0?'#3ec46e':'#ef5959'};background:${m.total>=0?'rgba(31,163,74,.12)':'rgba(220,38,38,.12)'};border:1px solid ${m.total>=0?'rgba(31,163,74,.3)':'rgba(220,38,38,.3)'};border-radius:99px;padding:5px 14px;">${this.signed(m.total,1)}</span>
         </div>
-        <div style="font-size:12.5px;color:var(--mut);margin-top:8px;">Grew ${this.money(R.initial)} · ${(R.n/12).toFixed(1)} yrs · ${alpha>=0?'beat':'trailed'} the S&amp;P 500 by <span style="color:${alpha>=0?'#3ec46e':'#ef5959'};font-weight:700;">${this.pct(Math.abs(alpha),1)}</span> CAGR</div>
+        <div style="font-size:12.5px;color:var(--mut);margin-top:8px;">Grew ${this.money(R.initial)} · ${(R.n/12).toFixed(1)} yrs · ${alpha>=0?'beat':'trailed'} ${this.esc(benchLabel)} by <span style="color:${alpha>=0?'#3ec46e':'#ef5959'};font-weight:700;">${this.pct(Math.abs(alpha),1)}</span> CAGR</div>
         ${truncNote}
       </div>
 
+      <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:8px;">Portfolio</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">
-        ${tiles.map(t => `
-          <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:14px;padding:16px;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
-              <span style="width:7px;height:7px;border-radius:50%;background:${t.dot};"></span>
-              <span style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">${t.label}</span>
-            </div>
-            <div style="font-family:var(--mono);font-size:21px;font-weight:800;color:${t.color};">${t.value}</div>
-            <div style="font-size:10.5px;color:var(--mut);margin-top:2px;">${t.sub}</div>
-          </div>`).join('')}
+        ${this.statTilesHtml(tiles)}
+      </div>
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:8px;">vs ${this.esc(benchLabel)}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">
+        ${this.statTilesHtml(benchTiles)}
       </div>
 
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
           <div>
             <div style="font-size:14px;font-weight:700;">Growth of ${this.money(R.initial)}</div>
-            <div style="font-size:11.5px;color:var(--mut);">Portfolio vs S&amp;P 500, ${rangeLabel}</div>
+            <div style="font-size:11.5px;color:var(--mut);">Portfolio vs ${this.esc(benchLabel)}, ${rangeLabel}</div>
           </div>
           <div style="display:flex;gap:14px;font-size:11.5px;color:var(--mut);">
             <span><span style="display:inline-block;width:14px;height:2px;background:var(--pos);vertical-align:middle;margin-right:5px;"></span>${this.esc(s.name)}</span>
-            <span><span style="display:inline-block;width:14px;height:2px;background:var(--mut);vertical-align:middle;margin-right:5px;border-top:2px dashed var(--mut);"></span>S&amp;P 500</span>
+            <span><span style="display:inline-block;width:14px;height:2px;background:var(--mut);vertical-align:middle;margin-right:5px;border-top:2px dashed var(--mut);"></span>${this.esc(benchLabel)}</span>
           </div>
         </div>
         <div id="eqWrap" class="eqhover" style="position:relative;margin-top:10px;">
@@ -1454,7 +1577,7 @@ const bt = {
       const dt = R.dates[idx];
       tip.style.display = 'block';
       tip.style.left = Math.min(Math.max(frac*100, 8), 78) + '%';
-      tip.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">${this.monLabel(dt)}</div><div style="color:var(--pos);">${this.money(R.equity[idx])}</div><div style="color:var(--mut);">${this.money(R.bench[idx])} S&amp;P</div>`;
+      tip.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">${this.monLabel(dt)}</div><div style="color:var(--pos);">${this.money(R.equity[idx])}</div><div style="color:var(--mut);">${this.money(R.bench[idx])} ${this.esc(this.benchmarkLabel(R.benchmark))}</div>`;
     };
     wrap.onmouseleave = () => { tip.style.display = 'none'; };
   },
@@ -1511,7 +1634,7 @@ const bt = {
     }
     const R = s.results;
     const options = s.saved.filter(sv => sv.name !== s.name);
-    const rows = [{ label: s.name, color: '#1fd397', m: R.m }, { label: 'S&P 500', color: '#7c8499', m: R.bm }];
+    const rows = [{ label: s.name, color: '#1fd397', m: R.m }, { label: this.benchmarkLabel(R.benchmark), color: '#7c8499', m: R.bm }];
     let extraChart = '';
     if (s.compareWith && s.compareResult && !s.compareResult.error) {
       const cr = s.compareResult;
@@ -1567,15 +1690,24 @@ const bt = {
     }
     const R = s.results, m = R.m;
     const totalGain = R.perAsset.reduce((a,p) => a + (p.end - p.start), 0);
+    // riskContribution is indexed to perAssetReturns' original order, not
+    // the sort-by-gain order used for display — look up by ticker instead
+    // of position.
+    const riskPctByTicker = {};
+    if (R.riskContribution) {
+      R.perAssetReturns.forEach((a,i) => { riskPctByTicker[a.t] = R.riskContribution.pctCtr[i]; });
+    }
     const contribRows = R.perAsset.slice().sort((a,b) => (b.end-b.start) - (a.end-a.start)).map(p => {
       const gain = p.end - p.start;
       const contribPct = totalGain !== 0 ? (gain/totalGain)*100 : 0;
+      const riskPct = riskPctByTicker[p.t];
       return `
-        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;padding:10px 0;align-items:center;border-bottom:1px solid var(--line);">
+        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;padding:10px 0;align-items:center;border-bottom:1px solid var(--line);">
           <span style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-weight:700;font-size:12.5px;"><span style="width:8px;height:8px;border-radius:2px;background:${p.color};"></span>${this.esc(p.t)}</span>
           <span style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--mut);">${this.pct(p.w,0)}</span>
           <span style="text-align:right;font-family:var(--mono);font-size:12px;color:${gain>=0?'#3ec46e':'#ef5959'};">${gain>=0?'+':''}${this.money(gain)}</span>
           <span style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--mut);">${contribPct.toFixed(0)}%</span>
+          <span style="text-align:right;font-family:var(--mono);font-size:12px;color:${riskPct!=null && riskPct*100>p.w*100+10?'#ef5959':'var(--mut)'};">${riskPct!=null ? (riskPct*100).toFixed(0)+'%' : '—'}</span>
         </div>`;
     }).join('');
 
@@ -1603,15 +1735,21 @@ const bt = {
           </div>`).join('')}
       </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:14px;">Contribution by holding</div>
-        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding-bottom:8px;border-bottom:1px solid var(--line);">
-          <span>Ticker</span><span style="text-align:right;">Weight</span><span style="text-align:right;">Gain/loss</span><span style="text-align:right;">% of return</span>
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Contribution by holding</div>
+        <div style="font-size:11px;color:var(--mut);margin-bottom:14px;">Risk % is each holding's share of total portfolio volatility — a holding can carry far more risk than its weight alone suggests, once correlation with the rest of the portfolio is accounted for.</div>
+        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1fr;gap:10px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding-bottom:8px;border-bottom:1px solid var(--line);">
+          <span>Ticker</span><span style="text-align:right;">Weight</span><span style="text-align:right;">Gain/loss</span><span style="text-align:right;">% of return</span><span style="text-align:right;">% of risk</span>
         </div>
         ${contribRows}
       </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:14px;">Calendar-year returns</div>
         ${this.yearlyReturnsHtml(R)}
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Rolling 12-month performance</div>
+        <div style="font-size:11px;color:var(--mut);margin-bottom:14px;">Was this a consistently good record, or one strong stretch carrying the average? A single whole-period Sharpe can't tell you that.</div>
+        ${this.rollingMetricsHtml(R)}
       </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:14px;">Correlation between holdings</div>
@@ -1634,9 +1772,53 @@ const bt = {
     }).join('');
     return `
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding-bottom:8px;border-bottom:1px solid var(--line);">
-        <span>Year</span><span style="text-align:right;">Portfolio</span><span style="text-align:right;">S&amp;P 500</span>
+        <span>Year</span><span style="text-align:right;">Portfolio</span><span style="text-align:right;">${this.esc(this.benchmarkLabel(R.benchmark))}</span>
       </div>
       ${rows}`;
+  },
+  rollingChartSvg(values, w, h, color) {
+    w = w||420; h = h||90;
+    const min = Math.min(...values, 0), max = Math.max(...values, 0);
+    const span = (max-min) || 1;
+    const step = w/((values.length-1) || 1);
+    const y = v => h - ((v-min)/span)*h;
+    const zeroY = y(0).toFixed(1);
+    const line = values.map((v,i) => `${i===0?'M':'L'}${(i*step).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="display:block;">
+      <line x1="0" y1="${zeroY}" x2="${w}" y2="${zeroY}" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="${line}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>`;
+  },
+  rollingMetricsHtml(R) {
+    const rolling = R.rolling;
+    if (!rolling || !rolling.length) {
+      return `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Needs more than ${this.ROLLING_WINDOW_MONTHS} months of history for a rolling 12-month view — this backtest has ${R.n}.</div>`;
+    }
+    const rollDates = rolling.map(r => R.dates[r.idx]);
+    const returns = rolling.map(r => r.ret);
+    const sharpes = rolling.map(r => r.sharpe);
+    const latestRet = returns[returns.length-1], latestSharpe = sharpes[sharpes.length-1];
+    const axisIdxs = [...new Set([0,0.25,0.5,0.75,1].map(f => Math.round(f*(rollDates.length-1))))];
+    const axisLabels = axisIdxs.map(i => `<span>${this.monLabel(rollDates[i])}</span>`).join('');
+    return `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;color:var(--mut);">Rolling 12-mo return</span>
+            <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${latestRet>=0?'#3ec46e':'#ef5959'};">${this.signed(latestRet,1)}</span>
+          </div>
+          ${this.rollingChartSvg(returns, 420, 90, '#1fd397')}
+          <div style="display:flex;justify-content:space-between;padding:4px 2px 0;font-family:var(--mono);font-size:9px;color:var(--mut);">${axisLabels}</div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;color:var(--mut);">Rolling 12-mo Sharpe</span>
+            <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:#FAFAF7;">${latestSharpe.toFixed(2)}</span>
+          </div>
+          ${this.rollingChartSvg(sharpes, 420, 90, '#9b6bff')}
+          <div style="display:flex;justify-content:space-between;padding:4px 2px 0;font-family:var(--mono);font-size:9px;color:var(--mut);">${axisLabels}</div>
+        </div>
+      </div>`;
   },
   // Grid rendering is only legible up to a point — beyond 12 holdings, fall
   // back to a single average-pairwise-correlation summary rather than an
