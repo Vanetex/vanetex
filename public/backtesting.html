@@ -628,6 +628,10 @@ const bt = {
         try {
           const results = this.computeFor(this.state, data.series);
           this._lastRunKey = this.configKey(this.state.holdings, this.state.rebalance, this.state.start, this.state.end, this.state.initial);
+          // Keep the full max-range series around — the historical stress
+          // test needs the same data for windows outside the chosen date
+          // range, and re-fetching it would just be the same request twice.
+          this._lastSeries = data.series;
           this.loadSectors(tickers);
           this.setState({ running: false, hasResults: true, tab: 'Results', results, error: null });
         } catch (e) {
@@ -884,6 +888,128 @@ const bt = {
       return `<span style="${isFuture?'color:var(--acc2);':''}">${this.monLabel(extended[idx])}</span>`;
     });
     return `<div style="display:flex;justify-content:space-between;padding:4px 2px 0;font-family:var(--mono);font-size:9.5px;color:var(--mut);">${labels.join('')}</div>`;
+  },
+
+  // ---------- historical stress test ----------
+  // Real crisis windows only — bounded by what Yahoo's keyless API actually
+  // carries. Verified live: monthly index data (^GSPC) starts January 1985,
+  // so the Great Depression, the 1970s oil-crisis bear market, and even the
+  // full lead-up to Black Monday are not reachable with real data here —
+  // deliberately left out rather than faked. These four have full real
+  // benchmark coverage back to SPY's 1993 inception.
+  STRESS_WINDOWS: [
+    { key: 'dotcom', label: 'Dot-Com Crash', sub: '2000–02', start: '2000-03-01', end: '2002-10-01' },
+    { key: 'gfc', label: 'Global Financial Crisis', sub: '2007–09', start: '2007-10-01', end: '2009-03-01' },
+    { key: 'covid', label: 'COVID Crash', sub: '2020', start: '2020-02-01', end: '2020-04-01' },
+    { key: 'bear2022', label: '2022 Bear Market', sub: '2022', start: '2022-01-01', end: '2022-10-01' },
+  ],
+  // Unlike the main backtest (which shifts the whole window forward when a
+  // holding's history starts late), a stress test needs the window to stay
+  // fixed on the real crisis — so holdings with zero data anywhere in the
+  // window are excluded and the rest reweighted, rather than silently
+  // moving the test out of the crisis entirely.
+  stressTestFor(holdings, seriesMap, windowStart, windowEnd, rebalance) {
+    const hs = holdings.filter(h => h.t && (+h.w||0) > 0);
+    const wStartKey = this.toKey(windowStart), wEndKey = this.toKey(windowEnd);
+    const included = [], excluded = [];
+    const maps = {};
+    hs.forEach(h => {
+      const sym = h.t.toUpperCase();
+      const map = this.seriesToMap(seriesMap[sym]);
+      const keys = [...map.keys()];
+      const hasOverlap = keys.length && Math.min(...keys) <= wEndKey && Math.max(...keys) >= wStartKey;
+      if (hasOverlap) { included.push(h); maps[sym] = map; }
+      else excluded.push(sym);
+    });
+    if (!included.length) return { insufficientData: true, excluded, included: [] };
+
+    const wsum = included.reduce((a,h) => a + (+h.w||0), 0) || 1;
+    const nowKey = this.monthKeyFromUnix(Date.now()/1000);
+    let firstKey = wStartKey;
+    const lastKey = Math.min(wEndKey, nowKey);
+    included.forEach(h => {
+      const keys = [...maps[h.t.toUpperCase()].keys()];
+      firstKey = Math.max(firstKey, Math.min(...keys));
+    });
+    if (firstKey >= lastKey) return { insufficientData: true, excluded, included: included.map(h=>h.t.toUpperCase()) };
+
+    const monthKeys = [];
+    for (let k=firstKey; k<=lastKey; k++) monthKeys.push(k);
+    const n = monthKeys.length - 1;
+    if (n < 1) return { insufficientData: true, excluded, included: included.map(h=>h.t.toUpperCase()) };
+
+    const lookup = (map,k) => { if (map.has(k)) return map.get(k); for (let kk=k-1; kk>=firstKey; kk--) if (map.has(kk)) return map.get(kk); return null; };
+    const retSeries = included.map(h => {
+      const map = maps[h.t.toUpperCase()];
+      const vals = monthKeys.map(k => lookup(map,k));
+      const rets = [];
+      for (let i=1;i<vals.length;i++) rets.push(vals[i]!=null && vals[i-1]!=null ? (vals[i]/vals[i-1]-1) : 0);
+      return rets;
+    });
+
+    const initial = 10000;
+    let vals = included.map(h => initial * ((+h.w||0)/wsum));
+    const equity = [initial];
+    const reb = this.rebEvery(rebalance);
+    for (let i=0;i<n;i++) {
+      for (let j=0;j<included.length;j++) vals[j] *= (1+retSeries[j][i]);
+      const total = vals.reduce((a,b)=>a+b,0);
+      if (reb>0 && (i+1)%reb===0) vals = included.map(h => total*((+h.w||0)/wsum));
+      equity.push(total);
+    }
+    let peak = equity[0], maxDD = 0;
+    for (const v of equity) { if (v>peak) peak=v; const dd=(v-peak)/peak; if (dd<maxDD) maxDD=dd; }
+    const totalReturn = equity[equity.length-1]/equity[0] - 1;
+
+    return {
+      insufficientData: false,
+      totalReturn, maxDD, equity,
+      effStart: this.fromKey(firstKey), effEnd: this.fromKey(lastKey),
+      included: included.map(h=>h.t.toUpperCase()), excluded,
+    };
+  },
+  stressTestSectionHtml() {
+    const s = this.state;
+    const seriesMap = this._lastSeries;
+    if (!seriesMap) return '';
+    const cards = this.STRESS_WINDOWS.map(w => {
+      const result = this.stressTestFor(s.holdings, seriesMap, w.start, w.end, s.rebalance);
+      if (result.insufficientData) {
+        return `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:14px;padding:16px;">
+          <div style="font-size:12.5px;font-weight:700;">${w.label}</div>
+          <div style="font-size:10.5px;color:var(--mut);margin-bottom:10px;">${w.sub}</div>
+          <div style="font-size:11px;color:var(--mut);line-height:1.5;">No holdings had real price history this far back.</div>
+        </div>`;
+      }
+      const spark = this.sparkSvg(result.equity, result.totalReturn>=0?'#3ec46e':'#ef5959', 200, 40);
+      const excludedNote = result.excluded.length
+        ? `<div style="font-size:9.5px;color:var(--mut);margin-top:8px;">${result.included.length}/${result.included.length+result.excluded.length} holdings had data — excludes ${result.excluded.join(', ')}</div>`
+        : '';
+      return `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:14px;padding:16px;">
+        <div style="font-size:12.5px;font-weight:700;">${w.label}</div>
+        <div style="font-size:10.5px;color:var(--mut);margin-bottom:10px;">${this.monLabel(result.effStart)} – ${this.monLabel(result.effEnd)}</div>
+        <div style="display:flex;align-items:baseline;gap:10px;">
+          <span style="font-family:var(--mono);font-size:19px;font-weight:800;color:${result.totalReturn>=0?'#3ec46e':'#ef5959'};">${this.signed(result.totalReturn,1)}</span>
+        </div>
+        <div style="font-size:10px;color:var(--mut);margin:2px 0 8px;">max drawdown ${this.pct(result.maxDD,1)}</div>
+        <div style="margin-top:4px;">${spark}</div>
+        ${excludedNote}
+      </div>`;
+    }).join('');
+    return `
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:700;">Historical Stress Test</span>
+          <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;color:var(--pos);" title="Real historical prices for each holding during real past crises.">REAL</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--mut);margin-bottom:16px;line-height:1.5;">
+          How your current holdings, at their current weights, actually performed during real past market crises — using each holding's own historical prices where available. Limited to crises since 1993 (SPY's inception); real data doesn't reach further back through any keyless source available here, so the Great Depression and other pre-1990s crashes aren't included.
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+          ${cards}
+        </div>
+      </div>
+    `;
   },
 
   // Standard SVG donut-via-stroke-dasharray technique: each segment is an
@@ -1215,6 +1341,7 @@ const bt = {
       </div>
 
       ${this.monteCarloSectionHtml(R)}
+      ${this.stressTestSectionHtml()}
 
       <div class="btDdAlloc" style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;">
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;">
