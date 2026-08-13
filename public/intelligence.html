@@ -2105,32 +2105,85 @@ const vtx = {
     // Extended financials — same "don't fabricate a null" rule as Key
     // Statistics: only fin fields that have actually loaded get shown,
     // everything else is an honest "—", never a hashed placeholder.
+    // Groups mirror the Financials-page-v2 proposal's Groups A/B/C/D/F
+    // (the fields Finnhub's stock/metric response already returns).
     const pctSigned = v => v==null ? '—' : (v>=0?'+':'')+v.toFixed(1)+'%';
     const pctColor = v => v==null ? 'var(--txt)' : (v>=0?'#3ec46e':'#ef5959');
+    const pct = v => v==null ? '—' : v.toFixed(1)+'%';
+    const mult = v => v==null ? '—' : v.toFixed(1)+'x';
+    const mult2 = v => v==null ? '—' : v.toFixed(2)+'x';
+    const ratio2 = v => v==null ? '—' : v.toFixed(2);
+    const dollars = v => v==null ? '—' : '$'+v.toFixed(2);
+    const dollarsM = v => v==null ? '—' : '$'+v.toFixed(2)+'M';
+    const sub5y = v => v==null ? null : '5Y avg '+v.toFixed(1)+'%';
     const extGroups = [
       { label: 'Valuation', items: [
-        {label:'Forward P/E', value: fin?.forwardPE!=null ? fin.forwardPE.toFixed(1)+'x' : '—'},
-        {label:'PEG Ratio', value: fin?.pegRatio!=null ? fin.pegRatio.toFixed(2) : '—'},
-        {label:'Price/Book', value: fin?.priceToBook!=null ? fin.priceToBook.toFixed(1)+'x' : '—'},
-        {label:'Price/Sales', value: fin?.priceToSales!=null ? fin.priceToSales.toFixed(1)+'x' : '—'},
-        {label:'EV/EBITDA', value: fin?.evToEbitda!=null ? fin.evToEbitda.toFixed(1)+'x' : '—'},
+        {label:'Forward P/E', value: mult(fin?.forwardPE)},
+        {label:'PEG (Trailing)', value: fin?.pegRatio!=null ? fin.pegRatio.toFixed(2) : '—'},
+        {label:'PEG (Forward)', value: fin?.forwardPEG!=null ? fin.forwardPEG.toFixed(2) : '—'},
+        {label:'EV/EBITDA', value: mult(fin?.evToEbitda)},
+        {label:'EV/Revenue', value: mult(fin?.evRevenue)},
+        {label:'EV/Free Cash Flow', value: mult(fin?.evFcf)},
+        {label:'Price/Book', value: mult(fin?.priceToBook)},
+        {label:'Price/Tangible Book', value: mult(fin?.priceToTangibleBook)},
+        {label:'Price/Sales', value: mult(fin?.priceToSales)},
+        {label:'Price/Cash Flow', value: mult(fin?.priceToCashFlow)},
+        {label:'Price/Free Cash Flow', value: mult(fin?.priceToFcf)},
+        {label:'Enterprise Value', value: fin?.enterpriseValue!=null ? this.mktCapFromFin(fin.enterpriseValue) : '—', color:'var(--acc2)'},
       ]},
-      { label: 'Profitability', items: [
-        {label:'Gross Margin', value: fin?.grossMargin!=null ? fin.grossMargin.toFixed(1)+'%' : '—'},
-        {label:'Operating Margin', value: fin?.operatingMargin!=null ? fin.operatingMargin.toFixed(1)+'%' : '—'},
-        {label:'Net Margin', value: fin?.netMargin!=null ? fin.netMargin.toFixed(1)+'%' : '—'},
-        {label:'ROE', value: fin?.roe!=null ? fin.roe.toFixed(1)+'%' : '—'},
-        {label:'ROA', value: fin?.roa!=null ? fin.roa.toFixed(1)+'%' : '—'},
+      { label: 'Profitability & Efficiency', items: [
+        {label:'Gross Margin (TTM)', value: pct(fin?.grossMargin), sub: sub5y(fin?.grossMargin5Y)},
+        {label:'Operating Margin (TTM)', value: pct(fin?.operatingMargin), sub: sub5y(fin?.operatingMargin5Y)},
+        {label:'Pretax Margin (TTM)', value: pct(fin?.pretaxMargin), sub: sub5y(fin?.pretaxMargin5Y)},
+        {label:'Net Margin (TTM)', value: pct(fin?.netMargin), sub: sub5y(fin?.netMargin5Y)},
+        {label:'ROE (TTM)', value: pct(fin?.roe), sub: sub5y(fin?.roe5Y)},
+        {label:'ROA (TTM)', value: pct(fin?.roa), sub: sub5y(fin?.roa5Y)},
+        {label:'ROI (TTM)', value: pct(fin?.roi), sub: sub5y(fin?.roi5Y)},
+        {label:'Asset Turnover', value: mult2(fin?.assetTurnover)},
+        {label:'Inventory Turnover', value: mult2(fin?.inventoryTurnover)},
+        {label:'Receivables Turnover', value: mult2(fin?.receivablesTurnover)},
+        {label:'Revenue / Employee', value: dollarsM(fin?.revenuePerEmployee)},
+        {label:'Net Income / Employee', value: dollarsM(fin?.netIncomePerEmployee)},
       ]},
-      { label: 'Growth', items: [
-        {label:'Revenue Growth (YoY)', value: pctSigned(fin?.revenueGrowthYoy), color: pctColor(fin?.revenueGrowthYoy)},
-        {label:'EPS Growth (YoY)', value: pctSigned(fin?.epsGrowthYoy), color: pctColor(fin?.epsGrowthYoy)},
-        {label:'52W Price Return', value: pctSigned(fin?.priceReturn52W), color: pctColor(fin?.priceReturn52W)},
-        {label:'YTD Price Return', value: pctSigned(fin?.priceReturnYtd), color: pctColor(fin?.priceReturnYtd)},
+      { label: 'Growth & Momentum', items: [
+        {label:'Revenue Growth (TTM YoY)', value: pctSigned(fin?.revenueGrowthYoy), color: pctColor(fin?.revenueGrowthYoy)},
+        {label:'Revenue Growth (Qtrly YoY)', value: pctSigned(fin?.revenueGrowthQuarterlyYoy), color: pctColor(fin?.revenueGrowthQuarterlyYoy)},
+        {label:'Revenue CAGR (3Y)', value: pctSigned(fin?.revenueGrowth3Y), color: pctColor(fin?.revenueGrowth3Y)},
+        {label:'Revenue CAGR (5Y)', value: pctSigned(fin?.revenueGrowth5Y), color: pctColor(fin?.revenueGrowth5Y)},
+        {label:'EPS Growth (TTM YoY)', value: pctSigned(fin?.epsGrowthYoy), color: pctColor(fin?.epsGrowthYoy)},
+        {label:'EPS Growth (Qtrly YoY)', value: pctSigned(fin?.epsGrowthQuarterlyYoy), color: pctColor(fin?.epsGrowthQuarterlyYoy)},
+        {label:'EPS CAGR (3Y)', value: pctSigned(fin?.epsGrowth3Y), color: pctColor(fin?.epsGrowth3Y)},
+        {label:'EPS CAGR (5Y)', value: pctSigned(fin?.epsGrowth5Y), color: pctColor(fin?.epsGrowth5Y)},
+        {label:'FCF CAGR (5Y)', value: pctSigned(fin?.fcfGrowth5Y), color: pctColor(fin?.fcfGrowth5Y)},
+        {label:'EBITDA CAGR (5Y)', value: pctSigned(fin?.ebitdaGrowth5Y), color: pctColor(fin?.ebitdaGrowth5Y)},
+        {label:'Tangible Book CAGR (5Y)', value: pctSigned(fin?.tangibleBookGrowth5Y), color: pctColor(fin?.tangibleBookGrowth5Y)},
+        {label:'Price Return (5D)', value: pctSigned(fin?.priceReturn5D), color: pctColor(fin?.priceReturn5D)},
+        {label:'Price Return (MTD)', value: pctSigned(fin?.priceReturnMtd), color: pctColor(fin?.priceReturnMtd)},
+        {label:'Price Return (13W)', value: pctSigned(fin?.priceReturn13W), color: pctColor(fin?.priceReturn13W)},
+        {label:'Price Return (26W)', value: pctSigned(fin?.priceReturn26W), color: pctColor(fin?.priceReturn26W)},
+        {label:'Price Return (52W)', value: pctSigned(fin?.priceReturn52W), color: pctColor(fin?.priceReturn52W)},
+        {label:'Price Return (YTD)', value: pctSigned(fin?.priceReturnYtd), color: pctColor(fin?.priceReturnYtd)},
+        {label:'vs. S&P 500 (4W)', value: pctSigned(fin?.relReturn4W), color: pctColor(fin?.relReturn4W)},
+        {label:'vs. S&P 500 (13W)', value: pctSigned(fin?.relReturn13W), color: pctColor(fin?.relReturn13W)},
+        {label:'vs. S&P 500 (26W)', value: pctSigned(fin?.relReturn26W), color: pctColor(fin?.relReturn26W)},
+        {label:'vs. S&P 500 (52W)', value: pctSigned(fin?.relReturn52W), color: pctColor(fin?.relReturn52W)},
+        {label:'vs. S&P 500 (YTD)', value: pctSigned(fin?.relReturnYtd), color: pctColor(fin?.relReturnYtd)},
       ]},
-      { label: 'Financial Health', items: [
-        {label:'Current Ratio', value: fin?.currentRatio!=null ? fin.currentRatio.toFixed(2) : '—'},
-        {label:'Debt/Equity', value: fin?.debtToEquity!=null ? fin.debtToEquity.toFixed(2) : '—'},
+      { label: 'Financial Health & Solvency', items: [
+        {label:'Current Ratio', value: ratio2(fin?.currentRatio)},
+        {label:'Quick Ratio', value: ratio2(fin?.quickRatio)},
+        {label:'Debt/Equity', value: ratio2(fin?.debtToEquity)},
+        {label:'LT Debt/Equity', value: ratio2(fin?.longTermDebtToEquity)},
+        {label:'Net Interest Coverage', value: fin?.netInterestCoverage!=null ? fin.netInterestCoverage.toFixed(1)+'x' : '—'},
+        {label:'Cash / Share', value: dollars(fin?.cashPerShare)},
+      ]},
+      { label: 'Dividends', items: [
+        {label:'Indicated Annual Div.', value: dollars(fin?.dividendIndicatedAnnual)},
+        {label:'Div./Share (TTM)', value: dollars(fin?.dividendPerShareTTM)},
+        {label:'Div./Share (Annual)', value: dollars(fin?.dividendPerShareAnnual)},
+        {label:'Payout Ratio (TTM)', value: pct(fin?.payoutRatioTTM)},
+        {label:'Payout Ratio (Annual)', value: pct(fin?.payoutRatioAnnual)},
+        {label:'Dividend CAGR (5Y)', value: pctSigned(fin?.dividendGrowth5Y), color: pctColor(fin?.dividendGrowth5Y)},
       ]},
     ];
     const extEl = document.getElementById('extFinancialsBody');
@@ -2141,9 +2194,12 @@ const vtx = {
         <div style="padding:9px 14px 3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);">${g.label}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);">
           ${g.items.map(it => `
-            <div style="background:rgba(10,13,22,.55);padding:8px 13px;display:flex;justify-content:space-between;align-items:center;">
-              <span style="font-size:10.5px;color:var(--mut);">${it.label}</span>
-              <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${it.color||'var(--txt)'};">${it.value}</span>
+            <div style="background:rgba(10,13,22,.55);padding:8px 13px;display:flex;flex-direction:column;justify-content:center;gap:2px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:10.5px;color:var(--mut);">${it.label}</span>
+                <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${it.color||'var(--txt)'};">${it.value}</span>
+              </div>
+              ${it.sub ? `<div style="text-align:right;font-size:8.5px;color:var(--mut);opacity:.75;">${it.sub}</div>` : ''}
             </div>`).join('')}
         </div>`).join('');
     }
