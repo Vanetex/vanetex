@@ -42,6 +42,11 @@ const CONCEPTS: Record<string, string[]> = {
   operatingIncome: ["OperatingIncomeLoss"],
   totalAssets: ["Assets"],
   totalLiabilities: ["Liabilities"],
+  // Some regulated utilities (Duke Energy among them) present a balance
+  // sheet with Assets and per-category liability lines but no single
+  // tagged "Liabilities" total — falls back to Assets minus equity below
+  // when this concept isn't found directly.
+  stockholdersEquity: ["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
   currentAssets: ["AssetsCurrent"], // banks have no classified balance sheet — stays null
   currentLiabilities: ["LiabilitiesCurrent"],
   retainedEarnings: ["RetainedEarningsAccumulatedDeficit"],
@@ -73,7 +78,12 @@ const CONCEPTS: Record<string, string[]> = {
 
 function pick(items: LineItem[], concepts: string[]): number | null {
   for (const c of concepts) {
-    const item = items.find((i) => i.concept === `us-gaap_${c}`);
+    // Finnhub doesn't consistently namespace concepts — most filers carry
+    // "us-gaap_NetIncomeLoss", but some (Duke Energy's combined multi-
+    // registrant 10-K among them) return the bare "ProfitLoss" for the
+    // exact same real figure. Matching only the prefixed form silently
+    // dropped over a decade of real, present data for those filers.
+    const item = items.find((i) => i.concept === `us-gaap_${c}` || i.concept === c);
     if (item && typeof item.value === "number") return item.value;
   }
   return null;
@@ -104,6 +114,11 @@ function extractPeriod(p: Period): ExtractedPeriod {
   const get = (key: string) => pick(all, CONCEPTS[key]);
   const operatingCashFlow = get("operatingCashFlow");
   const capex = get("capex");
+  const totalAssets = get("totalAssets");
+  const stockholdersEquity = get("stockholdersEquity");
+  const totalLiabilitiesDirect = get("totalLiabilities");
+  const totalLiabilities =
+    totalLiabilitiesDirect ?? (totalAssets != null && stockholdersEquity != null ? totalAssets - stockholdersEquity : null);
   return {
     year: p.year,
     endDate: p.endDate ? p.endDate.slice(0, 10) : null,
@@ -112,8 +127,8 @@ function extractPeriod(p: Period): ExtractedPeriod {
     netIncome: get("netIncome"),
     grossProfit: get("grossProfit"),
     operatingIncome: get("operatingIncome"),
-    totalAssets: get("totalAssets"),
-    totalLiabilities: get("totalLiabilities"),
+    totalAssets,
+    totalLiabilities,
     currentAssets: get("currentAssets"),
     currentLiabilities: get("currentLiabilities"),
     retainedEarnings: get("retainedEarnings"),
