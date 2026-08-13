@@ -229,7 +229,12 @@ export async function GET(request: NextRequest) {
 
   const sym = symbol.toUpperCase();
   const cacheKey = `financials-reported:${sym}`;
-  const cached = await kvGet<Record<string, unknown>>(cacheKey);
+  // ?refresh=1 skips the cache read (still writes a fresh entry below) —
+  // an escape hatch for when the extraction logic changes and an entry
+  // fetched under the old logic would otherwise sit stale for the full
+  // 6h TTL.
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+  const cached = forceRefresh ? null : await kvGet<Record<string, unknown>>(cacheKey);
   if (cached) {
     return NextResponse.json(cached, {
       headers: { "Cache-Control": "private, max-age=21600, stale-while-revalidate=1800" },
