@@ -418,13 +418,46 @@ const vtx = {
   mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
   pctOf(t) { if (t.changePct != null) return t.changePct; const base = t.prevClose || t.open; return base ? (t.price - base) / base * 100 : 0; },
   fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); },
-  isMarketOpen() {
-    const parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'numeric', weekday:'short', hour12:false }).formatToParts(new Date());
+  // Local device clocks drift or are just set wrong (phones with bad
+  // auto-time, VMs, manually-set clocks) — that silently breaks every
+  // open/closed check below even though the ET-timezone math itself is
+  // correct. syncClock() measures the offset from the server's real clock
+  // once at load and periodically after, and now() applies it everywhere
+  // isMarketOpen()/isFuturesOpen() would otherwise trust new Date().
+  async syncClock() {
+    try {
+      const t0 = Date.now();
+      const res = await fetch('/api/market/server-time');
+      const t1 = Date.now();
+      if (!res.ok) return;
+      const d = await res.json();
+      if (typeof d.now !== 'number') return;
+      // midpoint estimate: assume the response arrived halfway through the round trip
+      this._clockOffsetMs = (d.now + (t1 - t0) / 2) - t1;
+    } catch (e) { /* keep previous offset (0 on first run) on failure */ }
+  },
+  now() { return new Date(Date.now() + (this._clockOffsetMs || 0)); },
+  etParts() {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone:'America/New_York', hour:'numeric', minute:'numeric', weekday:'short', hour12:false }).formatToParts(this.now());
     const map = {}; parts.forEach(p => map[p.type]=p.value);
-    if (map.weekday==='Sat' || map.weekday==='Sun') return false;
-    const hour = parseInt(map.hour,10) % 24, minute = parseInt(map.minute,10);
-    const mins = hour*60+minute;
+    return { weekday: map.weekday, mins: (parseInt(map.hour,10)%24)*60 + parseInt(map.minute,10) };
+  },
+  isMarketOpen() {
+    const { weekday, mins } = this.etParts();
+    if (weekday==='Sat' || weekday==='Sun') return false;
     return mins >= 9*60+30 && mins < 16*60;
+  },
+  // CME Globex equity-index futures (ES/NQ/YM/RTY): trade Sun 6pm ET
+  // through Fri 5pm ET, with a daily maintenance halt 5-6pm ET Mon-Thu.
+  // Used to decide when the Global Markets panel can honestly switch the
+  // main index tiles over to a real futures price instead of the stale
+  // cash close — never shown as "open" when the exchange itself is dark.
+  isFuturesOpen() {
+    const { weekday, mins } = this.etParts();
+    if (weekday === 'Sat') return false;
+    if (weekday === 'Sun') return mins >= 18*60;
+    if (weekday === 'Fri') return mins < 17*60;
+    return !(mins >= 17*60 && mins < 18*60);
   },
   SECTOR_BUCKETS: [
     { key:'Technology', match:/semi|software|hardware|electronic|technology/i },
@@ -446,6 +479,8 @@ const vtx = {
   ACCENT_KEY: 'vtx_accent',
 
   init() {
+    this._clockOffsetMs = 0;
+    this.syncClock(); // fire-and-forget: first paint may use an unsynced clock, corrected within one round trip
     const seed = [
       ['NVDA','NVIDIA Corp','Semis',131.90],['AAPL','Apple Inc','Consumer',213.55],
       ['TSLA','Tesla Inc','Auto / EV',342.80],['MSFT','Microsoft','Software',457.30],
@@ -531,6 +566,7 @@ const vtx = {
 
     this.checkAuth();
     this.connectFeed();
+    setInterval(() => this.syncClock(), 15 * 60 * 1000);
 
     setInterval(() => { this.renderClock(); }, 1000);
     setInterval(() => {
@@ -1364,6 +1400,12 @@ const vtx = {
     const cryptoBySym = {};
     if (crypto) crypto.forEach(c => { cryptoBySym[c.symbol] = c; });
     const yc = this.YIELD_CURVE;
+    // Cash indices don't trade outside 9:30-4:00 ET, so their "price" is
+    // just frozen at the prior close all evening. Once CME futures reopen
+    // (6pm ET) they're the only real, moving read on where the market is
+    // — swap the main tiles over to the real ES/NQ/YM/RTY prices until the
+    // next cash open, tagged 'fut' so it's clear what's being shown.
+    const showFut = !s.marketOpen && this.isFuturesOpen();
 
     // Compact tile — deliberately smaller than the old 4-card layout so a
     // lot more real data fits on screen without scrolling. Pass `code` (an
@@ -1401,14 +1443,21 @@ const vtx = {
       return tile(label, p.yield.toFixed(2)+'%', chg==null?'—':(chg>=0?'+':'')+chg.toFixed(2)+' pts', color, null, code);
     };
 
+    // Main index tile: real cash-index price during/around market hours,
+    // real futures price (clearly tagged) once futures reopen for the
+    // night — same helper either way, just a different real quote object.
+    const mainIdxTile = (label, idxCode, futCode) => showFut
+      ? quoteTile(label, snap[futCode], {code:futCode, sub:'fut'})
+      : quoteTile(label, snap[idxCode], {code:idxCode});
+
     const globalMarketsHtml = `
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;flex-shrink:0;">
         <div style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:10px;">Global Markets</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:7px;">
-          ${quoteTile('S&P 500', snap.SPX, {code:'SPX'})}
-          ${quoteTile('Nasdaq', snap.NDX, {code:'NDX'})}
-          ${quoteTile('Dow Jones', snap.DOW, {code:'DOW'})}
-          ${quoteTile('Russell 2000', snap.RUSSELL2000, {code:'RUSSELL2000'})}
+          ${mainIdxTile('S&P 500', 'SPX', 'ES')}
+          ${mainIdxTile('Nasdaq', 'NDX', 'NQ')}
+          ${mainIdxTile('Dow Jones', 'DOW', 'YM')}
+          ${mainIdxTile('Russell 2000', 'RUSSELL2000', 'RTY')}
           ${quoteTile('VIX', snap.VIX, {invert:true, sub:'options', code:'VIX'})}
           ${treasuryTile('3M Treasury', 3, 'UST3M')}
           ${treasuryTile('5Y Treasury', 60, 'UST5Y')}
@@ -1423,7 +1472,7 @@ const vtx = {
           ${quoteTile('GBP/USD', snap.GBPUSD, {decimals:4, code:'GBPUSD'})}
           ${crypto ? ['BTC','ETH','SOL','XRP','DOGE'].map(sym => quoteTile(sym, cryptoBySym[sym] ? {price: cryptoBySym[sym].price, changePct: cryptoBySym[sym].changePct} : null, {code:sym})).join('') : ['BTC','ETH','SOL','XRP','DOGE'].map(sym => loadingTile(sym)).join('')}
         </div>
-        <div style="font-size:8px;color:var(--mut);margin-top:9px;opacity:.7;">Equities/rates/futures/FX: Yahoo Finance · Crypto: CoinGecko · click an index or future for its real chart · VIX doubles as the options-market signal (it's computed from real S&amp;P 500 options pricing) — real per-contract options chains aren't available from any free source we could verify.</div>
+        <div style="font-size:8px;color:var(--mut);margin-top:9px;opacity:.7;">Equities/rates/futures/FX: Yahoo Finance · Crypto: CoinGecko · click an index or future for its real chart · VIX doubles as the options-market signal (it's computed from real S&amp;P 500 options pricing) — real per-contract options chains aren't available from any free source we could verify.${showFut ? ' · S&P 500/Nasdaq/Dow/Russell are showing live futures pricing (tagged \'fut\') — cash market is closed, back to index prices at next open.' : ''}</div>
       </div>`;
 
     // Commodities — split out of Global Markets since 16 tiles alongside
@@ -1852,9 +1901,17 @@ const vtx = {
       return { ...x, price, hist };
     });
 
-    const time = ts ? this.fmtET(new Date(ts)) : this.hhmmss();
-    this.state.tape = [{ id: Math.random(), time, sym, price: price.toFixed(2), size: Math.max(1, Math.round(vol || 0)).toLocaleString(), side }, ...this.state.tape].slice(0, 26);
-    this.renderTimeSales();
+    // Finnhub's WS trade feed keeps streaming real pre/post-market prints,
+    // unlike quote polling (which the isMarketOpen() guard already covers
+    // in startPollFeed()) — without this check the "LIVE TAPE" panel kept
+    // filling with real after-hours executions while the status badge said
+    // MKT CLOSED. Checked fresh per-trade rather than the 15s-refreshed
+    // state.marketOpen, since trades can arrive faster than that refresh.
+    if (this.isMarketOpen()) {
+      const time = ts ? this.fmtET(new Date(ts)) : this.hhmmss();
+      this.state.tape = [{ id: Math.random(), time, sym, price: price.toFixed(2), size: Math.max(1, Math.round(vol || 0)).toLocaleString(), side }, ...this.state.tape].slice(0, 26);
+      this.renderTimeSales();
+    }
     this._renderPending = true;
   },
   renderFeedLabels() {
