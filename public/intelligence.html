@@ -267,6 +267,12 @@ input{font-family:var(--ui)}
           <div id="extFinancialsBody" style="padding:2px 0 8px;"></div>
         </div>
 
+        <!-- multi-year trends + quality scores (Piotroski F-Score, Altman Z-Score) — real 10-K data, up to 16 years -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Multi-Year Trends &amp; Quality Scores</div>
+          <div id="finReportedBody" style="padding:8px 14px 14px;"></div>
+        </div>
+
         <!-- ETF holdings composition — only shown when the focused ticker resolves to real holdings data -->
         <div id="etfHoldingsCard" style="display:none;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
           <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
@@ -605,6 +611,7 @@ const vtx = {
     this.loadChartData(this.state.focus, this.state.tf);
     this.loadEtfHoldings(this.state.focus);
     this.loadDepth(this.state.focus);
+    this.loadFinancialsReported(this.state.focus);
     this.loadTickerBar();
     setInterval(() => this.loadTickerBar(), 5 * 60 * 1000);
     setInterval(() => this.loadDepth(this.state.focus), 5 * 60 * 1000);
@@ -644,7 +651,7 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); },
   backToOverview() { this.state.view = 'overview'; this.render(); },
   selectInstrument(code) {
     if (!this.INSTRUMENTS[code]) return;
@@ -771,6 +778,7 @@ const vtx = {
     this.loadChartData(sym, this.state.tf);
     this.loadDepth(sym);
     this.loadEtfHoldings(sym);
+    this.loadFinancialsReported(sym);
     this.loadSparklines([sym]);
     try {
       const [q, fin, analyst, earn] = await Promise.all([
@@ -1344,6 +1352,21 @@ const vtx = {
       const data = await res.json();
       if (!this._etfHoldings) this._etfHoldings = {};
       this._etfHoldings[sym] = data;
+      if (this.state.focus === sym && this.state.view === 'ticker') this.render();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  // Up to 16 years of real 10-K line items, plus the Piotroski/Altman
+  // scores computed from them server-side. Heavy (two Finnhub calls
+  // behind a 6h cache), so this loads per-ticker on demand rather than
+  // upfront for the whole watchlist the way loadFinancials() does.
+  async loadFinancialsReported(sym) {
+    try {
+      const res = await fetch(`/api/stock/financials-reported?symbol=${encodeURIComponent(sym)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!this._finReported) this._finReported = {};
+      this._finReported[sym] = data;
       if (this.state.focus === sym && this.state.view === 'ticker') this.render();
     } catch (e) { /* keep previous data on failure */ }
   },
@@ -2259,6 +2282,91 @@ const vtx = {
               ${it.sub ? `<div style="text-align:right;font-size:8.5px;color:var(--mut);opacity:.75;">${it.sub}</div>` : ''}
             </div>`).join('')}
         </div>`).join('');
+    }
+
+    // Multi-year trends & quality scores — real 10-K line items (up to 16
+    // years) plus the Piotroski F-Score and Altman Z-Score computed from
+    // them. Both are public, documented formulas (not proprietary), and
+    // both honestly go to "not applicable" rather than a broken number
+    // when a filer's balance sheet doesn't carry the needed line item
+    // (e.g. banks have no classified current/non-current split).
+    const finRep = this._finReported && this._finReported[f.sym];
+    const frEl = document.getElementById('finReportedBody');
+    if (!finRep) {
+      frEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading multi-year statement history…</div>`;
+    } else if (!finRep.periods || !finRep.periods.length) {
+      frEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">No SEC 10-K filing history available for this ticker.</div>`;
+    } else {
+      const periods = finRep.periods;
+      const fmtUsdCompact = v => {
+        if (v == null) return '—';
+        const abs = Math.abs(v), sign = v < 0 ? '-' : '';
+        if (abs >= 1e12) return sign + '$' + (abs/1e12).toFixed(2) + 'T';
+        if (abs >= 1e9) return sign + '$' + (abs/1e9).toFixed(2) + 'B';
+        if (abs >= 1e6) return sign + '$' + (abs/1e6).toFixed(1) + 'M';
+        return sign + '$' + abs.toLocaleString();
+      };
+      const fmtShares = v => v == null ? '—' : (v >= 1e9 ? (v/1e9).toFixed(2)+'B' : (v/1e6).toFixed(0)+'M');
+      const trendChart = (label, key, fmt) => {
+        const idx = periods.map((p,i) => p[key] != null ? i : -1).filter(i => i >= 0);
+        if (idx.length < 2) return `
+          <div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-bottom:4px;">${label}</div>
+            <div style="font-size:10.5px;color:var(--mut);opacity:.75;">Not reported by this filer</div>
+          </div>`;
+        const clean = idx.map(i => periods[i][key]);
+        const firstY = periods[idx[0]].year, lastY = periods[idx[idx.length-1]].year;
+        const up = clean[clean.length-1] >= clean[0];
+        return `
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+              <span style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);">${label}</span>
+              <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--txt);">${fmt(clean[clean.length-1])}</span>
+            </div>
+            <svg width="100%" height="26" viewBox="0 0 104 30" preserveAspectRatio="none" fill="none" style="display:block;">
+              <path d="${this.sparkPath(clean)}" stroke="${up?'#1fd397':'#ff4d5e'}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>
+            </svg>
+            <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--mut);opacity:.7;margin-top:2px;"><span>FY${firstY}</span><span>FY${lastY}</span></div>
+          </div>`;
+      };
+
+      const pio = finRep.piotroski;
+      const pioColor = !pio ? 'var(--mut)' : (pio.score/pio.maxScore >= 0.78 ? '#1fd397' : pio.score/pio.maxScore >= 0.45 ? '#f5a524' : '#ff4d5e');
+      const pioHtml = !pio
+        ? `<div style="font-size:11px;color:var(--mut);">Not enough filing history to compute (needs at least two years of 10-Ks).</div>`
+        : `
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+            <span style="font-family:var(--mono);font-size:22px;font-weight:800;color:${pioColor};">${pio.score}<span style="font-size:13px;color:var(--mut);">/${pio.maxScore}</span></span>
+            <span style="font-size:10px;color:var(--mut);">Piotroski F-Score · FY${pio.asOfYear}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;">
+            ${pio.criteria.filter(c => c.pass !== null).map(c => `
+              <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--mut);">
+                <span style="color:${c.pass?'#1fd397':'#ff4d5e'};font-weight:800;flex-shrink:0;">${c.pass?'✓':'✕'}</span><span>${c.label}</span>
+              </div>`).join('')}
+          </div>
+          ${pio.maxScore < 9 ? `<div style="margin-top:7px;font-size:9px;color:var(--mut);opacity:.75;">${9-pio.maxScore} of 9 criteria don't apply to this filer (e.g. current ratio / gross margin aren't meaningful for banks and similar balance sheets).</div>` : ''}
+        `;
+
+      const z = finRep.altmanZ;
+      const zHtml = (!z || !z.applicable)
+        ? `<div style="font-size:11px;color:var(--mut);">${(z && z.reason) || 'Not available.'}</div>`
+        : `
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+            <span style="font-family:var(--mono);font-size:22px;font-weight:800;color:${z.zone==='safe'?'#1fd397':z.zone==='grey'?'#f5a524':'#ff4d5e'};">${z.score.toFixed(2)}</span>
+            <span style="font-size:10px;color:var(--mut);">Altman Z-Score · FY${z.asOfYear} · ${z.zone==='safe'?'Safe zone (>2.99)':z.zone==='grey'?'Grey zone (1.81–2.99)':'Distress zone (<1.81)'}</span>
+          </div>`;
+
+      frEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;padding-bottom:12px;margin-bottom:10px;border-bottom:1px solid var(--line);">
+          ${trendChart('Revenue', 'revenue', fmtUsdCompact)}
+          ${trendChart('Net Income', 'netIncome', fmtUsdCompact)}
+          ${trendChart('Free Cash Flow', 'fcf', fmtUsdCompact)}
+          ${trendChart('Diluted Shares Outstanding', 'dilutedShares', fmtShares)}
+        </div>
+        <div style="padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);">${pioHtml}</div>
+        <div>${zHtml}</div>
+        <div style="margin-top:10px;font-size:8px;color:var(--mut);opacity:.7;">Source: SEC 10-K filings via Finnhub, ${periods.length} year${periods.length===1?'':'s'} of history. Piotroski F-Score and Altman Z-Score are public, documented formulas computed from the raw statement data above — not a proprietary model, and not a substitute for reading the actual filing.</div>`;
     }
 
     // ETF holdings — only ever populated for SPDR-family tickers (the one
