@@ -357,7 +357,6 @@ const vtx = {
     return `${map.hour}:${map.minute}:${map.second}`;
   },
   hhmmss() { return this.fmtET(new Date()); },
-  mkPrint(t) { const sizes = [100,100,200,200,300,400,500,800,1200,2000]; return {id:Math.random(), time:this.hhmmss(), sym:t.sym, price:t.price.toFixed(2), size:sizes[Math.floor(Math.random()*sizes.length)].toLocaleString(), side: Math.random()>0.5?'B':'S'}; },
   sparkPath(arr) { const w=104,h=30,min=Math.min(...arr),max=Math.max(...arr),r=(max-min)||1; return 'M '+arr.map((v,i)=>((i/(arr.length-1))*w).toFixed(1)+' '+(h-((v-min)/r)*(h-5)-2.5).toFixed(1)).join(' L '); },
   sma(arr, period) {
     const out = [];
@@ -516,7 +515,6 @@ const vtx = {
       hist: [a[3]||100, a[3]||100], // flat placeholder until loadSparklines() fetches the real intraday path
     }));
     if (!this.state.tickers.some(t=>t.sym===this.state.focus)) this.state.focus = this.state.tickers[0].sym;
-    if (this.isMarketOpen()) { for (let i=0;i<16;i++) { this.state.tape.push(this.mkPrint(this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)])); } }
 
     let savedAccent = null;
     try { savedAccent = localStorage.getItem(this.ACCENT_KEY); } catch(e) {}
@@ -562,24 +560,6 @@ const vtx = {
     setInterval(() => this.loadFinancials(), 30 * 60 * 1000);
     setInterval(() => this.loadAnalystRatings(), 30 * 60 * 1000);
     setInterval(() => this.loadEarningsHistory(), 30 * 60 * 1000);
-
-    setInterval(() => {
-      if (!this.state.marketOpen || this.state.feedLive) return;
-      this.state.tickers = this.state.tickers.map(t => {
-        const drift = (Math.random()-0.5)*t.price*0.0016;
-        const np = Math.max(0.5, t.price+drift);
-        const hist = t.hist.concat(np); if (hist.length>46) hist.shift();
-        return {...t, price:np, hist};
-      });
-      this.render();
-    }, 1100);
-
-    setInterval(() => {
-      if (!this.state.marketOpen || this.state.feedLive) return;
-      const t = this.state.tickers[Math.floor(Math.random()*this.state.tickers.length)];
-      this.state.tape = [this.mkPrint(t), ...this.state.tape].slice(0,26);
-      this.renderTimeSales();
-    }, 520);
 
     this.checkAuth();
     this.connectFeed();
@@ -2491,10 +2471,10 @@ const vtx = {
 
   renderTimeSales() {
     const cPos='var(--pos)', cNeg='var(--neg)';
-    if (!this.state.marketOpen && this.state.tape.length === 0) {
-      const msg = this.state.feedLive
-        ? 'Market is closed — waiting for the next live print.'
-        : 'Market is closed — live prints resume at the next open.';
+    if (this.state.tape.length === 0) {
+      const msg = !this.state.marketOpen
+        ? (this.state.feedLive ? 'Market is closed — waiting for the next live print.' : 'Market is closed — live prints resume at the next open.')
+        : (this.state.feedLive ? 'Waiting for the next live print…' : 'Connecting to the live feed…');
       document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">${msg}</div>`;
       return;
     }
