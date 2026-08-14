@@ -267,6 +267,17 @@ input{font-family:var(--ui)}
           <div id="extFinancialsBody" style="padding:2px 0 8px;"></div>
         </div>
 
+        <!-- sector screen — real percentile rank vs. real sector peers, five pillars shown
+             separately with no blended score, no stars, no recommendation tier. A screen,
+             not a verdict: see the "Financials page v2" proposal, Section 4 and Section 8. -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:baseline;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Sector Screen</span>
+            <span id="sectorScreenMeta" style="font-size:9px;color:var(--mut);margin-left:auto;"></span>
+          </div>
+          <div id="sectorScreenBody" style="padding:10px 14px 14px;"></div>
+        </div>
+
         <!-- multi-year trends + quality scores (Piotroski F-Score, Altman Z-Score) — real 10-K data, up to 16 years -->
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
           <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Multi-Year Trends &amp; Quality Scores</div>
@@ -612,6 +623,7 @@ const vtx = {
     this.loadEtfHoldings(this.state.focus);
     this.loadDepth(this.state.focus);
     this.loadFinancialsReported(this.state.focus);
+    this.loadPeerPercentile(this.state.focus);
     this.loadTickerBar();
     setInterval(() => this.loadTickerBar(), 5 * 60 * 1000);
     setInterval(() => this.loadDepth(this.state.focus), 5 * 60 * 1000);
@@ -651,7 +663,7 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); },
   backToOverview() { this.state.view = 'overview'; this.render(); },
   selectInstrument(code) {
     if (!this.INSTRUMENTS[code]) return;
@@ -779,6 +791,7 @@ const vtx = {
     this.loadDepth(sym);
     this.loadEtfHoldings(sym);
     this.loadFinancialsReported(sym);
+    this.loadPeerPercentile(sym);
     this.loadSparklines([sym]);
     try {
       const [q, fin, analyst, earn] = await Promise.all([
@@ -1367,6 +1380,22 @@ const vtx = {
       const data = await res.json();
       if (!this._finReported) this._finReported = {};
       this._finReported[sym] = data;
+      if (this.state.focus === sym && this.state.view === 'ticker') this.render();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  // Real percentile rank vs. a real, disclosed sector-peer universe — five
+  // pillars shown separately, no blended score. Deliberate: six rounds of
+  // real point-in-time backtesting (see the Financials-page-v2 proposal)
+  // did not validate a composite score as predictive, so this only ever
+  // shows where a stock stands today, never a verdict on where it's going.
+  async loadPeerPercentile(sym) {
+    try {
+      const res = await fetch(`/api/stock/peer-percentile?symbol=${encodeURIComponent(sym)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!this._peerPercentile) this._peerPercentile = {};
+      this._peerPercentile[sym] = data;
       if (this.state.focus === sym && this.state.view === 'ticker') this.render();
     } catch (e) { /* keep previous data on failure */ }
   },
@@ -2282,6 +2311,49 @@ const vtx = {
               ${it.sub ? `<div style="text-align:right;font-size:8.5px;color:var(--mut);opacity:.75;">${it.sub}</div>` : ''}
             </div>`).join('')}
         </div>`).join('');
+    }
+
+    // Sector Screen — real percentile rank vs. a real, disclosed sector-
+    // peer universe. Five pillars shown separately, on purpose: six rounds
+    // of real point-in-time backtesting (see the Financials-page-v2
+    // proposal) never validated a blended score as predictive, so this
+    // never manufactures one — no combined number, no stars, no
+    // Overweight/Underweight call. Just where the stock stands today,
+    // relative to real peers, for someone else to weigh.
+    const peerPct = this._peerPercentile && this._peerPercentile[f.sym];
+    const pscEl = document.getElementById('sectorScreenBody');
+    const pscMetaEl = document.getElementById('sectorScreenMeta');
+    if (!peerPct) {
+      pscMetaEl.textContent = '';
+      pscEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading sector screen…</div>`;
+    } else if (!peerPct.applicable) {
+      pscMetaEl.textContent = '';
+      pscEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">${peerPct.reason || 'Not available for this ticker.'}</div>`;
+    } else {
+      pscMetaEl.textContent = `${peerPct.sector} · ${peerPct.peerCount} peers`;
+      const pillarDefs = [
+        { key:'value', label:'Valuation', fmt:v => v!=null ? v.toFixed(1)+'x P/E' : '—' },
+        { key:'quality', label:'Quality', fmt:v => v!=null ? v.toFixed(1)+'% ROE' : '—' },
+        { key:'growth', label:'Growth', fmt:v => v!=null ? (v>=0?'+':'')+v.toFixed(1)+'% rev.' : '—' },
+        { key:'finHealth', label:'Financial Health', fmt:v => v!=null ? v.toFixed(2)+'x D/E' : '—' },
+        { key:'momentum', label:'Momentum', fmt:v => v!=null ? (v>=0?'+':'')+v.toFixed(1)+'% (52w)' : '—' },
+      ];
+      const barColor = pct => pct==null ? 'var(--mut)' : pct>=66 ? '#1fd397' : pct>=33 ? '#f5a524' : '#ff4d5e';
+      pscEl.innerHTML = pillarDefs.map(pd => {
+        const p = peerPct.pillars[pd.key] || {};
+        const pct = p.percentile;
+        const color = barColor(pct);
+        return `
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+              <span style="font-size:10.5px;color:var(--mut);">${pd.label}</span>
+              <span style="font-family:var(--mono);font-size:10.5px;color:${color};font-weight:700;">${pct!=null ? Math.round(pct)+'th pctl' : '—'} <span style="color:var(--mut);font-weight:400;">· ${pd.fmt(p.rawValue)}</span></span>
+            </div>
+            <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden;">
+              <div style="height:100%;width:${pct!=null ? pct.toFixed(1) : 0}%;background:${color};border-radius:3px;"></div>
+            </div>
+          </div>`;
+      }).join('') + `<div style="margin-top:6px;font-size:8px;color:var(--mut);opacity:.7;">Real-time percentile vs. ${peerPct.peerCount} real, disclosed sector peers — each pillar stands alone. Not a combined score, star rating, or Buy/Sell call.</div>`;
     }
 
     // Multi-year trends & quality scores — real 10-K line items (up to 16
