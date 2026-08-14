@@ -2331,6 +2331,7 @@ const vtx = {
       pscEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">${peerPct.reason || 'Not available for this ticker.'}</div>`;
     } else {
       pscMetaEl.textContent = `${peerPct.sector} · ${peerPct.peerCount} peers`;
+      const ordinal = n => { const r=n%100; if (r>=11&&r<=13) return n+'th'; switch(n%10){case 1:return n+'st';case 2:return n+'nd';case 3:return n+'rd';default:return n+'th';} };
       const pillarDefs = [
         { key:'value', label:'Valuation', fmt:v => v!=null ? v.toFixed(1)+'x P/E' : '—' },
         { key:'quality', label:'Quality', fmt:v => v!=null ? v.toFixed(1)+'% ROE' : '—' },
@@ -2347,7 +2348,7 @@ const vtx = {
           <div style="margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
               <span style="font-size:10.5px;color:var(--mut);">${pd.label}</span>
-              <span style="font-family:var(--mono);font-size:10.5px;color:${color};font-weight:700;">${pct!=null ? Math.round(pct)+'th pctl' : '—'} <span style="color:var(--mut);font-weight:400;">· ${pd.fmt(p.rawValue)}</span></span>
+              <span style="font-family:var(--mono);font-size:10.5px;color:${color};font-weight:700;">${pct!=null ? ordinal(Math.round(pct))+' pctl' : '—'} <span style="color:var(--mut);font-weight:400;">· ${pd.fmt(p.rawValue)}</span></span>
             </div>
             <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden;">
               <div style="height:100%;width:${pct!=null ? pct.toFixed(1) : 0}%;background:${color};border-radius:3px;"></div>
