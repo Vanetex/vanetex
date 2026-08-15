@@ -716,14 +716,17 @@ const vtx = {
 
   async loadTickerBar() {
     const syms = this.TICKER_BAR_SYMS;
-    const results = await Promise.all(syms.map(s =>
-      fetch(`/api/stock/quote?symbol=${encodeURIComponent(s)}`).then(r => r.ok ? r.json() : null).catch(() => null)
-    ));
-    this.state.tickerBarData = syms.map((s, i) => {
-      const d = results[i];
-      return d && d.price ? { sym: s, price: d.price, changePct: d.changePct ?? 0 } : null;
-    }).filter(Boolean);
-    this.renderTickerBar();
+    try {
+      const res = await fetch(`/api/stock/quote?symbols=${encodeURIComponent(syms.join(','))}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.quotes) return;
+      this.state.tickerBarData = syms.map(s => {
+        const d = data.quotes[s];
+        return d && d.price ? { sym: s, price: d.price, changePct: d.changePct ?? 0 } : null;
+      }).filter(Boolean);
+      this.renderTickerBar();
+    } catch (e) { /* keep previous tape on failure */ }
   },
 
   renderTickerBar() {
@@ -975,17 +978,17 @@ const vtx = {
   async loadQuotes() {
     try {
       const t0 = performance.now();
-      const results = await Promise.all(this.state.tickers.map(t =>
-        fetch(`/api/stock/quote?symbol=${encodeURIComponent(t.sym)}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      ));
+      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      const res = await fetch(`/api/stock/quote?symbols=${encodeURIComponent(symbols)}`);
       // Real measured round-trip time for this refresh, replacing the old
       // Math.random()-based latency figure that was never tied to an
       // actual request.
       this.state.latency = Math.round(performance.now() - t0);
-      this.state.tickers = this.state.tickers.map((t, i) => {
-        const q = results[i];
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.quotes) return;
+      this.state.tickers = this.state.tickers.map(t => {
+        const q = data.quotes[t.sym];
         if (!q || !q.price) return t;
         // Append this real quote onto the real intraday history fetched by
         // loadSparklines(), rather than fabricating a new random-walk shape
@@ -1045,15 +1048,14 @@ const vtx = {
 
   async loadFinancials() {
     try {
-      const results = await Promise.all(this.state.tickers.map(t =>
-        fetch(`/api/stock/financials?symbol=${encodeURIComponent(t.sym)}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      ));
-      this.state.tickers = this.state.tickers.map((t, i) => {
-        const fin = results[i];
-        if (!fin || fin.error) return t;
-        return { ...t, fin };
+      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      const res = await fetch(`/api/stock/financials?symbols=${encodeURIComponent(symbols)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.financials) return;
+      this.state.tickers = this.state.tickers.map(t => {
+        const fin = data.financials[t.sym];
+        return fin ? { ...t, fin } : t;
       });
       this.render();
     } catch (e) { /* keep previous financials on failure */ }
@@ -1061,15 +1063,14 @@ const vtx = {
 
   async loadAnalystRatings() {
     try {
-      const results = await Promise.all(this.state.tickers.map(t =>
-        fetch(`/api/stock/recommendation?symbol=${encodeURIComponent(t.sym)}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      ));
-      this.state.tickers = this.state.tickers.map((t, i) => {
-        const analyst = results[i];
-        if (!analyst || analyst.error) return t;
-        return { ...t, analyst };
+      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      const res = await fetch(`/api/stock/recommendation?symbols=${encodeURIComponent(symbols)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.recommendations) return;
+      this.state.tickers = this.state.tickers.map(t => {
+        const analyst = data.recommendations[t.sym];
+        return analyst ? { ...t, analyst } : t;
       });
       this.render();
     } catch (e) { /* keep previous ratings on failure */ }
@@ -1077,15 +1078,14 @@ const vtx = {
 
   async loadEarningsHistory() {
     try {
-      const results = await Promise.all(this.state.tickers.map(t =>
-        fetch(`/api/stock/earnings-history?symbol=${encodeURIComponent(t.sym)}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      ));
-      this.state.tickers = this.state.tickers.map((t, i) => {
-        const eh = results[i];
-        if (!eh || eh.error) return t;
-        return { ...t, earnHistory: eh.quarters };
+      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      const res = await fetch(`/api/stock/earnings-history?symbols=${encodeURIComponent(symbols)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.histories) return;
+      this.state.tickers = this.state.tickers.map(t => {
+        const eh = data.histories[t.sym];
+        return eh ? { ...t, earnHistory: eh.quarters } : t;
       });
       this.render();
     } catch (e) { /* keep previous earnings history on failure */ }
@@ -1225,11 +1225,12 @@ const vtx = {
   async loadMarketSnapshot() {
     try {
       const syms = this.MARKET_SNAPSHOT_SYMS;
-      const results = await Promise.all(syms.map(s =>
-        fetch(`/api/market/index-quote?symbol=${s}`).then(r=>r.ok?r.json():null).catch(()=>null)
-      ));
+      const res = await fetch(`/api/market/index-quote?symbols=${syms.join(',')}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.quotes) return;
       this.MARKET_SNAPSHOT = this.MARKET_SNAPSHOT || {};
-      syms.forEach((s, i) => { if (results[i] && !results[i].error) this.MARKET_SNAPSHOT[s] = results[i]; });
+      Object.assign(this.MARKET_SNAPSHOT, data.quotes);
       this.render();
     } catch (e) { /* keep previous data on failure */ }
   },
