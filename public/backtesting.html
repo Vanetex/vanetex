@@ -291,6 +291,14 @@ const bt = {
   removeHolding(i) { this.setState(s => ({ holdings: s.holdings.filter((_,j) => j !== i), preset: null })); },
   setTicker(i, v) { const h = this.state.holdings.slice(); h[i] = { ...h[i], t: v.toUpperCase() }; this.setState({ holdings: h, preset: null }); },
   setWeight(i, v) { const h = this.state.holdings.slice(); h[i] = { ...h[i], w: v === '' ? '' : +v }; this.setState({ holdings: h, preset: null }); },
+  clampWeight(i) {
+    const h = this.state.holdings.slice();
+    if (!h[i]) return;
+    let n = +h[i].w;
+    if (!n || n < 0) n = 0;
+    h[i] = { ...h[i], w: n };
+    this.setState({ holdings: h });
+  },
   setHoldingColor(i, color) { const h = this.state.holdings.slice(); h[i] = { ...h[i], color }; this.setState({ holdings: h }); },
 
   // ---------- voice input ----------
@@ -1169,11 +1177,30 @@ const bt = {
     fetch(`/api/backtest/sectors?symbols=${encodeURIComponent(missing.join(','))}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (!data || !data.profiles) return;
-        Object.assign(this._sectorCache, data.profiles);
+        if (!data || !data.profiles) throw new Error('bad response');
+        Object.assign(cache, data.profiles);
+        // The route returns one profile per requested symbol on success —
+        // but if it somehow doesn't, don't leave those symbols stuck
+        // showing "Loading…" forever with no way out.
+        missing.forEach(sym => { if (!(sym in cache)) cache[sym] = { industry: null, marketCapUsdM: null, country: null, unavailable: true }; });
         this.render();
       })
-      .catch(() => {});
+      .catch(() => {
+        // Whole request failed (rate limit, missing API key, network error)
+        // — mark these symbols so the breakdown panels show a real "try
+        // again" state instead of spinning on "Loading…" indefinitely.
+        missing.forEach(sym => { cache[sym] = { industry: null, marketCapUsdM: null, country: null, unavailable: true }; });
+        this.render();
+      });
+  },
+  retrySectors() {
+    const cache = this._sectorCache || (this._sectorCache = {});
+    const tickers = [...new Set(this.state.holdings.filter(h => h.t).map(h => h.t.toUpperCase()))];
+    tickers.forEach(t => { if (cache[t] && cache[t].unavailable) delete cache[t]; });
+    this.loadSectors(tickers);
+  },
+  breakdownUnavailableHtml() {
+    return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;line-height:1.6;">Couldn't load real classification data for one or more holdings (rate limited or temporarily unavailable).<br><button onclick="bt.retrySectors()" style="margin-top:10px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--txt);font-size:11.5px;font-weight:600;cursor:pointer;">Try again</button></div>`;
   },
   // Shared donut+legend renderer for sector/market-cap/geography — all
   // three group holdings by a bucket key and weight, differing only in
@@ -1211,6 +1238,7 @@ const bt = {
     if (!perAsset.every(a => a.t in cache)) {
       return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real sector classification (Finnhub)…</div>`;
     }
+    if (perAsset.some(a => cache[a.t]?.unavailable)) return this.breakdownUnavailableHtml();
     return this.groupedBreakdownHtml(perAsset, a => this.sectorBucket(cache[a.t]?.industry), {
       uncategorizedKey: 'Uncategorized (ETF/Fund)',
       uncategorizedNote: `<div style="margin-top:14px;font-size:10.5px;color:var(--mut);line-height:1.5;">ETFs and funds don't carry an industry classification the way individual stocks do — Finnhub's free tier (and every free alternative we checked) has no real per-fund sector breakdown, so those holdings are grouped here rather than guessed at.</div>`,
@@ -1236,6 +1264,7 @@ const bt = {
     if (!perAsset.every(a => a.t in cache)) {
       return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real market cap data (Finnhub)…</div>`;
     }
+    if (perAsset.some(a => cache[a.t]?.unavailable)) return this.breakdownUnavailableHtml();
     return this.groupedBreakdownHtml(perAsset, a => this.marketCapBucket(cache[a.t]?.marketCapUsdM), {
       uncategorizedKey: 'Not available (ETF/fund or non-USD listing)',
       uncategorizedNote: `<div style="margin-top:14px;font-size:10.5px;color:var(--mut);line-height:1.5;">ETFs/funds don't carry a market cap the way individual stocks do, and Finnhub reports market cap in each company's local listing currency — non-USD listings are grouped here rather than shown with an FX-converted estimate.</div>`,
@@ -1247,6 +1276,7 @@ const bt = {
     if (!perAsset.every(a => a.t in cache)) {
       return `<div style="padding:30px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading real headquarters/listing data (Finnhub)…</div>`;
     }
+    if (perAsset.some(a => cache[a.t]?.unavailable)) return this.breakdownUnavailableHtml();
     return this.groupedBreakdownHtml(perAsset, a => {
       const code = cache[a.t]?.country;
       return code ? (this.COUNTRY_NAMES[code] || code) : 'Not available (ETF/fund)';
@@ -1281,7 +1311,7 @@ const bt = {
         </label>
         <input value="${this.esc(h.t)}" onchange="bt.setTicker(${i}, this.value)" placeholder="TICK" style="flex:1;min-width:0;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-family:var(--mono);font-size:12.5px;font-weight:700;outline:none;">
         <div style="position:relative;width:70px;">
-          <input type="number" value="${h.w}" onchange="bt.setWeight(${i}, this.value)" style="width:100%;padding:9px 20px 9px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-family:var(--mono);font-size:12.5px;font-weight:700;text-align:right;outline:none;">
+          <input type="number" min="0" value="${h.w}" onchange="bt.setWeight(${i}, this.value)" onblur="bt.clampWeight(${i})" style="width:100%;padding:9px 20px 9px 11px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt);font-family:var(--mono);font-size:12.5px;font-weight:700;text-align:right;outline:none;">
           <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--mut);pointer-events:none;">%</span>
         </div>
         <button class="rmx" onclick="bt.removeHolding(${i})" style="width:28px;height:28px;flex-shrink:0;border:none;background:transparent;color:var(--mut);display:flex;align-items:center;justify-content:center;border-radius:7px;">
@@ -1391,6 +1421,11 @@ const bt = {
       </div>`;
     }
     const R = s.results, m = R.m, bm = R.bm;
+    // A failed re-run (e.g. a bad ticker) leaves the previous successful
+    // results on screen by design — but with zero visual cue, that reads
+    // as a silent no-op instead of a failure. Surface it here too, not
+    // just in the sidebar error banner which sits below the fold.
+    const staleErrorBanner = s.error ? `<div style="margin-bottom:16px;padding:12px 14px;border-radius:10px;background:rgba(255,77,94,.1);border:1px solid rgba(255,77,94,.35);color:#ff8a94;font-size:12.5px;line-height:1.5;"><strong>Last run failed:</strong> ${this.esc(s.error)} — showing results from the last successful run below.</div>` : '';
     const alpha = m.cagr - bm.cagr;
     const rangeLabel = `${this.monLabel(R.effStart)} – ${this.monLabel(R.effEnd)}`;
     const truncNote = R.truncated ? `<div style="margin-top:8px;font-size:11.5px;color:var(--warn);">Data starts ${this.monLabel(R.effStart)} — one or more holdings don't have history back to ${s.start}. Showing ${rangeLabel} instead.</div>` : '';
@@ -1415,6 +1450,7 @@ const bt = {
     ];
 
     return `
+      ${staleErrorBanner}
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:18px;padding:24px 28px;margin-bottom:16px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
           <span style="font-size:15px;font-weight:700;">${this.esc(s.name)}</span>
