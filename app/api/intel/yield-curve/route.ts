@@ -28,22 +28,23 @@ type Point = { label: string; months: number; yield: number; date: string; prevY
 
 // Keeps the 2 most recent real observations (skipping "." no-data rows) so
 // callers can show a day-over-day change, not just the latest level.
+// Throws on a real fetch failure rather than returning null — Treasury
+// Constant Maturity series essentially never legitimately have zero
+// observations, so a null here would almost always mean "FRED request
+// failed," and silently dropping that maturity from the curve (then
+// caching the gap for 6h below) would misrepresent it as real data.
 async function fetchLatestTwo(seriesId: string, apiKey: string): Promise<{ value: number; date: string; prevValue: number | null } | null> {
-  try {
-    const url = `${FRED_BASE}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=5`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = (await res.json()) as { observations?: { date: string; value: string }[] };
-    const real = (data.observations ?? []).filter((o) => o.value !== ".");
-    if (!real.length) return null;
-    return {
-      value: parseFloat(real[0].value),
-      date: real[0].date,
-      prevValue: real.length > 1 ? parseFloat(real[1].value) : null,
-    };
-  } catch {
-    return null;
-  }
+  const url = `${FRED_BASE}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=5`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`FRED series ${seriesId} fetch failed: ${res.status}`);
+  const data = (await res.json()) as { observations?: { date: string; value: string }[] };
+  const real = (data.observations ?? []).filter((o) => o.value !== ".");
+  if (!real.length) return null;
+  return {
+    value: parseFloat(real[0].value),
+    date: real[0].date,
+    prevValue: real.length > 1 ? parseFloat(real[1].value) : null,
+  };
 }
 
 export async function GET(request: NextRequest) {

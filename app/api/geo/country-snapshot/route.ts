@@ -16,11 +16,16 @@ const NUMERIC_TO_ISO3: Record<number, string> = {
 
 type WBObservation = { date: string; value: number | null };
 
+// Throws on a real fetch failure — distinct from the World Bank
+// legitimately having no rows for a territory (some non-sovereign/small
+// territories genuinely carry no indicator data, and that IS a real
+// "no data" result worth caching as hasData:false below). A rate limit or
+// network failure isn't that, and must not get cached as if it were.
 async function fetchIndicator(iso3: string, indicator: string): Promise<{ value: number; year: string } | null> {
   const res = await fetch(
     `https://api.worldbank.org/v2/country/${iso3}/indicator/${indicator}?format=json&per_page=6`,
   );
-  if (!res.ok) return null;
+  if (!res.ok) throw new Error(`World Bank indicator ${indicator} fetch failed for ${iso3}: ${res.status}`);
   const text = await res.text();
   // World Bank prefixes responses with a UTF-8 BOM.
   const data = JSON.parse(text.replace(/^﻿/, "")) as [unknown, WBObservation[] | null];

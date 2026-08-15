@@ -60,6 +60,11 @@ export interface Evaluation {
   tags: string[];             // e.g. "Ignored valuation"
   // Bonus: "ideal answer" text for Compare vs Ideal
   idealAnswer?: string;
+  // True when the real AI grader was unreachable (no API key, provider
+  // error, or a response that failed to parse) and this is the crude
+  // deterministic rubric instead — must stay visible to the user, not a
+  // silent substitution for real AI feedback.
+  isFallback?: boolean;
 }
 
 export interface Reflection {

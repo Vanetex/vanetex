@@ -9,29 +9,32 @@ const FINNHUB_BASE = "https://finnhub.io/api/v1";
 
 type ChartPoint = { date: string; value: number };
 
-// Raw Finnhub fetch — no caching here
+// Raw Finnhub fetch — no caching here. Throws on a real fetch/network
+// failure rather than swallowing it to {} — unstable_cache below only
+// caches a successful return, so a transient failure doesn't get memoized
+// as "no candle data" for the full revalidate window.
 async function _fetchCandles(
   symbol: string,
   from: number,
   to: number,
   apiKey: string,
 ): Promise<Record<string, number>> {
-  try {
-    const res = await fetch(
-      `${FINNHUB_BASE}/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${apiKey}`,
-      { cache: "no-store" },
-    );
-    const data = (await res.json()) as { s: string; t: number[]; c: number[] };
-    if (data.s !== "ok" || !data.t) return {};
-    const map: Record<string, number> = {};
-    data.t.forEach((ts, i) => {
-      const dateStr = new Date(ts * 1000).toISOString().split("T")[0];
-      map[dateStr] = data.c[i];
-    });
-    return map;
-  } catch {
-    return {};
-  }
+  const res = await fetch(
+    `${FINNHUB_BASE}/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${apiKey}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) throw new Error(`Finnhub candle fetch failed for ${symbol}: ${res.status}`);
+  const data = (await res.json()) as { s: string; t: number[]; c: number[] };
+  // Finnhub's "no_data" status is a real, legitimate empty result — distinct
+  // from the fetch failure above, which throws instead of being cached as
+  // if it were this.
+  if (data.s !== "ok" || !data.t) return {};
+  const map: Record<string, number> = {};
+  data.t.forEach((ts, i) => {
+    const dateStr = new Date(ts * 1000).toISOString().split("T")[0];
+    map[dateStr] = data.c[i];
+  });
+  return map;
 }
 
 // Cached at module level — daily candles don't change during the trading day.
@@ -117,11 +120,23 @@ export async function GET(request: NextRequest) {
   // Unique tickers ever traded
   const tickers = [...new Set(trades.map((t) => t.ticker as string))];
 
-  // Fetch candles for all tickers + SPY concurrently
-  const [spyCandles, ...tickerCandlesList] = await Promise.all([
-    fetchDailyCandles("SPY", fromUnix, toUnix, apiKey),
-    ...tickers.map((ticker) => fetchDailyCandles(ticker, fromUnix, toUnix, apiKey)),
-  ]);
+  // Fetch candles for all tickers + SPY concurrently. A real fetch failure
+  // (as opposed to a symbol legitimately having no candles) degrades to
+  // the existing first-buy-price fallback below for chart continuity, but
+  // must NOT feed a stale/wrong number into the leaderboard-facing
+  // portfolio_value write further down.
+  let spyCandles: Record<string, number> = {};
+  let tickerCandlesList: Record<string, number>[] = tickers.map(() => ({}));
+  let candleFetchFailed = false;
+  try {
+    [spyCandles, ...tickerCandlesList] = await Promise.all([
+      fetchDailyCandles("SPY", fromUnix, toUnix, apiKey),
+      ...tickers.map((ticker) => fetchDailyCandles(ticker, fromUnix, toUnix, apiKey)),
+    ]);
+  } catch (err) {
+    console.error("[portfolio/chart] candle fetch failed:", err);
+    candleFetchFailed = true;
+  }
 
   const candlesByTicker: Record<string, Record<string, number>> = {};
   tickers.forEach((ticker, i) => {
@@ -237,11 +252,16 @@ export async function GET(request: NextRequest) {
       ? (Math.pow(currentValue / startValue, 365 / daysElapsed) - 1) * 100
       : null;
 
-  // Persist current value so the trading leaderboard can rank without Finnhub
-  await supabase
-    .from("paper_portfolios")
-    .update({ portfolio_value: currentValue, value_updated_at: new Date().toISOString() })
-    .eq("user_id", user.id);
+  // Persist current value so the trading leaderboard can rank without
+  // Finnhub — but only when today's candles actually loaded. Writing a
+  // value reconstructed from stale first-buy-price fallbacks (below) would
+  // silently corrupt the leaderboard number the same way a $0 fallback would.
+  if (!candleFetchFailed) {
+    await supabase
+      .from("paper_portfolios")
+      .update({ portfolio_value: currentValue, value_updated_at: new Date().toISOString() })
+      .eq("user_id", user.id);
+  }
 
   return NextResponse.json(
     {
@@ -249,6 +269,7 @@ export async function GET(request: NextRequest) {
       spyPoints,
       annualReturn: annualReturn !== null ? parseFloat(annualReturn.toFixed(2)) : null,
       totalReturn: parseFloat(totalReturn.toFixed(2)),
+      dataMayBeStale: candleFetchFailed,
     },
     { headers: { "Cache-Control": "private, max-age=300, stale-while-revalidate=60" } },
   );

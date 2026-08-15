@@ -53,20 +53,19 @@ function classifySector(industry: string | null): string | null {
   return null;
 }
 
+// Throws on a real fetch failure — a Finnhub outage/rate-limit must not
+// read the same as "this ticker genuinely has no industry tag," which the
+// caller caches as a stable "not applicable" verdict for an hour below.
 async function fetchIndustry(sym: string, apiKey: string): Promise<string | null> {
   const cacheKey = `peer-percentile:profile:${sym}`;
   const cached = await kvGet<{ industry: string | null }>(cacheKey);
   if (cached) return cached.industry;
-  try {
-    const res = await fetch(`${FINNHUB_BASE}/stock/profile2?symbol=${encodeURIComponent(sym)}&token=${apiKey}`);
-    if (!res.ok) return null;
-    const data = (await res.json()) as { finnhubIndustry?: string };
-    const industry = data.finnhubIndustry ?? null;
-    await kvSet(cacheKey, { industry }, PROFILE_CACHE_TTL_S);
-    return industry;
-  } catch {
-    return null;
-  }
+  const res = await fetch(`${FINNHUB_BASE}/stock/profile2?symbol=${encodeURIComponent(sym)}&token=${apiKey}`);
+  if (!res.ok) throw new Error(`Finnhub profile2 fetch failed for ${sym}: ${res.status}`);
+  const data = (await res.json()) as { finnhubIndustry?: string };
+  const industry = data.finnhubIndustry ?? null;
+  await kvSet(cacheKey, { industry }, PROFILE_CACHE_TTL_S);
+  return industry;
 }
 
 // Same percentile-rank convention used throughout the Phase 2.5 validation:

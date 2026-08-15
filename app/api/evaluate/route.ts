@@ -96,10 +96,11 @@ export async function POST(req: NextRequest) {
       raw = await callOpenAI(userMessage);
     }
 
-    const evaluation: Evaluation = raw
-      ? safeParseEvaluation(raw) ??
-        localFallback(scenario, action, confidence, reasoning)
-      : localFallback(scenario, action, confidence, reasoning);
+    const parsed = raw ? safeParseEvaluation(raw) : null;
+    const evaluation: Evaluation = parsed ?? {
+      ...localFallback(scenario, action, confidence, reasoning),
+      isFallback: true,
+    };
 
     return jsonResponse(evaluation);
   } catch (err: unknown) {

@@ -57,7 +57,10 @@ async function fetchFredDates(releaseId: number, apiKey: string, from: string, t
   const url = `${FRED_BASE}/release/dates?release_id=${releaseId}&api_key=${apiKey}&file_type=json`
     + `&realtime_start=${from}&realtime_end=${to}&include_release_dates_with_no_data=true&sort_order=asc&limit=10`;
   const res = await fetch(url);
-  if (!res.ok) return [];
+  // Throw rather than return [] — a genuine FRED failure (rate limit,
+  // outage) must not look like "no releases scheduled," which would
+  // otherwise get cached as the real calendar for a full 24h below.
+  if (!res.ok) throw new Error(`FRED release ${releaseId} fetch failed: ${res.status}`);
   const data = (await res.json()) as { release_dates?: { date: string }[] };
   return (data.release_dates ?? []).map((r) => r.date);
 }
@@ -67,7 +70,9 @@ async function fetchFredDates(releaseId: number, apiKey: string, from: string, t
 // under a "<year> FOMC Meetings" heading per year.
 async function fetchFomcDates(from: Date, to: Date): Promise<string[]> {
   const res = await fetch(FOMC_URL, { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" });
-  if (!res.ok) return [];
+  // Same reasoning as fetchFredDates above — a fetch failure must not be
+  // indistinguishable from "the Fed genuinely scheduled no meetings."
+  if (!res.ok) throw new Error(`FOMC calendar page fetch failed: ${res.status}`);
   const html = await res.text();
 
   const years = new Set([from.getUTCFullYear(), to.getUTCFullYear()]);

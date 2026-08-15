@@ -42,7 +42,14 @@ export async function GET(request: NextRequest) {
 
     if (!res.ok || !contentType.includes("spreadsheet")) {
       const body: Body = { available: false };
-      await kvSet(cacheKey, body, CACHE_TTL_S);
+      // A 404 (or a 200 that comes back as something other than a
+      // spreadsheet — SSGA serving an HTML page for a fund it doesn't
+      // have) is a real, stable "not a SPDR fund" signal worth caching
+      // for 12h. Anything else (5xx, 429, or another transient failure)
+      // isn't — caching THAT would make a rate limit or outage look
+      // identical to "this ETF was never supported," for just as long.
+      const isStableNotFound = res.status === 404 || (res.ok && !contentType.includes("spreadsheet"));
+      if (isStableNotFound) await kvSet(cacheKey, body, CACHE_TTL_S);
       return NextResponse.json(body);
     }
 

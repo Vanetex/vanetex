@@ -367,22 +367,32 @@ export async function POST(request: NextRequest) {
       otherTickers.map((t) =>
         fetch(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(t)}&token=${apiKey}`)
           .then((r) => r.ok ? r.json() : null)
-          .then((d) => ({ ticker: t, price: d?.c ?? 0 }))
-          .catch(() => ({ ticker: t, price: 0 }))
+          .then((d) => (d?.c ? { ticker: t, price: d.c, failed: false } : { ticker: t, price: 0, failed: true }))
+          .catch(() => ({ ticker: t, price: 0, failed: true }))
       )
     );
-    const priceMap: Record<string, number> = { [ticker]: currentPrice };
-    otherPrices.forEach(({ ticker: t, price: p }) => { if (p > 0) priceMap[t] = p; });
+    // A failed/missing quote must NOT be priced at $0 — that would silently
+    // write a wrong number to the leaderboard-facing portfolio_value. If any
+    // position's price couldn't be fetched, skip this sync entirely and
+    // leave the last known-good value in place; it'll catch up on the next
+    // successful trade or cron refresh rather than corrupt the total now.
+    const anyFailed = otherPrices.some((p) => p.failed);
+    if (anyFailed) {
+      const failedTickers = otherPrices.filter((p) => p.failed).map((p) => p.ticker);
+      console.error(`[trade/execute] Skipping portfolio_value sync for user ${user.id} — price fetch failed for ${failedTickers.join(", ")}.`);
+    } else {
+      const priceMap: Record<string, number> = { [ticker]: currentPrice };
+      otherPrices.forEach(({ ticker: t, price: p }) => { priceMap[t] = p; });
 
-    const positionValue = updatedPositions.reduce((sum, p) => {
-      const price = priceMap[p.ticker as string] ?? 0;
-      return sum + Number(p.shares) * price;
-    }, 0);
-    const liveValue = parseFloat((Number(updatedPortfolio.cash) + positionValue).toFixed(2));
-    await supabase
-      .from("paper_portfolios")
-      .update({ portfolio_value: liveValue, value_updated_at: new Date().toISOString() })
-      .eq("user_id", user.id);
+      const positionValue = updatedPositions.reduce((sum, p) => {
+        return sum + Number(p.shares) * priceMap[p.ticker as string];
+      }, 0);
+      const liveValue = parseFloat((Number(updatedPortfolio.cash) + positionValue).toFixed(2));
+      await supabase
+        .from("paper_portfolios")
+        .update({ portfolio_value: liveValue, value_updated_at: new Date().toISOString() })
+        .eq("user_id", user.id);
+    }
   }
 
   return NextResponse.json({

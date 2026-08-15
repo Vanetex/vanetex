@@ -6,17 +6,20 @@ export const maxDuration = 60;
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 
-// Fetch current price from Finnhub with a simple in-flight dedup
-async function fetchPrice(ticker: string, apiKey: string): Promise<number> {
+// Fetch current price from Finnhub. Returns null (not 0) on any failure —
+// a fetch failure must stay distinguishable from a real price, otherwise a
+// rate limit or upstream outage would silently zero out real users'
+// leaderboard-facing portfolio_value below.
+async function fetchPrice(ticker: string, apiKey: string): Promise<number | null> {
   try {
     const res = await fetch(
       `${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(ticker)}&token=${apiKey}`,
     );
-    if (!res.ok) return 0;
+    if (!res.ok) return null;
     const d = await res.json() as { c?: number };
-    return d.c ?? 0;
+    return d.c || null;
   } catch {
-    return 0;
+    return null;
   }
 }
 
@@ -56,7 +59,7 @@ export async function GET(request: NextRequest) {
   const allTickers = [...new Set(Object.values(byUser).flat().map((p) => p.ticker))];
 
   // Fetch in batches of 10 to avoid rate limits
-  const priceMap: Record<string, number> = {};
+  const priceMap: Record<string, number | null> = {};
   for (let i = 0; i < allTickers.length; i += 10) {
     const batch = allTickers.slice(i, i + 10);
     const prices = await Promise.all(batch.map((t) => fetchPrice(t, apiKey)));
@@ -64,15 +67,22 @@ export async function GET(request: NextRequest) {
     if (i + 10 < allTickers.length) await new Promise((r) => setTimeout(r, 200));
   }
 
-  // Compute and update portfolio values
+  // Compute and update portfolio values — but a user whose held tickers hit
+  // a failed price fetch gets skipped entirely rather than written with a
+  // $0-priced position. A stale-but-correct portfolio_value (refreshed next
+  // run) beats a corrupted one on the leaderboard.
   let updated = 0;
+  let skipped = 0;
   const updates = portfolios.map((portfolio) => {
     const uid = portfolio.user_id as string;
     const cash = Number(portfolio.cash);
-    const posValue = (byUser[uid] ?? []).reduce((sum, p) => {
-      const price = priceMap[p.ticker] ?? 0;
-      return sum + p.shares * price;
-    }, 0);
+    const userPositions = byUser[uid] ?? [];
+    const failedTickers = userPositions.filter((p) => priceMap[p.ticker] == null).map((p) => p.ticker);
+    if (failedTickers.length) {
+      console.error(`[cron/refresh-portfolios] Skipping value update for user ${uid} — price fetch failed for ${failedTickers.join(", ")}.`);
+      return null;
+    }
+    const posValue = userPositions.reduce((sum, p) => sum + p.shares * (priceMap[p.ticker] as number), 0);
     const value = parseFloat((cash + posValue).toFixed(2));
     return admin
       .from("paper_portfolios")
@@ -81,7 +91,8 @@ export async function GET(request: NextRequest) {
   });
 
   const results = await Promise.all(updates);
-  updated = results.filter((r) => !r.error).length;
+  updated = results.filter((r) => r && !r.error).length;
+  skipped = results.filter((r) => r === null).length;
 
-  return NextResponse.json({ updated, tickers: allTickers.length });
+  return NextResponse.json({ updated, skipped, tickers: allTickers.length });
 }

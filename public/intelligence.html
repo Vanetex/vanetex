@@ -223,6 +223,7 @@ input{font-family:var(--ui)}
               <circle id="chartEndDot" r="3.4" fill="var(--acc)"></circle>
               <g id="priceAxis"></g>
             </svg>
+            <div id="chartStatusMsg" style="display:none;position:absolute;inset:8px 6px 26px;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--mut);background:rgba(8,11,20,.92);border-radius:8px;"></div>
             <div id="chartDateAxis" style="display:flex;justify-content:space-between;padding:2px 7.42% 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);"></div>
           </div>
         </div>
@@ -678,12 +679,21 @@ const vtx = {
         fetch(`/api/stock/candles?symbol=${encodeURIComponent(inst.yahooSymbol)}&range=${this.state.tf}`).then(r=>r.ok?r.json():null).catch(()=>null),
       ]);
       this._instrumentData = this._instrumentData || {};
+      const gotQuote = (quote && !quote.error) ? quote : null;
+      const gotChart = (chart && chart.prices && chart.prices.length >= 2) ? chart : null;
       this._instrumentData[code] = {
-        quote: (quote && !quote.error) ? quote : null,
-        chart: (chart && chart.prices && chart.prices.length >= 2) ? chart : null,
+        quote: gotQuote, chart: gotChart,
+        // Distinct from "still loading" — a fetch was actually attempted
+        // and came back empty, so the panel can show a real error+retry
+        // instead of spinning on "Loading…" forever.
+        quoteFailed: !gotQuote, chartFailed: !gotChart,
       };
       if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
-    } catch (e) { /* keep previous data on failure */ }
+    } catch (e) {
+      this._instrumentData = this._instrumentData || {};
+      this._instrumentData[code] = { quote: null, chart: null, quoteFailed: true, chartFailed: true };
+      if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
+    }
   },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; this.renderRight(); },
   openSector(name) { this.state.moversSector = name; this.renderRight(); },
@@ -734,23 +744,33 @@ const vtx = {
 
   setTf(tf) { this.state.tf = tf; this.render(); this.loadChartData(this.state.focus, tf); },
   async loadChartData(sym, tf) {
+    const markFailed = () => {
+      this._chartLoadFailed = this._chartLoadFailed || {};
+      (this._chartLoadFailed[sym] = this._chartLoadFailed[sym] || {})[tf] = true;
+    };
+    const markOk = () => { if (this._chartLoadFailed && this._chartLoadFailed[sym]) delete this._chartLoadFailed[sym][tf]; };
+    const rerenderIfRelevant = () => {
+      const isCompareTarget = this.state.tab === 'compare' && (this.state.compareSet||[]).includes(sym);
+      if ((this.state.focus === sym || isCompareTarget) && this.state.tf === tf) this.render();
+    };
     try {
       const r = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(tf)}`);
-      if (!r.ok) return;
+      if (!r.ok) { markFailed(); rerenderIfRelevant(); return; }
       const { prices, times } = await r.json();
-      if (!prices || prices.length < 2) return;
+      if (!prices || prices.length < 2) { markFailed(); rerenderIfRelevant(); return; }
       if (!this._chartData) this._chartData = {};
       if (!this._chartData[sym]) this._chartData[sym] = {};
       this._chartData[sym][tf] = { prices, times: times || [] };
-      const isCompareTarget = this.state.tab === 'compare' && (this.state.compareSet||[]).includes(sym);
-      if ((this.state.focus === sym || isCompareTarget) && this.state.tf === tf) this.render();
-    } catch(e) {}
+      markOk();
+      rerenderIfRelevant();
+    } catch(e) { markFailed(); rerenderIfRelevant(); }
   },
   toggleIndicator(key) { this.state.indicators[key] = !this.state.indicators[key]; this.render(); },
 
   saveWatchlist() {
     const data = this.state.tickers.map(t => [t.sym, t.name, t.sector, t.price]);
-    try { localStorage.setItem(this.WATCHLIST_KEY, JSON.stringify(data)); } catch(e) {}
+    try { localStorage.setItem(this.WATCHLIST_KEY, JSON.stringify(data)); }
+    catch(e) { console.error('[vtx] Failed to persist watchlist — changes will be lost on reload.', e); }
   },
   async addTicker(sym, name, sector) {
     sym = sym.toUpperCase();
@@ -1354,14 +1374,14 @@ const vtx = {
   // behind a 6h cache), so this loads per-ticker on demand rather than
   // upfront for the whole watchlist the way loadFinancials() does.
   async loadFinancialsReported(sym) {
+    if (!this._finReported) this._finReported = {};
     try {
       const res = await fetch(`/api/stock/financials-reported?symbol=${encodeURIComponent(sym)}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!this._finReported) this._finReported = {};
-      this._finReported[sym] = data;
-      if (this.state.focus === sym && this.state.view === 'ticker') this.render();
-    } catch (e) { /* keep previous data on failure */ }
+      this._finReported[sym] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._finReported[sym] = { __failed: true };
+    }
+    if (this.state.focus === sym && this.state.view === 'ticker') this.render();
   },
 
   // Real percentile rank vs. a real, disclosed sector-peer universe — five
@@ -1370,14 +1390,14 @@ const vtx = {
   // did not validate a composite score as predictive, so this only ever
   // shows where a stock stands today, never a verdict on where it's going.
   async loadPeerPercentile(sym) {
+    if (!this._peerPercentile) this._peerPercentile = {};
     try {
       const res = await fetch(`/api/stock/peer-percentile?symbol=${encodeURIComponent(sym)}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!this._peerPercentile) this._peerPercentile = {};
-      this._peerPercentile[sym] = data;
-      if (this.state.focus === sym && this.state.view === 'ticker') this.render();
-    } catch (e) { /* keep previous data on failure */ }
+      this._peerPercentile[sym] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._peerPercentile[sym] = { __failed: true };
+    }
+    if (this.state.focus === sym && this.state.view === 'ticker') this.render();
   },
 
   async loadNews() {
@@ -1703,7 +1723,9 @@ const vtx = {
     const isTreasury = inst.category === 'Treasury';
     let priceHtml;
     if (!quote) {
-      priceHtml = `<div style="font-size:13px;color:var(--mut);">Loading real quote…</div>`;
+      priceHtml = data && data.quoteFailed
+        ? `<div style="font-size:12px;color:var(--mut);">Couldn't load a real quote. <button onclick="vtx.loadInstrumentData('${code}')" style="background:none;border:none;color:var(--acc2);font-size:12px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`
+        : `<div style="font-size:13px;color:var(--mut);">Loading real quote…</div>`;
     } else if (isTreasury) {
       const chg = quote.ptsChange;
       const color = chg == null ? 'var(--mut)' : (chg >= 0 ? cPos : cNeg);
@@ -1719,7 +1741,9 @@ const vtx = {
 
     let chartHtml, statsHtml = '';
     if (!chart) {
-      chartHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading real chart…</div>`;
+      chartHtml = data && data.chartFailed
+        ? `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load a real chart.<br><button onclick="vtx.loadInstrumentData('${code}')" style="margin-top:8px;background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`
+        : `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading real chart…</div>`;
     } else {
       const ch = this.buildChart(chart.prices, chart.times);
       chartHtml = `
@@ -2054,9 +2078,17 @@ const vtx = {
       <button onclick="vtx.toggleIndicator('${key}')" style="font-family:var(--mono);font-size:10.5px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${s.indicators[key]?'rgba(var(--glow),.2)':'transparent'};color:${s.indicators[key]?color:'var(--mut)'};">${label}</button>`).join('');
 
     const chartEntry = this._chartData && this._chartData[f.sym] && this._chartData[f.sym][s.tf];
+    const chartFailed = !chartEntry && this._chartLoadFailed && this._chartLoadFailed[f.sym] && this._chartLoadFailed[f.sym][s.tf];
     const chartPrices = chartEntry ? chartEntry.prices : f.hist;
     const chartTimes = chartEntry ? chartEntry.times : null;
     const ch = this.buildChart(chartPrices, chartTimes);
+    const chartStatusEl = document.getElementById('chartStatusMsg');
+    if (chartFailed) {
+      chartStatusEl.style.display = 'flex';
+      chartStatusEl.innerHTML = `Couldn't load a real chart.<br><button onclick="vtx.loadChartData('${f.sym}','${s.tf}')" style="margin-top:6px;background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button>`;
+    } else {
+      chartStatusEl.style.display = 'none';
+    }
     document.getElementById('chartAreaPath').setAttribute('d', ch.area);
     document.getElementById('chartLinePath').setAttribute('d', ch.line);
     document.getElementById('chartEndGlow').setAttribute('cx', ch.endX); document.getElementById('chartEndGlow').setAttribute('cy', ch.endY);
@@ -2306,6 +2338,9 @@ const vtx = {
     if (!peerPct) {
       pscMetaEl.textContent = '';
       pscEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading sector screen…</div>`;
+    } else if (peerPct.__failed) {
+      pscMetaEl.textContent = '';
+      pscEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Couldn't load the sector screen. <button onclick="vtx.loadPeerPercentile('${f.sym}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
     } else if (!peerPct.applicable) {
       pscMetaEl.textContent = '';
       pscEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">${peerPct.reason || 'Not available for this ticker.'}</div>`;
@@ -2347,6 +2382,8 @@ const vtx = {
     const frEl = document.getElementById('finReportedBody');
     if (!finRep) {
       frEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading multi-year statement history…</div>`;
+    } else if (finRep.__failed) {
+      frEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Couldn't load statement history. <button onclick="vtx.loadFinancialsReported('${f.sym}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
     } else if (!finRep.periods || !finRep.periods.length) {
       frEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">No SEC 10-K filing history available for this ticker.</div>`;
     } else {
@@ -2748,7 +2785,12 @@ const vtx = {
         const seriesData = compareSet.map(sym => ({ sym, entry: this._chartData && this._chartData[sym] && this._chartData[sym][s.tf] }));
         const missing = seriesData.filter(d => !d.entry).map(d => d.sym);
         if (missing.length) {
-          el.innerHTML = header + `<div style="padding:40px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading ${missing.join(', ')}…</div>`;
+          const failed = missing.filter(sym => this._chartLoadFailed && this._chartLoadFailed[sym] && this._chartLoadFailed[sym][s.tf]);
+          const stillLoading = missing.filter(sym => !failed.includes(sym));
+          const lines = [];
+          if (stillLoading.length) lines.push(`Loading ${stillLoading.join(', ')}…`);
+          if (failed.length) lines.push(`Couldn't load ${failed.join(', ')}. <button onclick="${failed.map(sym=>`vtx.loadChartData('${sym}','${s.tf}')`).join(';')}" style="background:none;border:none;color:var(--acc2);font-size:11.5px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button>`);
+          el.innerHTML = header + `<div style="padding:40px 14px;text-align:center;color:var(--mut);font-size:11.5px;line-height:1.8;">${lines.join('<br>')}</div>`;
         } else {
           const normSeries = seriesData.map((d,i) => {
             const base = d.entry.prices[0];

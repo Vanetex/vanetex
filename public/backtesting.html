@@ -216,7 +216,8 @@ const bt = {
 
   // ---------- persistence ----------
   persistSaved() {
-    try { localStorage.setItem(this.SAVED_KEY, JSON.stringify(this.state.saved)); } catch (e) {}
+    try { localStorage.setItem(this.SAVED_KEY, JSON.stringify(this.state.saved)); return true; }
+    catch (e) { return false; }
   },
   configKey(holdings, rebalance, start, end, initial) {
     const hs = holdings.filter(h => h.t).map(h => ({ t: h.t.toUpperCase(), w: +h.w || 0 }));
@@ -255,9 +256,18 @@ const bt = {
     const existingIdx = this.state.saved.findIndex(s => s.name === entry.name);
     const saved = this.state.saved.slice();
     if (existingIdx >= 0) saved[existingIdx] = entry; else saved.unshift(entry);
+    const prevSaved = this.state.saved;
     this.state.saved = saved;
-    this.persistSaved();
-    this.setState({ savedFlash: true });
+    const ok = this.persistSaved();
+    if (!ok) {
+      // Storage write actually failed (quota exceeded, private browsing
+      // with storage disabled, etc.) — roll back and say so honestly
+      // instead of flashing "Saved ✓" for a save that didn't happen.
+      this.state.saved = prevSaved;
+      this.setState({ error: "Couldn't save — your browser's local storage is full or unavailable." });
+      return;
+    }
+    this.setState({ savedFlash: true, error: null });
     clearTimeout(this._flashTimer);
     this._flashTimer = setTimeout(() => this.setState({ savedFlash: false }), 1600);
   },

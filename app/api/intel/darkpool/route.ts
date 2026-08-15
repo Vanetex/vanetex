@@ -26,7 +26,7 @@ type DarkRow = {
   litPct: number | null;
 };
 
-const cache = new Map<string, { body: DarkRow[]; ts: number }>();
+const cache = new Map<string, { body: DarkRow[]; missingSymbols: string[]; ts: number }>();
 
 function parseCsv(text: string): Record<string, string>[] {
   const lines = text.trim().split("\n");
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
   const key = symbols.join(",");
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
-    return NextResponse.json({ rows: hit.body }, {
+    return NextResponse.json({ rows: hit.body, missingSymbols: hit.missingSymbols }, {
       headers: { "Cache-Control": "public, max-age=1800, stale-while-revalidate=300" },
     });
   }
@@ -174,10 +174,14 @@ export async function GET(request: NextRequest) {
   try {
     const results = await Promise.all(symbols.map((s) => fetchSymbol(s, apiKey).catch(() => null)));
     const rows = results.filter((r): r is DarkRow => r !== null);
+    // `fetchSymbol` returning null covers both "genuinely no prints this
+    // week" and "the FINRA/Finnhub fetch for this symbol failed" — rows
+    // alone can't tell a caller which symbols it's missing, or why.
+    const missingSymbols = symbols.filter((s) => !rows.some((r) => r.sym === s));
 
-    cache.set(key, { body: rows, ts: Date.now() });
+    cache.set(key, { body: rows, missingSymbols, ts: Date.now() });
 
-    return NextResponse.json({ rows }, {
+    return NextResponse.json({ rows, missingSymbols }, {
       headers: { "Cache-Control": "public, max-age=1800, stale-while-revalidate=300" },
     });
   } catch (err) {

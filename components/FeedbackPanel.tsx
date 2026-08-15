@@ -6,6 +6,15 @@ export default function FeedbackPanel({ evaluation }: { evaluation: Evaluation }
     <div className="surface-card fade-in mt-6 rounded-3xl p-6">
       <h3 className="text-base font-semibold">AI analyst feedback</h3>
 
+      {evaluation.isFallback && (
+        <div
+          className="mt-3 rounded-xl px-3 py-2 text-sm"
+          style={{ background: "rgba(245,166,35,0.08)", border: "1px solid rgba(245,166,35,0.3)", color: "var(--warn, #f5a623)" }}
+        >
+          ⚠️ The AI grader was unavailable, so this is a simplified automatic rubric, not full AI feedback. Scores and notes below are rougher than usual.
+        </div>
+      )}
+
       <div className="mt-4 grid grid-cols-2 gap-3">
         <ScoreTile
           label="Reasoning"

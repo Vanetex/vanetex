@@ -90,6 +90,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(body);
   } catch (err) {
     console.error("[stock/candles] error:", err);
-    return NextResponse.json({ prices: [], times: [], volume: null, week52High: null, week52Low: null });
+    // A real fetch/parse failure must not look identical to Yahoo
+    // legitimately reporting no such symbol (the empty-array 200 above) —
+    // callers need a real error status to distinguish "try again" from
+    // "there's genuinely nothing here."
+    return NextResponse.json({ error: "Failed to fetch chart data." }, { status: 502 });
   }
 }
