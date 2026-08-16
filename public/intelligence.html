@@ -300,6 +300,9 @@ input{font-family:var(--ui)}
 
         <!-- Instrument view (index/futures/commodity — real price + chart, no equity-only fields) -->
         <div id="instrumentView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
+
+        <!-- Indicator view (real FRED economic series — history chart, no price/equity fields) -->
+        <div id="indicatorView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -332,7 +335,7 @@ input{font-family:var(--ui)}
 const vtx = {
   state: {
     variant: 'A', focus: 'NVDA', view: 'overview', tab: 'news', tf: '1D',
-    query: '', searchOpen: false, remoteResults: [], tickers: [], tape: [], tickerBarData: [],
+    query: '', searchOpen: false, remoteResults: [], instrumentMatches: [], remoteIndicators: [], tickers: [], tape: [], tickerBarData: [],
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: null, // set by loadQuotes() from a real measured round-trip time
     indicators: { sma9: false, sma20: false },
@@ -644,16 +647,121 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); },
   backToOverview() { this.state.view = 'overview'; this.render(); },
   selectInstrument(code) {
     if (!this.INSTRUMENTS[code]) return;
     this.state.view = 'instrument';
     this.state.instrument = code;
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
     this.render();
     this.loadInstrumentData(code);
   },
   setInstrumentTf(tf) { this.state.tf = tf; this.render(); this.loadInstrumentData(this.state.instrument); },
+
+  // Economic indicator view — a real FRED series (any of the thousands
+  // discoverable via /api/intel/econ-search), not a fixed list like
+  // INSTRUMENTS above. meta carries what the search result already gave
+  // us (title/frequency/units) so opening the view doesn't need a second
+  // round-trip just for labels.
+  selectIndicator(meta) {
+    if (!meta || !meta.id) return;
+    this.state.view = 'indicator';
+    this.state.indicatorMeta = meta;
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.remoteInstruments = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.render();
+    this.loadIndicatorData(meta.id);
+  },
+  async loadIndicatorData(id) {
+    this._indicatorData = this._indicatorData || {};
+    try {
+      const res = await fetch(`/api/intel/econ-series?id=${encodeURIComponent(id)}`);
+      this._indicatorData[id] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._indicatorData[id] = { __failed: true };
+    }
+    if (this.state.view === 'indicator' && this.state.indicatorMeta && this.state.indicatorMeta.id === id) this.renderIndicatorView();
+  },
+  // Same chart geometry as buildChart (574x150 viewBox) so it drops into
+  // the same SVG skeleton, but deliberately simpler — a real economic
+  // series has no volume/SMA overlays, and buildChart's date formatting
+  // is keyed to the stock chart's own timeframe selector (1D/5D/.../MAX),
+  // which doesn't apply here since indicator history has no such range.
+  buildIndicatorChart(points) {
+    const W = 574, H = 150;
+    const values = points.map(p => p.value);
+    const min = Math.min(...values), max = Math.max(...values);
+    const r = (max - min) || 1;
+    const yOf = v => H - ((v - min) / r) * (H - 14) - 7;
+    const pts = values.map((v, i) => [(i / (values.length - 1)) * W, yOf(v)]);
+    const line = 'M ' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L ');
+    const area = line + ` L ${W} ${H} L 0 ${H} Z`;
+    const end = pts[pts.length - 1];
+    const axisLabels = [38, 78, 118].map(y => ({ y, price: (min + r * (H - 7 - y) / (H - 14)) }));
+    axisLabels.push({ y: 144, price: min });
+    const dates = points.map(p => p.date);
+    const spanYears = (new Date(dates[dates.length - 1]) - new Date(dates[0])) / (365.25 * 24 * 3600 * 1000);
+    const tickIdxs = [...new Set([0, 0.25, 0.5, 0.75, 1].map(f => Math.round(f * (dates.length - 1))))];
+    const dateLabels = tickIdxs.map(i => {
+      const d = new Date(dates[i] + 'T00:00:00Z');
+      return spanYears >= 3
+        ? d.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' });
+    });
+    return { line, area, endX: end[0].toFixed(1), endY: end[1].toFixed(1), axisLabels, dateLabels, W };
+  },
+  renderIndicatorView() {
+    const el = document.getElementById('indicatorView');
+    if (!el) return;
+    const meta = this.state.indicatorMeta;
+    if (!meta) { el.innerHTML = ''; return; }
+    const data = this._indicatorData && this._indicatorData[meta.id];
+
+    let bodyHtml;
+    if (!data) {
+      bodyHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading real data from FRED…</div>`;
+    } else if (data.__failed) {
+      bodyHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load this series.<br><button onclick="vtx.loadIndicatorData('${meta.id}')" style="margin-top:8px;background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else {
+      const points = data.points;
+      const last = points[points.length - 1];
+      const prev = points.length > 1 ? points[points.length - 2] : null;
+      const chg = prev ? last.value - prev.value : null;
+      const ch = this.buildIndicatorChart(points);
+      const cPos = 'var(--pos)', cNeg = 'var(--neg)';
+      bodyHtml = `
+        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:2px;">
+          <span style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${last.value.toLocaleString('en-US',{maximumFractionDigits:2})}</span>
+          ${chg != null ? `<span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${chg>=0?cPos:cNeg};">${chg>=0?'+':''}${chg.toLocaleString('en-US',{maximumFractionDigits:2})} vs prior reading</span>` : ''}
+        </div>
+        <div style="font-size:11px;color:var(--mut);margin-bottom:14px;">${meta.units} · as of ${last.date}</div>
+        <svg viewBox="0 0 ${ch.W} 150" width="100%" height="210" preserveAspectRatio="none" fill="none" style="display:block;">
+          <defs><linearGradient id="indArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--acc)" stop-opacity="0.32"></stop>
+            <stop offset="100%" stop-color="var(--acc)" stop-opacity="0"></stop>
+          </linearGradient></defs>
+          <path d="${ch.area}" fill="url(#indArea)"></path>
+          <path d="${ch.line}" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>
+          <circle cx="${ch.endX}" cy="${ch.endY}" r="3.4" fill="var(--acc)"></circle>
+        </svg>
+        <div style="display:flex;justify-content:space-between;padding:2px 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);">${ch.dateLabels.map(l=>`<span>${l}</span>`).join('')}</div>
+        <div style="margin-top:6px;font-size:9px;color:var(--mut);opacity:.75;">Real historical data from FRED (Federal Reserve Economic Data) — ${meta.frequency}${meta.seasonalAdjustment && meta.seasonalAdjustment !== 'NSA' ? ', ' + meta.seasonalAdjustment : ''}.</div>
+      `;
+    }
+
+    el.innerHTML = `
+      <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 2px;cursor:pointer;align-self:flex-start;">← Overview</button>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:20px 22px;">
+        <div style="font-size:20px;font-weight:700;margin-bottom:4px;">${meta.title}</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);margin-bottom:16px;">FRED · ${meta.id}</div>
+        ${bodyHtml}
+      </div>
+    `;
+  },
   async loadInstrumentData(code) {
     const inst = this.INSTRUMENTS[code];
     if (!inst) return;
@@ -785,7 +893,7 @@ const vtx = {
     this.state.tickers.push(t);
     this.subscribeSymbol(sym);
     this.saveWatchlist();
-    this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[];
+    this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[];
     document.getElementById('searchInput').value=''; this.closeSearch();
     this.state.focus = sym;
     this.state.view = 'ticker';
@@ -879,11 +987,30 @@ const vtx = {
     return this.state.tickers.filter(t => t.sym.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)).slice(0,6);
   },
   onSearchInput(v) {
-    this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[];
+    this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[];
+    // The 40-entry INSTRUMENTS map (indices, futures, metals, energy,
+    // agriculture, treasuries, forex, crypto) is small and static, so this
+    // filters instantly client-side — no round trip needed, unlike stock
+    // search (Finnhub) and indicator search (FRED), which are real
+    // catalogs too large to ship to the client.
+    this.state.instrumentMatches = this.matchInstruments(v);
     this.renderSearch();
     clearTimeout(this._searchTimer);
     const q = v.trim();
-    if (q.length>=1) this._searchTimer = setTimeout(()=>this.fetchRemoteSearch(q), 250);
+    if (q.length>=1) {
+      this._searchTimer = setTimeout(() => {
+        this.fetchRemoteSearch(q);
+        this.fetchEconSearch(q);
+      }, 250);
+    }
+  },
+  matchInstruments(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return [];
+    return Object.entries(this.INSTRUMENTS)
+      .filter(([code, inst]) => code.toLowerCase().includes(q) || inst.label.toLowerCase().includes(q))
+      .slice(0, 6)
+      .map(([code, inst]) => ({ code, ...inst }));
   },
   async fetchRemoteSearch(q) {
     try {
@@ -893,6 +1020,18 @@ const vtx = {
       if (this.state.query.trim()!==q) return;
       const have = new Set(this.state.tickers.map(t=>t.sym));
       this.state.remoteResults = (data.results||[]).filter(r=>!have.has(r.symbol));
+      this.renderSearch();
+    } catch(e) {}
+  },
+  // Real FRED series search — GDP, CPI, unemployment, PMI, housing starts,
+  // money supply, whatever the user types — not a fixed list.
+  async fetchEconSearch(q) {
+    try {
+      const res = await fetch(`/api/intel/econ-search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (this.state.query.trim()!==q) return;
+      this.state.remoteIndicators = data.results || [];
       this.renderSearch();
     } catch(e) {}
   },
@@ -936,7 +1075,9 @@ const vtx = {
     const dd = document.getElementById('searchDropdown');
     const r = this.results();
     const remote = this.state.remoteResults || [];
-    if (!this.state.searchOpen || (r.length===0 && remote.length===0)) { dd.style.display='none'; return; }
+    const instruments = this.state.instrumentMatches || [];
+    const indicators = this.state.remoteIndicators || [];
+    if (!this.state.searchOpen || (r.length===0 && remote.length===0 && instruments.length===0 && indicators.length===0)) { dd.style.display='none'; return; }
     dd.style.display='block';
     let html = r.map(t => `
       <div class="srchrow" onmousedown="vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
@@ -951,6 +1092,23 @@ const vtx = {
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.symbol}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
           <span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--acc2);border:1px solid rgba(var(--glow),.35);border-radius:5px;padding:2px 6px;">+ ADD</span>
+        </div>`).join('');
+    }
+    if (instruments.length) {
+      html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Markets</div>`;
+      html += instruments.map(inst => `
+        <div class="srchrow" onmousedown="vtx.selectInstrument('${inst.code}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+          <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${inst.code}</span>
+          <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${inst.label}</span>
+          <span style="font-size:10px;color:var(--mut);">${inst.category}</span>
+        </div>`).join('');
+    }
+    if (indicators.length) {
+      html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Economic Indicators · FRED</div>`;
+      html += indicators.map(ind => `
+        <div class="srchrow" onmousedown='vtx.selectIndicator(${JSON.stringify(ind).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+          <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ind.title}</span>
+          <span style="font-size:10px;color:var(--mut);">${ind.frequency}</span>
         </div>`).join('');
     }
     dd.innerHTML = html;
@@ -2016,10 +2174,13 @@ const vtx = {
     document.getElementById('tickerView').style.display = s.view === 'ticker' ? 'contents' : 'none';
     document.getElementById('overviewView').style.display = s.view === 'overview' ? 'flex' : 'none';
     document.getElementById('instrumentView').style.display = s.view === 'instrument' ? 'flex' : 'none';
+    document.getElementById('indicatorView').style.display = s.view === 'indicator' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
       this.renderInstrumentView();
+    } else if (s.view === 'indicator') {
+      this.renderIndicatorView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
