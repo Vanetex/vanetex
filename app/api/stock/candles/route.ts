@@ -30,12 +30,22 @@ export async function GET(request: NextRequest) {
   type Body = {
     prices: number[];
     times: number[];
+    opens: number[];
+    highs: number[];
+    lows: number[];
+    volumes: number[];
     volume: number | null;
     week52High: number | null;
     week52Low: number | null;
+    dayHigh: number | null;
+    dayLow: number | null;
   };
 
-  const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}:v3`;
+  // v4: added real open/high/low/volume per bar (previously only close was
+  // kept, even though Yahoo returns full OHLCV) — bumped so a stale v3
+  // cache entry (missing these fields) never gets served to the new
+  // candlestick-aware frontend.
+  const cacheKey = `candles:${symbol.toUpperCase()}:${rangeParam}:v4`;
   const cached = await kvGet<Body>(cacheKey);
   if (cached) {
     return NextResponse.json(cached);
@@ -56,35 +66,56 @@ export async function GET(request: NextRequest) {
       chart: {
         result?: Array<{
           timestamp?: number[];
-          indicators: { quote: Array<{ close: number[] }> };
-          meta?: { regularMarketVolume?: number; fiftyTwoWeekHigh?: number; fiftyTwoWeekLow?: number };
+          indicators: { quote: Array<{ close: number[]; open?: number[]; high?: number[]; low?: number[]; volume?: number[] }> };
+          meta?: {
+            regularMarketVolume?: number;
+            fiftyTwoWeekHigh?: number;
+            fiftyTwoWeekLow?: number;
+            regularMarketDayHigh?: number;
+            regularMarketDayLow?: number;
+          };
         }>;
         error?: { description: string };
       };
     };
 
+    const empty: Body = { prices: [], times: [], opens: [], highs: [], lows: [], volumes: [], volume: null, week52High: null, week52Low: null, dayHigh: null, dayLow: null };
     if (data.chart.error || !data.chart.result?.[0]) {
-      return NextResponse.json({ prices: [], times: [], volume: null, week52High: null, week52Low: null });
+      return NextResponse.json(empty);
     }
 
     const result = data.chart.result[0];
     const timestamps = result.timestamp ?? [];
-    const closes = result.indicators.quote[0]?.close ?? [];
-    // Filter both arrays together (not independently) so a null close at
-    // index i can't desync the price from its real timestamp.
+    const quote = result.indicators.quote[0] ?? { close: [] };
+    const closes = quote.close ?? [];
+    const opensIn = quote.open ?? [];
+    const highsIn = quote.high ?? [];
+    const lowsIn = quote.low ?? [];
+    const volumesIn = quote.volume ?? [];
+    // Filter every series together (not independently) so a null close at
+    // index i can't desync any field from its real timestamp. open/high/low
+    // fall back to close, and volume to 0, only for the rare bar where
+    // Yahoo's close exists but one of the other fields is individually
+    // null — real market data, not a fabrication (a candle body needs SOME
+    // open value to draw at all; falling back to that bar's own real close
+    // just draws it as a doji rather than guessing a different number).
     const pairs = closes
-      .map((c, i) => ({ c, t: timestamps[i] }))
-      .filter((p): p is { c: number; t: number } => p.c != null && p.t != null)
-      .slice(-limit);
-    const prices = pairs.map((p) => p.c);
-    const times = pairs.map((p) => p.t); // unix seconds
+      .map((c, i) => ({ c, t: timestamps[i], o: opensIn[i], h: highsIn[i], l: lowsIn[i], v: volumesIn[i] }))
+      .filter((p) => p.c != null && p.t != null)
+      .slice(-limit) as { c: number; t: number; o: number | null | undefined; h: number | null | undefined; l: number | null | undefined; v: number | null | undefined }[];
 
     const body: Body = {
-      prices,
-      times,
+      prices: pairs.map((p) => p.c),
+      times: pairs.map((p) => p.t),
+      opens: pairs.map((p) => p.o ?? p.c),
+      highs: pairs.map((p) => p.h ?? p.c),
+      lows: pairs.map((p) => p.l ?? p.c),
+      volumes: pairs.map((p) => p.v ?? 0),
       volume: result.meta?.regularMarketVolume ?? null,
       week52High: result.meta?.fiftyTwoWeekHigh ?? null,
       week52Low: result.meta?.fiftyTwoWeekLow ?? null,
+      dayHigh: result.meta?.regularMarketDayHigh ?? null,
+      dayLow: result.meta?.regularMarketDayLow ?? null,
     };
     await kvSet(cacheKey, body, CACHE_TTL_S);
     return NextResponse.json(body);
