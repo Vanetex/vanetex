@@ -205,25 +205,23 @@ input{font-family:var(--ui)}
           </div>
           <div style="padding:8px 6px 4px;position:relative;">
             <svg id="chartSvg" width="100%" height="210" viewBox="0 0 620 200" preserveAspectRatio="none" fill="none" style="display:block;">
-              <defs>
-                <linearGradient id="vtxArea" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="var(--acc)" stop-opacity="0.32"></stop>
-                  <stop offset="100%" stop-color="var(--acc)" stop-opacity="0"></stop>
-                </linearGradient>
-              </defs>
               <line x1="0" y1="38" x2="574" y2="38" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
               <line x1="0" y1="78" x2="574" y2="78" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
               <line x1="0" y1="118" x2="574" y2="118" stroke="rgba(255,255,255,.04)" stroke-width="1"></line>
               <g id="volBars"></g>
-              <path id="chartAreaPath" fill="url(#vtxArea)"></path>
-              <path id="chartLinePath" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>
+              <g id="candles"></g>
               <path id="chartSma9Path" fill="none" stroke="var(--warn)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0"></path>
               <path id="chartSma20Path" fill="none" stroke="#9b6bff" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0"></path>
-              <circle id="chartEndGlow" r="6.5" fill="var(--acc)" opacity="0.2"></circle>
-              <circle id="chartEndDot" r="3.4" fill="var(--acc)"></circle>
               <g id="priceAxis"></g>
+              <g id="crosshair" opacity="0" style="pointer-events:none;">
+                <line id="crosshairX" x1="0" y1="0" x2="0" y2="196" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3,3"></line>
+                <line id="crosshairY" x1="0" y1="0" x2="574" y2="0" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3,3"></line>
+                <circle id="crosshairDot" r="3.2" fill="var(--txt)" stroke="var(--acc)" stroke-width="1.6"></circle>
+              </g>
+              <rect id="chartHoverCatcher" x="0" y="0" width="574" height="196" fill="transparent" style="pointer-events:all;cursor:crosshair;"></rect>
             </svg>
             <div id="chartStatusMsg" style="display:none;position:absolute;inset:8px 6px 26px;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--mut);background:rgba(8,11,20,.92);border-radius:8px;"></div>
+            <div id="chartTooltip" style="display:none;position:absolute;z-index:5;pointer-events:none;background:rgba(8,11,20,.95);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-family:var(--mono);font-size:9.5px;line-height:1.6;color:var(--txt);box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap;"></div>
             <div id="chartDateAxis" style="display:flex;justify-content:space-between;padding:2px 7.42% 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);"></div>
           </div>
         </div>
@@ -403,24 +401,62 @@ const vtx = {
     </svg>`;
   },
 
-  buildChart(arr, times) {
-    const W=574,H=150,VB=46,AX=46;
+  // Real OHLC candlesticks + real volume, not a line-only chart with a
+  // price-change-magnitude bar chart pretending to be volume underneath
+  // it. Falls back to a thin close-only line only when real open/high/low
+  // genuinely aren't available yet (e.g. the flat sparkline placeholder
+  // before loadChartData's real fetch resolves) — never fabricates a
+  // candle body from data that isn't real OHLC.
+  buildChart(data) {
+    const W=574,H=150,VB=46;
     const s = this.state;
-    const sma9 = s.indicators.sma9 ? this.sma(arr,9) : null;
-    const sma20 = s.indicators.sma20 ? this.sma(arr,20) : null;
-    let min=Math.min(...arr), max=Math.max(...arr);
+    const { closes, times, opens, highs, lows, volumes } = data;
+    const n = closes.length;
+    const hasOHLC = !!(opens && highs && lows && opens.length===n && highs.length===n && lows.length===n);
+
+    const sma9 = s.indicators.sma9 ? this.sma(closes,9) : null;
+    const sma20 = s.indicators.sma20 ? this.sma(closes,20) : null;
+    const loSeries = hasOHLC ? lows : closes, hiSeries = hasOHLC ? highs : closes;
+    let min=Math.min(...loSeries), max=Math.max(...hiSeries);
     [sma9,sma20].forEach(sm => { if (sm) sm.forEach(v => { if (v!=null) { min=Math.min(min,v); max=Math.max(max,v); } }); });
     const r=(max-min)||1;
     const yOf = v => H-((v-min)/r)*(H-14)-7;
-    const pts=arr.map((v,i)=>[(i/(arr.length-1))*W,yOf(v)]);
-    const line='M '+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L ');
-    const area=line+` L ${W} ${H} L 0 ${H} Z`;
-    const end=pts[pts.length-1];
-    const bars=[]; const bw=W/arr.length*0.55;
-    for (let i=1;i<arr.length;i++) { const up=arr[i]>=arr[i-1]; const mag=Math.abs(arr[i]-arr[i-1]); const h=Math.max(2,Math.min(VB,4+(mag/r)*VB*4)); bars.push({x:((i/(arr.length-1))*W-bw/2).toFixed(1),y:(H+VB-h).toFixed(1),w:bw.toFixed(1),h:h.toFixed(1),fill: up?'rgba(31,209,151,.45)':'rgba(255,77,94,.45)'}); }
+    const slotW = W/n;
+    const xOf = i => (i+0.5)*slotW;
+
+    let line='', area='', candles=[];
+    if (hasOHLC) {
+      const bodyW = Math.max(1.2, slotW*0.62);
+      candles = closes.map((c,i) => {
+        const up = c >= opens[i];
+        const yHigh = yOf(highs[i]), yLow = yOf(lows[i]), yO = yOf(opens[i]), yC = yOf(c);
+        const bodyTop = Math.min(yO,yC), bodyH = Math.max(1, Math.abs(yC-yO));
+        return { wickX:xOf(i).toFixed(1), wickY1:yHigh.toFixed(1), wickY2:yLow.toFixed(1), bodyX:(xOf(i)-bodyW/2).toFixed(1), bodyY:bodyTop.toFixed(1), bodyW:bodyW.toFixed(1), bodyH:bodyH.toFixed(1), fill: up?'var(--pos)':'var(--neg)' };
+      });
+    } else {
+      // No real OHLC yet (placeholder hist) — an honest thin line, not
+      // fabricated candle bodies.
+      const pts = closes.map((v,i)=>[xOf(i),yOf(v)]);
+      line = 'M '+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L ');
+      area = line+` L ${W} ${H} L 0 ${H} Z`;
+    }
+
+    // Real volume, scaled to the max in the visible window — replacing the
+    // old bars, which were sized by price-change magnitude and colored
+    // like a volume histogram despite not being volume at all.
+    const volBars = (volumes && volumes.length===n) ? (() => {
+      const maxVol = Math.max(...volumes, 1);
+      const bw = Math.max(1.2, slotW*0.62);
+      return closes.map((c,i) => {
+        const hgt = Math.max(1, (volumes[i]/maxVol)*VB);
+        const up = hasOHLC ? c>=opens[i] : (i===0 || c>=closes[i-1]);
+        return { x:(xOf(i)-bw/2).toFixed(1), y:(H+VB-hgt).toFixed(1), w:bw.toFixed(1), h:hgt.toFixed(1), fill: up?'rgba(31,209,151,.45)':'rgba(255,77,94,.45)' };
+      });
+    })() : [];
+
     const pathFromSma = sm => {
       if (!sm) return '';
-      const valid = sm.map((v,i)=>v==null?null:[(i/(arr.length-1))*W,yOf(v)]).filter(Boolean);
+      const valid = sm.map((v,i)=>v==null?null:[xOf(i),yOf(v)]).filter(Boolean);
       if (valid.length<2) return '';
       return 'M '+valid.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L ');
     };
@@ -431,9 +467,100 @@ const vtx = {
     // (not inside it) so justify-content:space-between lines them up with
     // buildChart's own index-based x positions (index 0 -> x=0, last index
     // -> x=W) without needing exact pixel math to match two layout systems.
-    const dateLabels = (times && times.length === arr.length) ? this.dateLabelsFrom(times, s.tf) : [];
+    const dateLabels = (times && times.length===n) ? this.dateLabelsFrom(times, s.tf) : [];
+    const endX = xOf(n-1).toFixed(1), endY = yOf(closes[n-1]).toFixed(1);
 
-    return {line, area, endX:end[0].toFixed(1), endY:end[1].toFixed(1), bars, sma9Path: pathFromSma(sma9), sma20Path: pathFromSma(sma20), axisLabels, dateLabels, W, AX};
+    return {
+      line, area, candles, volBars, sma9Path: pathFromSma(sma9), sma20Path: pathFromSma(sma20),
+      axisLabels, dateLabels, W, AX:46, endX, endY, hasOHLC,
+      // Exposed for the hover/crosshair feature's nearest-bar lookup —
+      // real values, same ones the candles/labels above are built from.
+      _hover: { n, slotW, yOf, closes, opens: hasOHLC?opens:null, highs: hasOHLC?highs:null, lows: hasOHLC?lows:null, volumes: (volumes&&volumes.length===n)?volumes:null, times: (times&&times.length===n)?times:null, tf: s.tf },
+    };
+  },
+  // Shared crosshair/tooltip handler for both the main ticker chart and the
+  // Instrument View chart — snaps to the nearest real bar (not the raw
+  // cursor position) and shows its real O/H/L/C/volume/date.
+  fmtVol(v) {
+    if (v == null) return '—';
+    if (v >= 1e9) return (v/1e9).toFixed(2)+'B';
+    if (v >= 1e6) return (v/1e6).toFixed(2)+'M';
+    if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+    return String(Math.round(v));
+  },
+  chartHoverMove(evt, catcherEl, els, containerEl) {
+    const ch = this._currentChart;
+    if (!ch || !ch._hover || !ch._hover.n) return;
+    const rect = catcherEl.getBoundingClientRect();
+    if (!rect.width) return;
+    const scaleX = ch.W / rect.width;
+    const xSvg = (evt.clientX - rect.left) * scaleX;
+    const { n, slotW, closes, opens, highs, lows, volumes, times, yOf, tf } = ch._hover;
+    let i = Math.floor(xSvg / slotW);
+    i = Math.max(0, Math.min(n - 1, i));
+    const xCenter = (i + 0.5) * slotW;
+    const yPrice = yOf(closes[i]);
+
+    els.group.setAttribute('opacity', '1');
+    els.lineX.setAttribute('x1', xCenter.toFixed(1)); els.lineX.setAttribute('x2', xCenter.toFixed(1));
+    els.lineY.setAttribute('y1', yPrice.toFixed(1)); els.lineY.setAttribute('y2', yPrice.toFixed(1));
+    els.dot.setAttribute('cx', xCenter.toFixed(1)); els.dot.setAttribute('cy', yPrice.toFixed(1));
+
+    let dateStr = '';
+    if (times && times[i] != null) {
+      const d = new Date(times[i] * 1000);
+      dateStr = tf === '1D'
+        ? d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true, timeZone:'America/New_York' })
+        : d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric', timeZone:'UTC' });
+    }
+    let body;
+    if (opens) {
+      const up = closes[i] >= opens[i];
+      const color = up ? 'var(--pos)' : 'var(--neg)';
+      body = `<span style="color:${color};">O ${this.fmt(opens[i])} &nbsp; H ${this.fmt(highs[i])} &nbsp; L ${this.fmt(lows[i])} &nbsp; C ${this.fmt(closes[i])}</span>`;
+    } else {
+      body = `C ${this.fmt(closes[i])}`;
+    }
+    const volLine = volumes ? `<br>Vol ${this.fmtVol(volumes[i])}` : '';
+    els.tooltip.innerHTML = `<div style="color:var(--mut);">${dateStr}</div>${body}${volLine}`;
+    els.tooltip.style.display = 'block';
+    // Position near the cursor but clamped inside the chart container.
+    const containerRect = containerEl.getBoundingClientRect();
+    let left = evt.clientX - containerRect.left + 14;
+    let top = evt.clientY - containerRect.top - 10;
+    const tw = els.tooltip.offsetWidth || 140, th = els.tooltip.offsetHeight || 50;
+    if (left + tw > containerRect.width) left = evt.clientX - containerRect.left - tw - 14;
+    if (top + th > containerRect.height) top = containerRect.height - th;
+    if (top < 0) top = 0;
+    els.tooltip.style.left = left + 'px';
+    els.tooltip.style.top = top + 'px';
+  },
+  chartHoverLeave(els) {
+    els.group.setAttribute('opacity', '0');
+    els.tooltip.style.display = 'none';
+  },
+  wireMainChartHover() {
+    const catcher = document.getElementById('chartHoverCatcher');
+    const container = catcher.closest('div');
+    const els = {
+      group: document.getElementById('crosshair'), lineX: document.getElementById('crosshairX'),
+      lineY: document.getElementById('crosshairY'), dot: document.getElementById('crosshairDot'),
+      tooltip: document.getElementById('chartTooltip'),
+    };
+    catcher.addEventListener('mousemove', e => this.chartHoverMove(e, catcher, els, container));
+    catcher.addEventListener('mouseleave', () => this.chartHoverLeave(els));
+  },
+  wireInstrumentChartHover() {
+    const catcher = document.getElementById('instHoverCatcher');
+    if (!catcher) return;
+    const container = catcher.closest('div');
+    const els = {
+      group: document.getElementById('instCrosshair'), lineX: document.getElementById('instCrosshairX'),
+      lineY: document.getElementById('instCrosshairY'), dot: document.getElementById('instCrosshairDot'),
+      tooltip: document.getElementById('instChartTooltip'),
+    };
+    catcher.addEventListener('mousemove', e => this.chartHoverMove(e, catcher, els, container));
+    catcher.addEventListener('mouseleave', () => this.chartHoverLeave(els));
   },
   mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
   pctOf(t) { if (t.changePct != null) return t.changePct; const base = t.prevClose || t.open; return base ? (t.price - base) / base * 100 : 0; },
@@ -552,6 +679,7 @@ const vtx = {
       card.style.transform = `perspective(1100px) rotateX(${(-py*3.2).toFixed(2)}deg) rotateY(${(px*4.2).toFixed(2)}deg)`;
     });
     card.addEventListener('mouseleave', () => { card.style.transform = 'perspective(1100px) rotateX(0deg) rotateY(0deg)'; });
+    this.wireMainChartHover();
 
     this.render();
     this.loadQuotes();
@@ -867,11 +995,14 @@ const vtx = {
     try {
       const r = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(tf)}`);
       if (!r.ok) { markFailed(); rerenderIfRelevant(); return; }
-      const { prices, times } = await r.json();
+      const { prices, times, opens, highs, lows, volumes } = await r.json();
       if (!prices || prices.length < 2) { markFailed(); rerenderIfRelevant(); return; }
       if (!this._chartData) this._chartData = {};
       if (!this._chartData[sym]) this._chartData[sym] = {};
-      this._chartData[sym][tf] = { prices, times: times || [] };
+      // prices/times stay the historical shape (Compare tab's normalized
+      // multi-symbol overlay reads these directly); opens/highs/lows/volumes
+      // are additive, for the real candlestick chart below.
+      this._chartData[sym][tf] = { prices, times: times || [], opens: opens || [], highs: highs || [], lows: lows || [], volumes: volumes || [] };
       markOk();
       rerenderIfRelevant();
     } catch(e) { markFailed(); rerenderIfRelevant(); }
@@ -1904,24 +2035,35 @@ const vtx = {
         ? `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load a real chart.<br><button onclick="vtx.loadInstrumentData('${code}')" style="margin-top:8px;background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`
         : `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading real chart…</div>`;
     } else {
-      const ch = this.buildChart(chart.prices, chart.times);
+      const ch = this.buildChart({ closes: chart.prices, times: chart.times, opens: chart.opens, highs: chart.highs, lows: chart.lows, volumes: chart.volumes });
+      this._currentChart = ch;
+      const candleBody = ch.hasOHLC
+        ? ch.candles.map(c => `<line x1="${c.wickX}" y1="${c.wickY1}" x2="${c.wickX}" y2="${c.wickY2}" stroke="${c.fill}" stroke-width="1"></line><rect x="${c.bodyX}" y="${c.bodyY}" width="${c.bodyW}" height="${c.bodyH}" fill="${c.fill}" rx="0.5"></rect>`).join('')
+        : `<path d="${ch.area}" fill="url(#instArea)"></path><path d="${ch.line}" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>`;
       chartHtml = `
-        <svg viewBox="0 0 ${ch.W+ch.AX} 150" width="100%" height="210" preserveAspectRatio="none" fill="none" style="display:block;">
+        <svg id="instChartSvg" viewBox="0 0 ${ch.W+ch.AX} 150" width="100%" height="210" preserveAspectRatio="none" fill="none" style="display:block;">
           <defs><linearGradient id="instArea" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="var(--acc)" stop-opacity="0.32"></stop>
             <stop offset="100%" stop-color="var(--acc)" stop-opacity="0"></stop>
           </linearGradient></defs>
-          <path d="${ch.area}" fill="url(#instArea)"></path>
-          <path d="${ch.line}" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>
+          ${candleBody}
           ${ch.sma9Path ? `<path d="${ch.sma9Path}" fill="none" stroke="var(--warn)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path>` : ''}
           ${ch.sma20Path ? `<path d="${ch.sma20Path}" fill="none" stroke="#9b6bff" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path>` : ''}
-          <circle cx="${ch.endX}" cy="${ch.endY}" r="6.5" fill="var(--acc)" opacity="0.2"></circle>
-          <circle cx="${ch.endX}" cy="${ch.endY}" r="3.4" fill="var(--acc)"></circle>
           ${ch.axisLabels.map(a => `<text x="${ch.W+6}" y="${(a.y+3).toFixed(1)}" font-family="var(--mono)" font-size="9" fill="var(--mut)">${this.fmt(a.price)}${isTreasury?'%':''}</text>`).join('')}
+          <g id="instCrosshair" opacity="0" style="pointer-events:none;">
+            <line id="instCrosshairX" x1="0" y1="0" x2="0" y2="150" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3,3"></line>
+            <line id="instCrosshairY" x1="0" y1="0" x2="${ch.W}" y2="0" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3,3"></line>
+            <circle id="instCrosshairDot" r="3.2" fill="var(--txt)" stroke="var(--acc)" stroke-width="1.6"></circle>
+          </g>
+          <rect id="instHoverCatcher" x="0" y="0" width="${ch.W}" height="150" fill="transparent" style="pointer-events:all;cursor:crosshair;"></rect>
         </svg>
+        <div id="instChartTooltip" style="display:none;position:absolute;z-index:5;pointer-events:none;background:rgba(8,11,20,.95);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-family:var(--mono);font-size:9.5px;line-height:1.6;color:var(--txt);box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap;"></div>
         <div style="display:flex;justify-content:space-between;padding:2px 7.42% 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);">${ch.dateLabels.map(l => `<span>${l}</span>`).join('')}</div>`;
 
-      const dayLo = Math.min(...chart.prices), dayHi = Math.max(...chart.prices);
+      // Real intra-period low/high now that Yahoo's actual low/high arrays
+      // are kept (not just close, which understates the real range).
+      const dayLo = chart.lows && chart.lows.length ? Math.min(...chart.lows) : Math.min(...chart.prices);
+      const dayHi = chart.highs && chart.highs.length ? Math.max(...chart.highs) : Math.max(...chart.prices);
       const pctSuffix = isTreasury ? '%' : '';
       const stats = [
         { label: s.tf==='1D' ? 'Day Low' : 'Period Low', value: this.fmt(dayLo)+pctSuffix },
@@ -1969,6 +2111,10 @@ const vtx = {
       ${statsHtml}
       <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
+    // The chart SVG above was just rebuilt via innerHTML, so its hover
+    // catcher is a fresh element each time — re-wire it (harmless/no-op
+    // when there's no chart yet, e.g. still loading or failed).
+    this.wireInstrumentChartHover();
   },
 
   async checkAuth() {
@@ -2241,9 +2387,11 @@ const vtx = {
 
     const chartEntry = this._chartData && this._chartData[f.sym] && this._chartData[f.sym][s.tf];
     const chartFailed = !chartEntry && this._chartLoadFailed && this._chartLoadFailed[f.sym] && this._chartLoadFailed[f.sym][s.tf];
-    const chartPrices = chartEntry ? chartEntry.prices : f.hist;
-    const chartTimes = chartEntry ? chartEntry.times : null;
-    const ch = this.buildChart(chartPrices, chartTimes);
+    const chartData = chartEntry
+      ? { closes: chartEntry.prices, times: chartEntry.times, opens: chartEntry.opens, highs: chartEntry.highs, lows: chartEntry.lows, volumes: chartEntry.volumes }
+      : { closes: f.hist, times: null };
+    const ch = this.buildChart(chartData);
+    this._currentChart = ch;
     const chartStatusEl = document.getElementById('chartStatusMsg');
     if (chartFailed) {
       chartStatusEl.style.display = 'flex';
@@ -2251,11 +2399,10 @@ const vtx = {
     } else {
       chartStatusEl.style.display = 'none';
     }
-    document.getElementById('chartAreaPath').setAttribute('d', ch.area);
-    document.getElementById('chartLinePath').setAttribute('d', ch.line);
-    document.getElementById('chartEndGlow').setAttribute('cx', ch.endX); document.getElementById('chartEndGlow').setAttribute('cy', ch.endY);
-    document.getElementById('chartEndDot').setAttribute('cx', ch.endX); document.getElementById('chartEndDot').setAttribute('cy', ch.endY);
-    document.getElementById('volBars').innerHTML = ch.bars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${b.fill}" rx="0.8"></rect>`).join('');
+    document.getElementById('candles').innerHTML = ch.hasOHLC
+      ? ch.candles.map(c => `<line x1="${c.wickX}" y1="${c.wickY1}" x2="${c.wickX}" y2="${c.wickY2}" stroke="${c.fill}" stroke-width="1"></line><rect x="${c.bodyX}" y="${c.bodyY}" width="${c.bodyW}" height="${c.bodyH}" fill="${c.fill}" rx="0.5"></rect>`).join('')
+      : `<path d="${ch.area}" fill="rgba(var(--glow),.18)"></path><path d="${ch.line}" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"></path>`;
+    document.getElementById('volBars').innerHTML = ch.volBars.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${b.fill}" rx="0.8"></rect>`).join('');
     const sma9El = document.getElementById('chartSma9Path'), sma20El = document.getElementById('chartSma20Path');
     sma9El.setAttribute('d', ch.sma9Path); sma9El.setAttribute('opacity', ch.sma9Path ? '0.9' : '0');
     sma20El.setAttribute('d', ch.sma20Path); sma20El.setAttribute('opacity', ch.sma20Path ? '0.9' : '0');
