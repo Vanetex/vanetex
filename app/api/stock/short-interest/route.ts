@@ -35,14 +35,18 @@ function candidateSettlementDates(count: number): string[] {
   };
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   const dates: string[] = [];
-  const cursor = new Date();
-  cursor.setUTCHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const cursor = new Date(today);
   while (dates.length < count) {
     const lastDayOfMonth = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0));
     const fifteenth = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), 15));
     for (const raw of [lastDayOfMonth, fifteenth]) {
       const adjusted = toWeekday(new Date(raw));
-      if (adjusted <= cursor) dates.push(fmt(adjusted));
+      // Compare against the fixed "today", not the decrementing cursor —
+      // otherwise a real, already-past date (e.g. 7/31 when cursor has
+      // rolled back to mid-July) gets wrongly excluded as "in the future".
+      if (adjusted <= today) dates.push(fmt(adjusted));
     }
     cursor.setUTCMonth(cursor.getUTCMonth() - 1);
   }
@@ -126,11 +130,12 @@ export async function GET(request: NextRequest) {
   if (!symbolParam) return NextResponse.json({ error: "symbol is required" }, { status: 400 });
   const sym = symbolParam.toUpperCase();
 
-  // v2: fixes the CSV parser dropping unquoted empty fields, which
-  // misaligned every column after stockSplitFlag/revisionFlag — bumped so
-  // a stale v1 cache entry with wrong avgDailyVolume/daysToCover values
-  // never gets served to the corrected frontend.
-  const cacheKey = `short-interest:${sym}:v2`;
+  // v3: fixes candidateSettlementDates() comparing each candidate against
+  // the decrementing month-walk cursor instead of the fixed "today", which
+  // wrongly excluded the most recent real cycle (e.g. 7/31) once the
+  // cursor had rolled back past it — bumped again so the newest cycle
+  // isn't stuck missing behind a stale cache entry.
+  const cacheKey = `short-interest:${sym}:v3`;
   const cached = await kvGet<{ points: Point[] }>(cacheKey);
   if (cached) return NextResponse.json(cached);
 
