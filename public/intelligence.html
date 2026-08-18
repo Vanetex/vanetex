@@ -260,6 +260,17 @@ input{font-family:var(--ui)}
           <div id="analystBody" style="padding:11px 14px;"></div>
         </div>
 
+        <!-- short interest & insider positioning — real FINRA Rule 4560 consolidated
+             short interest (official free public API, no key) plus a cluster-buying
+             flag computed from the Form 4 data already fetched for Filings. -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Short Interest &amp; Positioning</span>
+            <span id="shortInterestAsOf" style="font-size:9px;color:var(--mut);margin-left:auto;"></span>
+          </div>
+          <div id="shortInterestBody" style="padding:11px 14px;"></div>
+        </div>
+
         <!-- extended financials -->
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
           <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Financials</div>
@@ -810,7 +821,7 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); },
   backToOverview() { this.state.view = 'overview'; this.render(); },
   selectInstrument(code) {
     if (!this.INSTRUMENTS[code]) return;
@@ -1126,6 +1137,7 @@ const vtx = {
     this.loadEtfHoldings(sym);
     this.loadFinancialsReported(sym);
     this.loadPeerPercentile(sym);
+    this.loadShortInterest(sym);
     this.loadSparklines([sym]);
     try {
       const [q, fin, analyst, earn] = await Promise.all([
@@ -1785,6 +1797,26 @@ const vtx = {
       this._finReported[sym] = res.ok ? await res.json() : { __failed: true };
     } catch (e) {
       this._finReported[sym] = { __failed: true };
+    }
+    if (this.state.focus === sym && this.state.view === 'ticker') this.render();
+  },
+
+  // Real FINRA Rule 4560 consolidated short interest — bi-monthly, official,
+  // no API key. A symbol with no short position on file (thin float, brand
+  // new listing) genuinely returns zero points; that's not a failure.
+  async loadShortInterest(sym) {
+    if (!this._shortInterest) this._shortInterest = {};
+    try {
+      const res = await fetch(`/api/stock/short-interest?symbol=${encodeURIComponent(sym)}`);
+      if (res.ok) {
+        this._shortInterest[sym] = await res.json();
+      } else if (res.status === 404) {
+        this._shortInterest[sym] = { points: [] };
+      } else {
+        this._shortInterest[sym] = { __failed: true };
+      }
+    } catch (e) {
+      this._shortInterest[sym] = { __failed: true };
     }
     if (this.state.focus === sym && this.state.view === 'ticker') this.render();
   },
@@ -2909,6 +2941,57 @@ const vtx = {
         <div style="padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);">${pioHtml}</div>
         <div>${zHtml}</div>
         <div style="margin-top:10px;font-size:8px;color:var(--mut);opacity:.7;">Source: SEC 10-K filings via Finnhub, ${periods.length} year${periods.length===1?'':'s'} of history. Piotroski F-Score and Altman Z-Score are public, documented formulas computed from the raw statement data above — not a proprietary model, and not a substitute for reading the actual filing.</div>`;
+    }
+
+    // Short interest & positioning — real FINRA Rule 4560 consolidated short
+    // interest, plus an insider cluster-buying flag computed from the same
+    // Form 4 data already fetched for the Filings tab (3+ distinct insiders
+    // buying within the trailing 30 days on file).
+    const si = this._shortInterest && this._shortInterest[f.sym];
+    const siAsOfEl = document.getElementById('shortInterestAsOf');
+    const siEl = document.getElementById('shortInterestBody');
+    const fmtSh = v => v == null ? '—' : v >= 1e9 ? (v/1e9).toFixed(2)+'B' : v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v.toLocaleString();
+    const ownFilings = (this.FIL||[]).filter(x=>x.sym===f.sym);
+    const buyers = new Set(ownFilings.filter(x=>/buy|bought/i.test(x.act||'')).map(x=>x.who));
+    const clusterHtml = buyers.size >= 3
+      ? `<div style="margin-top:10px;padding:8px 10px;border-radius:9px;background:rgba(31,209,151,.08);border:1px solid rgba(31,209,151,.25);font-size:10.5px;color:var(--pos);">Cluster buying: ${buyers.size} distinct insiders bought on file — ${[...buyers].slice(0,4).join(', ')}${buyers.size>4?', …':''}.</div>`
+      : '';
+    if (!si) {
+      siAsOfEl.textContent = '';
+      siEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading short interest…</div>` + clusterHtml;
+    } else if (si.__failed) {
+      siAsOfEl.textContent = '';
+      siEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Couldn't load short interest. <button onclick="vtx.loadShortInterest('${f.sym}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>` + clusterHtml;
+    } else if (!si.points.length) {
+      siAsOfEl.textContent = '';
+      siEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">No FINRA short interest on file for ${f.sym}.</div>` + clusterHtml;
+    } else {
+      const pts = si.points;
+      const last = pts[pts.length-1];
+      const chgColor = last.changePercent == null ? 'var(--mut)' : (last.changePercent >= 0 ? 'var(--neg)' : 'var(--pos)');
+      siAsOfEl.textContent = `As of ${last.settlementDate}`;
+      const sparkline = pts.length >= 2 ? `<svg width="100%" height="26" viewBox="0 0 104 30" preserveAspectRatio="none" fill="none" style="display:block;margin-top:8px;">
+        <path d="${this.sparkPath(pts.map(p=>p.shortInterest))}" stroke="var(--acc2)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>
+      </svg>` : '';
+      siEl.innerHTML = `
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+          <span style="font-family:var(--mono);font-size:22px;font-weight:800;">${fmtSh(last.shortInterest)}</span>
+          <span style="font-size:10px;color:var(--mut);">shares short</span>
+          ${last.changePercent != null ? `<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${chgColor};margin-left:auto;">${last.changePercent>=0?'+':''}${last.changePercent.toFixed(1)}% vs prior cycle</span>` : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px;">
+          <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:7px 9px;">
+            <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);">Days to Cover</div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:800;margin-top:2px;">${last.daysToCover != null ? last.daysToCover.toFixed(2) : '—'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:7px 9px;">
+            <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);">Avg Daily Volume</div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:800;margin-top:2px;">${fmtSh(last.avgDailyVolume)}</div>
+          </div>
+        </div>
+        ${sparkline}
+        ${clusterHtml}
+        <div style="margin-top:9px;font-size:8px;color:var(--mut);opacity:.7;">FINRA Rule 4560 consolidated short interest, settles twice monthly (15th &amp; month-end) with an ~8-business-day publish lag — this is the most recent cycle on file, not real-time.${pts.length>1?` ${pts.length} cycles shown.`:''}</div>`;
     }
 
     // ETF holdings — only ever populated for SPDR-family tickers (the one
