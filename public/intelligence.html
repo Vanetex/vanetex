@@ -344,6 +344,38 @@ const vtx = {
   CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
   ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
   YIELD_CURVE: null, // populated by loadYieldCurve() — real FRED Treasury data, no seed
+  MACRO_DASH: {}, // populated by loadMacroDashboard() — real FRED data per series id, no seed
+
+  // Curated FRED series for the Macro tab's dashboard grid — every id/title/
+  // units/frequency below was verified live against /api/intel/econ-search
+  // (not guessed) before being hardcoded here. 'type' only controls display
+  // formatting (pct vs plain number), never the value itself.
+  MACRO_SERIES: [
+    { group: 'Credit & Stress', items: [
+      { id:'BAA10Y', label:'Baa Corporate Spread', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:"Moody's Seasoned Baa Corporate Bond Yield Relative to Yield on 10-Year Treasury Constant Maturity", type:'pct' },
+      { id:'AAA10Y', label:'Aaa Corporate Spread', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:"Moody's Seasoned Aaa Corporate Bond Yield Relative to Yield on 10-Year Treasury Constant Maturity", type:'pct' },
+      { id:'BAMLH0A0HYM2', label:'High-Yield OAS Spread', units:'Percent', frequency:'Daily, Close', seasonalAdjustment:'NSA', title:'ICE BofA US High Yield Index Option-Adjusted Spread', type:'pct' },
+      { id:'STLFSI4', label:'Fed Financial Stress Index', units:'Index', frequency:'Weekly, Ending Friday', seasonalAdjustment:'NSA', title:'St. Louis Fed Financial Stress Index', type:'num' },
+    ]},
+    { group: 'Growth & Sentiment', items: [
+      { id:'UMCSENT', label:'Consumer Sentiment', units:'Index 1966:Q1=100', frequency:'Monthly', seasonalAdjustment:'NSA', title:'University of Michigan: Consumer Sentiment', type:'num' },
+      { id:'ICSA', label:'Jobless Claims', units:'Number', frequency:'Weekly, Ending Saturday', seasonalAdjustment:'SA', title:'Initial Claims', type:'num' },
+      { id:'GACDFSA066MSFRBPHI', label:'Philly Fed Mfg. Index', units:'Index', frequency:'Monthly', seasonalAdjustment:'SA', title:'Current General Activity; Diffusion Index for Federal Reserve District 3: Philadelphia', type:'num' },
+      { id:'GACDISA066MSFRBNY', label:'Empire State Mfg. Index', units:'Index', frequency:'Monthly', seasonalAdjustment:'SA', title:'Current General Business Conditions; Diffusion Index for New York', type:'num' },
+    ]},
+    { group: 'Housing & Consumer', items: [
+      { id:'CSUSHPINSA', label:'Case-Shiller Home Price Index', units:'Index Jan 2000=100', frequency:'Monthly', seasonalAdjustment:'NSA', title:'S&P Cotality Case-Shiller U.S. National Home Price Index', type:'num' },
+      { id:'MORTGAGE30US', label:'30-Year Mortgage Rate', units:'Percent', frequency:'Weekly, Ending Thursday', seasonalAdjustment:'NSA', title:'30-Year Fixed Rate Mortgage Average in the United States', type:'pct' },
+      { id:'RSAFS', label:'Retail Sales', units:'Millions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'Advance Retail Sales: Retail Trade and Food Services', type:'num' },
+    ]},
+    { group: 'Money, Rates & Dollar', items: [
+      { id:'M2SL', label:'M2 Money Supply', units:'Billions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'M2', type:'num' },
+      { id:'DFII10', label:'10Y Real (TIPS) Yield', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed', type:'pct' },
+      { id:'T10YIE', label:'10Y Breakeven Inflation', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'10-Year Breakeven Inflation Rate', type:'pct' },
+      { id:'WALCL', label:'Fed Balance Sheet', units:'Millions of U.S. Dollars', frequency:'Weekly, As of Wednesday', seasonalAdjustment:'NSA', title:'Assets: Total Assets: Total Assets (Less Eliminations from Consolidation): Wednesday Level', type:'num' },
+      { id:'DTWEXBGS', label:'Trade-Weighted Dollar Index', units:'Index Jan 2006=100', frequency:'Daily', seasonalAdjustment:'NSA', title:'Nominal Broad U.S. Dollar Index', type:'num' },
+    ]},
+  ],
   FIL: null, // populated by loadFilings() — real SEC EDGAR Form 4 data; null = not loaded yet, [] = loaded and genuinely empty
   DARK: null, // populated by loadDarkPool() — real FINRA weekly dark-pool data; null = not loaded yet, [] = loaded and genuinely empty
 
@@ -714,6 +746,7 @@ const vtx = {
     this.loadCalendar();
     this.loadEconCalendar();
     this.loadYieldCurve();
+    this.loadMacroDashboard();
     this.loadMarketSnapshot();
     this.loadCryptoSnapshot();
     this.loadVixHistory();
@@ -725,6 +758,7 @@ const vtx = {
     setInterval(() => this.loadCalendar(), 30 * 60 * 1000);
     setInterval(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
     setInterval(() => this.loadYieldCurve(), 6 * 60 * 60 * 1000);
+    setInterval(() => this.loadMacroDashboard(), 6 * 60 * 60 * 1000);
     setInterval(() => this.loadMarketSnapshot(), 60 * 1000);
     setInterval(() => this.loadCryptoSnapshot(), 60 * 1000);
     setInterval(() => this.loadVixHistory(), 6 * 60 * 60 * 1000);
@@ -1450,6 +1484,29 @@ const vtx = {
       if (this.state.tab === 'econ') this.renderRight();
       if (this.state.view === 'overview') this.renderOverview();
     } catch (e) { /* keep previous data on failure */ }
+  },
+
+  // Fetches every curated FRED series in MACRO_SERIES via the existing
+  // /api/intel/econ-series route (already used by the search-driven
+  // Indicator View — no new backend). Each series resolves independently
+  // so one bad/rate-limited series can't block the other 15 from loading.
+  async loadMacroDashboard() {
+    const allIds = this.MACRO_SERIES.flatMap(g => g.items.map(i => i.id));
+    await Promise.all(allIds.map(async id => {
+      try {
+        const res = await fetch(`/api/intel/econ-series?id=${encodeURIComponent(id)}`);
+        if (!res.ok) { this.MACRO_DASH[id] = { failed: true }; return; }
+        const data = await res.json();
+        const points = data.points || [];
+        if (!points.length) { this.MACRO_DASH[id] = { failed: true }; return; }
+        const last = points[points.length - 1];
+        const prev = points.length > 1 ? points[points.length - 2] : null;
+        this.MACRO_DASH[id] = { value: last.value, date: last.date, change: prev ? last.value - prev.value : null };
+      } catch (e) {
+        this.MACRO_DASH[id] = { failed: true };
+      }
+    }));
+    if (this.state.tab === 'econ') this.renderRight();
   },
 
   MARKET_SNAPSHOT_SYMS: ['SPX','NDX','VIX','GOLD','OIL','SILVER','NATGAS','COPPER','EURUSD','USDJPY','GBPUSD','FTSE','NIKKEI','HSI',
@@ -3026,7 +3083,47 @@ const vtx = {
               </div>`;
             }).join('') + `</div>`;
 
-      el.innerHTML = `<div style="border-bottom:1px solid var(--line);">${ycHtml}</div>${econHtml}`;
+      // Macro Dashboard — 16 curated FRED series across 4 groups, each tile
+      // clickable straight into the existing Indicator View (real chart +
+      // full history), so this is a new front-door into infrastructure the
+      // app already has, not a second chart system.
+      const fmtMacroVal = (v, type) => v == null ? '—' : (type === 'pct' ? v.toFixed(2)+'%' : v.toLocaleString('en-US',{maximumFractionDigits:2}));
+      const macroTile = (item) => {
+        const d = this.MACRO_DASH[item.id];
+        const meta = { id:item.id, title:item.title, units:item.units, frequency:item.frequency, seasonalAdjustment:item.seasonalAdjustment };
+        if (!d) return `<div style="background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px;">
+          <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.label}</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:800;margin-top:2px;color:var(--mut);">Loading…</div>
+        </div>`;
+        if (d.failed) return `<div style="background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px;">
+          <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.label}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--mut);margin-top:2px;">Couldn't load</div>
+        </div>`;
+        const up = d.change != null && d.change >= 0;
+        const chgStr = d.change != null ? `${up?'+':''}${d.change.toLocaleString('en-US',{maximumFractionDigits:2})}` : '—';
+        const chgColor = d.change == null ? 'var(--mut)' : (up ? 'var(--pos)' : 'var(--neg)');
+        return `<div onclick='vtx.selectIndicator(${JSON.stringify(meta).replace(/'/g,"&#39;")})' title="View ${item.label} chart" style="cursor:pointer;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px;">
+          <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.label}</div>
+          <div style="font-family:var(--mono);font-size:14px;font-weight:800;margin-top:2px;">${fmtMacroVal(d.value, item.type)}</div>
+          <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:${chgColor};margin-top:1px;">${chgStr}</div>
+        </div>`;
+      };
+      const macroDashHtml = `
+        <div style="padding:11px 14px 4px;border-bottom:1px solid var(--line);">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:10px;">Macro Dashboard</div>
+          <div style="display:flex;flex-direction:column;gap:10px;padding-bottom:11px;">
+            ${this.MACRO_SERIES.map(g => `
+              <div>
+                <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);opacity:.75;margin-bottom:6px;">${g.group}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px;">
+                  ${g.items.map(macroTile).join('')}
+                </div>
+              </div>`).join('')}
+          </div>
+          <div style="font-size:8px;color:var(--mut);padding:0 0 9px;opacity:.7;">Real FRED data · click any tile for its full history · updates every 6h.</div>
+        </div>`;
+
+      el.innerHTML = `<div style="border-bottom:1px solid var(--line);">${ycHtml}</div>${macroDashHtml}${econHtml}`;
     }
     else if (s.tab === 'movers') {
       const cPos='var(--pos)', cNeg='var(--neg)';
