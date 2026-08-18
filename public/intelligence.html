@@ -3175,16 +3175,29 @@ const vtx = {
   },
 
   composeReply(msg) {
-    const f = this.state.tickers.find(t=>t.sym===this.state.focus) || this.state.tickers[0];
+    const q = (msg||'').toLowerCase();
+    // If the question names a different symbol on the watchlist than the one
+    // currently focused, answer about THAT symbol — otherwise every question
+    // silently gets answered about whatever happens to be focused, which is
+    // wrong more often than it's right once there's more than one ticker.
+    const mentioned = this.state.tickers.find(t => new RegExp(`\\b${t.sym}\\b`, 'i').test(q));
+    const f = mentioned || this.state.tickers.find(t=>t.sym===this.state.focus) || this.state.tickers[0];
     const p = this.pctOf(f);
     const dir = p>=0 ? 'up' : 'down';
     const fin = f.fin || {};
-    const q = (msg||'').toLowerCase();
     const lo = Math.min(...f.hist), hi = Math.max(...f.hist);
 
     const dark = (this.DARK||[]).filter(d=>d.sym===f.sym);
     const filings = (this.FIL||[]).filter(x=>x.sym===f.sym);
     const allFilings = (this.FIL||[]).slice(0,5);
+
+    if (/news|headline/.test(q)) {
+      const own = (this.NEWS||[]).filter(n=>n.sym===f.sym);
+      const items = (own.length ? own : (this.NEWS||[]).slice(0,4)).slice(0,4);
+      if (!items.length) return `No news loaded yet — check the News tab in a moment.`;
+      const lines = items.map(n=>`• ${n.headline} (${n.src}${n.sym!==f.sym?', '+n.sym:''})`).join('\n');
+      return `${own.length ? f.sym+' — ' : 'Latest market-wide '}News\n\n${lines}`;
+    }
 
     if (/dark.?pool|block print|off.?exchange/.test(q)) {
       if (!dark.length) return `No recent dark-pool prints on file for ${f.sym} in our FINRA weekly summary (data has a ~6-8 week reporting lag, and not every symbol clears the threshold every week). Try checking ${(this.DARK||[]).map(d=>d.sym).join(', ')||'another symbol'} in the Dark Pools tab.`;
@@ -3212,7 +3225,7 @@ const vtx = {
       return `${f.sym} — Earnings\n\n${lines || 'Nothing scheduled in the current earnings window.'}`;
     }
 
-    if (/financ|fundamental|pe |p\/e|valuation|eps|dividend|beta|market cap/.test(q)) {
+    if (/financ|fundamental|pe |p\/e|valuation|eps|dividend|beta|market cap|volume|shares? traded/.test(q)) {
       const peStr = fin.peTTM ? fin.peTTM.toFixed(1)+'x' : 'n/a';
       const epsStr = fin.epsTTM != null ? '$'+fin.epsTTM.toFixed(2) : 'n/a';
       const mcStr = fin.marketCapitalization ? this.mktCapFromFin(fin.marketCapitalization) : 'n/a';
@@ -3220,7 +3233,9 @@ const vtx = {
       const betaStr = fin.beta != null ? fin.beta.toFixed(2) : 'n/a';
       const w52Low = fin.week52Low ?? f.week52Low, w52High = fin.week52High ?? f.week52High;
       const w52 = (w52Low!=null && w52High!=null) ? `$${this.fmt(w52Low)} – $${this.fmt(w52High)}` : 'n/a';
-      return `${f.sym} — ${f.name}\n\nPrice ${this.fmt(f.price)} (${(p>=0?'+':'')+p.toFixed(2)}% today)\nP/E (ttm): ${peStr}\nEPS (ttm): ${epsStr}\nBeta: ${betaStr}\nDividend yield: ${divStr}\nMarket cap: ${mcStr}\n52-week range: ${w52}`;
+      const volStr = f.volume != null ? (f.volume/1e6).toFixed(1)+'M' : 'n/a';
+      const avgVolStr = fin.avgVolume3M != null ? fin.avgVolume3M.toFixed(1)+'M' : 'n/a';
+      return `${f.sym} — ${f.name}\n\nPrice ${this.fmt(f.price)} (${(p>=0?'+':'')+p.toFixed(2)}% today)\nP/E (ttm): ${peStr}\nEPS (ttm): ${epsStr}\nBeta: ${betaStr}\nDividend yield: ${divStr}\nMarket cap: ${mcStr}\n52-week range: ${w52}\nVolume: ${volStr} (avg: ${avgVolStr})`;
     }
 
     if (/summar|overview|how.+(doing|look)|what.+(happening|going on)/.test(q)) {
@@ -3250,10 +3265,10 @@ const vtx = {
     }
 
     if (/help|what can you|how.+work/.test(q)) {
-      return `I'm a rule-based lookup, not a generative model — I match your question to a category and pull straight from the live data already loaded on this page for ${f.sym} (or whichever symbol you have focused):\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range\n• "analyst ratings" — consensus + buy/hold/sell breakdown\n• "sector" — how ${f.sym} compares to its sector today\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" — upcoming earnings dates\n• "FOMC" / "CPI" / "jobs report" — upcoming macro releases\n\nSwitch the focused symbol via the watchlist or search to ask about a different ticker.`;
+      return `I'm a rule-based lookup, not a generative model — I match your question to a category and pull straight from the live data already loaded on this page:\n\n• "Summarize ${f.sym}" — price, sector, P/E, recent insider/dark-pool activity\n• "financials" — P/E, EPS, beta, dividend yield, market cap, 52-week range, volume\n• "analyst ratings" — consensus + buy/hold/sell breakdown\n• "sector" — how ${f.sym} compares to its sector today\n• "dark pool" — most recent FINRA off-exchange print\n• "filings" / "insider" — recent SEC Form 4 activity\n• "earnings" — upcoming earnings dates\n• "news" — latest headlines\n• "FOMC" / "CPI" / "jobs report" — upcoming macro releases\n\nMention a ticker by name (e.g. "summarize TSLA") to ask about it directly — no need to switch the focused symbol first. Otherwise I answer about whichever symbol you have focused.`;
     }
 
-    return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "analyst ratings", "sector" standing, "dark pool" activity, "filings", "earnings", or the "FOMC"/macro calendar — I'll pull from the live data on this page. Type "help" for the full list.`;
+    return `${f.sym} is trading at ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session (sector: ${f.sector}). Ask me for a "summary", "financials", "analyst ratings", "sector" standing, "dark pool" activity, "filings", "earnings", "news", or the "FOMC"/macro calendar — I'll pull from the live data on this page. Type "help" for the full list.`;
   },
   sendChat(text) {
     const input = document.getElementById('chatInputEl');
