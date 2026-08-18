@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   const apiKey = process.env.FINNHUB_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "FINNHUB_API_KEY is not configured" }, { status: 500 });
 
-  const cacheKey = `corporate-actions:${sym}`;
+  const cacheKey = `corporate-actions:${sym}:debug1`;
   const cached = await kvGet<Record<string, unknown>>(cacheKey);
   if (cached) return NextResponse.json(cached, { headers: { "Cache-Control": "private, max-age=21600" } });
 
@@ -55,14 +55,20 @@ export async function GET(request: NextRequest) {
       fetch(`${FINNHUB_BASE}/stock/split?symbol=${encodeURIComponent(sym)}&from=${fromStr}&to=${toStr}&token=${apiKey}`),
     ]);
 
-    const dividends: FinnhubDividend[] = divRes.ok ? await divRes.json() : [];
-    const splits: FinnhubSplit[] = splitRes.ok ? await splitRes.json() : [];
+    const divBodyText = divRes.ok ? await divRes.text() : await divRes.text().catch(() => "");
+    const splitBodyText = splitRes.ok ? await splitRes.text() : await splitRes.text().catch(() => "");
+    const dividends: FinnhubDividend[] = divRes.ok ? JSON.parse(divBodyText) : [];
+    const splits: FinnhubSplit[] = splitRes.ok ? JSON.parse(splitBodyText) : [];
     // TEMP DEBUG — remove before finalizing
-    console.error(`[corporate-actions DEBUG] div status=${divRes.status} split status=${splitRes.status}`);
-    if (!divRes.ok) console.error(`[corporate-actions DEBUG] div body=${await divRes.text().catch(()=>"")}`);
-    if (!splitRes.ok) console.error(`[corporate-actions DEBUG] split body=${await splitRes.text().catch(()=>"")}`);
+    const debug = {
+      divStatus: divRes.status,
+      splitStatus: splitRes.status,
+      divBody: divRes.ok ? null : divBodyText,
+      splitBody: splitRes.ok ? null : splitBodyText,
+    };
 
     const body = {
+      debug,
       dividends: (dividends ?? [])
         .filter((d) => d.date)
         .sort((a, b) => b.date.localeCompare(a.date))
