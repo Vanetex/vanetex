@@ -337,7 +337,8 @@ const vtx = {
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: null, // set by loadQuotes() from a real measured round-trip time
     indicators: { sma9: false, sma20: false },
-    moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null
+    moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null,
+    screenerSort: { key: 'chg', dir: -1 }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company-news data, no seed
@@ -966,6 +967,11 @@ const vtx = {
     }
   },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; if (id === 'analytics') this.loadAnalyticsData(); this.renderRight(); },
+  setScreenerSort(key) {
+    const s = this.state.screenerSort;
+    this.state.screenerSort = (s.key === key) ? { key, dir: -s.dir } : { key, dir: -1 };
+    this.renderRight();
+  },
   // Loads 1Y weekly history for the whole watchlist plus the S&P 500
   // benchmark (^GSPC — same Yahoo symbol Instrument View uses), via the
   // exact same loadChartData()/candles route the main chart and Compare
@@ -3256,6 +3262,54 @@ const vtx = {
       }
     }
     else if (s.tab === 'analytics') {
+      // Screener — every column comes from data already loaded per ticker
+      // by the existing batched loaders (loadFinancials/loadSparklines),
+      // so this renders instantly with zero new fetches, unlike the
+      // heavier 1Y-history panels below it.
+      const sortDef = { chg:'Change %', price:'Price', pe:'P/E', revGrowth:'Rev Growth YoY', volRatio:'Vol vs Avg', w52pos:'52W Range Pos.' };
+      const ss = s.screenerSort;
+      const screenerRows = s.tickers.map(t => {
+        const chg = this.pctOf(t);
+        const pe = t.fin ? t.fin.peTTM : null;
+        const revGrowth = t.fin ? t.fin.revenueGrowthYoy : null;
+        const avgVol = t.fin ? t.fin.avgVolume3M : null; // already in millions
+        const volRatio = (t.volume != null && avgVol) ? (t.volume/1e6) / avgVol : null;
+        const w52pos = (t.week52Low != null && t.week52High != null && t.week52High > t.week52Low)
+          ? (t.price - t.week52Low) / (t.week52High - t.week52Low) * 100 : null;
+        return { sym:t.sym, sector:t.sector, price:t.price, chg, pe, revGrowth, volRatio, w52pos };
+      }).sort((a,b) => {
+        const av = a[ss.key], bv = b[ss.key];
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1; if (bv == null) return -1;
+        return (av - bv) * ss.dir;
+      });
+      const sHeader = (key, label) => `<th onclick="vtx.setScreenerSort('${key}')" style="text-align:right;padding:6px 8px;cursor:pointer;user-select:none;white-space:nowrap;${ss.key===key?'color:var(--acc2);':''}">${label}${ss.key===key?(ss.dir===1?' ▲':' ▼'):''}</th>`;
+      const dashOr = (v,fmt) => v==null?'—':fmt(v);
+      const screenerHtml = `
+        <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Watchlist Screener</div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:11px;">
+              <thead><tr style="color:var(--mut);font-size:9px;letter-spacing:.05em;text-transform:uppercase;">
+                <th style="text-align:left;padding:6px 8px;">Ticker</th>
+                ${sHeader('price','Price')}${sHeader('chg','Change %')}${sHeader('pe','P/E')}${sHeader('revGrowth','Rev Growth YoY')}${sHeader('volRatio','Vol vs Avg')}${sHeader('w52pos','52W Range Pos.')}
+              </tr></thead>
+              <tbody>
+                ${screenerRows.map(r => `<tr style="border-top:1px solid var(--line);">
+                  <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.jumpToTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${r.sector}</span></td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${this.fmt(r.price)}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.chg>=0?'var(--pos)':'var(--neg)'};">${(r.chg>=0?'+':'')+r.chg.toFixed(2)}%</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.pe, v=>v.toFixed(1)+'x')}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.revGrowth==null?'var(--txt)':(r.revGrowth>=0?'var(--pos)':'var(--neg)')};">${dashOr(r.revGrowth, v=>(v>=0?'+':'')+v.toFixed(1)+'%')}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.volRatio!=null&&r.volRatio>=1.5?'var(--warn)':'var(--txt)'};">${dashOr(r.volRatio, v=>v.toFixed(2)+'x')}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.w52pos, v=>v.toFixed(0)+'%')}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Click a column to sort · Vol vs Avg above 1.5x is flagged as unusual · 52W Range Pos. is 0% at the 52-week low, 100% at the 52-week high.</div>
+        </div>`;
+
       const syms = s.tickers.map(t => t.sym);
       const bench = this._chartData && this._chartData['^GSPC'] && this._chartData['^GSPC']['1Y'];
       const perSym = {};
@@ -3265,7 +3319,7 @@ const vtx = {
       });
       const readySyms = syms.filter(sym => perSym[sym]);
       if (!readySyms.length || !bench) {
-        el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading 1-year price history for the watchlist…</div>`;
+        el.innerHTML = screenerHtml + `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading 1-year price history for the watchlist…</div>`;
       } else {
         const benchReturns = this.periodReturns(bench.prices);
         const rf = (this.YIELD_CURVE && this.YIELD_CURVE.points.find(p => p.months === 3));
@@ -3354,7 +3408,7 @@ const vtx = {
           }).join('');
         }
 
-        el.innerHTML = `
+        el.innerHTML = screenerHtml + `
           <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
             <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Risk &amp; Return Leaderboard</div>
             ${leaderboardHtml}
