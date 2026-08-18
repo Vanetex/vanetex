@@ -49,10 +49,34 @@ function candidateSettlementDates(count: number): string[] {
   return dates.sort((a, b) => (a < b ? 1 : -1)).slice(0, count); // newest first
 }
 
+// FINRA leaves empty fields (stockSplitFlag, revisionFlag) completely
+// unquoted — a bare comma, e.g. `"146547784",,"58400983"`. Matching only
+// quoted substrings (the naive regex approach) silently drops those empty
+// tokens and shifts every field after them into the wrong column. This
+// walks the line comma-by-comma so an unquoted empty field still produces
+// a real (empty-string) entry in the output.
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  while (i <= line.length) {
+    if (line[i] === '"') {
+      const end = line.indexOf('"', i + 1);
+      fields.push(line.slice(i + 1, end === -1 ? line.length : end));
+      i = (end === -1 ? line.length : end) + 2; // skip closing quote + comma
+    } else {
+      const end = line.indexOf(",", i);
+      if (end === -1) { fields.push(line.slice(i)); break; }
+      fields.push(line.slice(i, end));
+      i = end + 1;
+    }
+  }
+  return fields;
+}
+
 function parseCsv(text: string): Record<string, string>[] {
   const lines = text.trim().split("\n").filter(Boolean);
   if (lines.length < 2) return [];
-  const parseLine = (line: string) => [...line.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+  const parseLine = parseCsvLine;
   const headers = parseLine(lines[0]);
   return lines.slice(1).map((line) => {
     const values = parseLine(line);
