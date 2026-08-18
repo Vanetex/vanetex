@@ -64,6 +64,12 @@ const CONCEPTS: Record<string, string[]> = {
     "PaymentsForCapitalImprovements",
     "PaymentsToAcquireProductiveAssets",
   ],
+  // Not tagged at all by filers with no real R&D line (banks, REITs,
+  // most retailers) — stays null there, by design, same as grossProfit.
+  researchAndDevelopment: [
+    "ResearchAndDevelopmentExpense",
+    "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost",
+  ],
   // Weighted-average diluted share count is required for EPS reporting
   // across virtually every industry, making it a far more reliable
   // cross-company series than balance-sheet "shares outstanding" (which
@@ -106,6 +112,9 @@ type ExtractedPeriod = {
   operatingCashFlow: number | null;
   capex: number | null;
   fcf: number | null;
+  researchAndDevelopment: number | null;
+  rdToRevenue: number | null;
+  capexToRevenue: number | null;
   dilutedShares: number | null;
 };
 
@@ -114,6 +123,8 @@ function extractPeriod(p: Period): ExtractedPeriod {
   const get = (key: string) => pick(all, CONCEPTS[key]);
   const operatingCashFlow = get("operatingCashFlow");
   const capex = get("capex");
+  const revenue = get("revenue");
+  const researchAndDevelopment = get("researchAndDevelopment");
   const totalAssets = get("totalAssets");
   const stockholdersEquity = get("stockholdersEquity");
   const totalLiabilitiesDirect = get("totalLiabilities");
@@ -123,7 +134,7 @@ function extractPeriod(p: Period): ExtractedPeriod {
     year: p.year,
     endDate: p.endDate ? p.endDate.slice(0, 10) : null,
     filedDate: p.filedDate ? p.filedDate.slice(0, 10) : null,
-    revenue: get("revenue"),
+    revenue,
     netIncome: get("netIncome"),
     grossProfit: get("grossProfit"),
     operatingIncome: get("operatingIncome"),
@@ -136,6 +147,11 @@ function extractPeriod(p: Period): ExtractedPeriod {
     operatingCashFlow,
     capex,
     fcf: operatingCashFlow != null && capex != null ? operatingCashFlow - capex : null,
+    researchAndDevelopment,
+    rdToRevenue: researchAndDevelopment != null && revenue ? (researchAndDevelopment / revenue) * 100 : null,
+    // capex is reported as a cash outflow (positive "payments" figure), so
+    // no sign-flip is needed here the way it is for fcf above.
+    capexToRevenue: capex != null && revenue ? (capex / revenue) * 100 : null,
     dilutedShares: get("dilutedShares"),
   };
 }

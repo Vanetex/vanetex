@@ -2786,6 +2786,7 @@ const vtx = {
         return sign + '$' + abs.toLocaleString();
       };
       const fmtShares = v => v == null ? '—' : (v >= 1e9 ? (v/1e9).toFixed(2)+'B' : (v/1e6).toFixed(0)+'M');
+      const fmtPctOfRev = v => v == null ? '—' : v.toFixed(1)+'%';
       const trendChart = (label, key, fmt) => {
         const idx = periods.map((p,i) => p[key] != null ? i : -1).filter(i => i >= 0);
         if (idx.length < 2) return `
@@ -2842,6 +2843,10 @@ const vtx = {
           ${trendChart('Net Income', 'netIncome', fmtUsdCompact)}
           ${trendChart('Free Cash Flow', 'fcf', fmtUsdCompact)}
           ${trendChart('Diluted Shares Outstanding', 'dilutedShares', fmtShares)}
+          ${trendChart('Capital Expenditures', 'capex', fmtUsdCompact)}
+          ${trendChart('Capex / Revenue', 'capexToRevenue', fmtPctOfRev)}
+          ${trendChart('R&D Spend', 'researchAndDevelopment', fmtUsdCompact)}
+          ${trendChart('R&D / Revenue', 'rdToRevenue', fmtPctOfRev)}
         </div>
         <div style="padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);">${pioHtml}</div>
         <div>${zHtml}</div>
