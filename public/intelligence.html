@@ -965,7 +965,59 @@ const vtx = {
       if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
     }
   },
-  setTab(id) { this.state.tab = id; this.state.moversSector = null; this.renderRight(); },
+  setTab(id) { this.state.tab = id; this.state.moversSector = null; if (id === 'analytics') this.loadAnalyticsData(); this.renderRight(); },
+  // Loads 1Y weekly history for the whole watchlist plus the S&P 500
+  // benchmark (^GSPC — same Yahoo symbol Instrument View uses), via the
+  // exact same loadChartData()/candles route the main chart and Compare
+  // tab already use. Correlation/beta/vol/drawdown/Sharpe are all pure
+  // computation on top of this — no new API, no new backend route.
+  async loadAnalyticsData() {
+    const syms = this.state.tickers.map(t => t.sym);
+    const need = ['^GSPC', ...syms].filter(s => !(this._chartData && this._chartData[s] && this._chartData[s]['1Y']));
+    if (!need.length) { this.renderRight(); return; }
+    await Promise.all(need.map(s => this.loadChartData(s, '1Y')));
+    if (this.state.tab === 'analytics') this.renderRight();
+  },
+  // --- Cross-asset analytics math — every function below operates only on
+  // real price history already fetched via loadChartData(); nothing here
+  // fabricates or estimates a missing value, a symbol with insufficient
+  // history is simply excluded (see periodReturns' length guard below).
+  periodReturns(prices) {
+    const r = [];
+    for (let i = 1; i < prices.length; i++) { if (prices[i-1]) r.push(prices[i]/prices[i-1] - 1); }
+    return r;
+  },
+  pearsonCorr(a, b) {
+    const n = Math.min(a.length, b.length);
+    if (n < 2) return null;
+    a = a.slice(-n); b = b.slice(-n);
+    const meanA = a.reduce((s,v)=>s+v,0)/n, meanB = b.reduce((s,v)=>s+v,0)/n;
+    let cov = 0, varA = 0, varB = 0;
+    for (let i = 0; i < n; i++) { const da = a[i]-meanA, db = b[i]-meanB; cov += da*db; varA += da*da; varB += db*db; }
+    const denom = Math.sqrt(varA*varB);
+    return denom ? cov/denom : null;
+  },
+  annualizedVol(returns, periodsPerYear) {
+    if (returns.length < 2) return null;
+    const mean = returns.reduce((s,v)=>s+v,0)/returns.length;
+    const variance = returns.reduce((s,v)=>s+(v-mean)**2,0)/(returns.length-1);
+    return Math.sqrt(variance) * Math.sqrt(periodsPerYear);
+  },
+  betaVs(returns, benchReturns) {
+    const n = Math.min(returns.length, benchReturns.length);
+    if (n < 2) return null;
+    const a = returns.slice(-n), b = benchReturns.slice(-n);
+    const meanA = a.reduce((s,v)=>s+v,0)/n, meanB = b.reduce((s,v)=>s+v,0)/n;
+    let cov = 0, varB = 0;
+    for (let i = 0; i < n; i++) { cov += (a[i]-meanA)*(b[i]-meanB); varB += (b[i]-meanB)**2; }
+    return varB ? cov/varB : null;
+  },
+  maxDrawdown(prices) {
+    if (prices.length < 2) return null;
+    let peak = prices[0], maxDd = 0;
+    for (const p of prices) { if (p > peak) peak = p; const dd = (p-peak)/peak; if (dd < maxDd) maxDd = dd; }
+    return maxDd; // negative fraction, e.g. -0.23
+  },
   openSector(name) { this.state.moversSector = name; this.renderRight(); },
   // Cross-linking: click a ticker anywhere (news, calendar, dark pools) and
   // land on it — focus it if it's already on the watchlist, otherwise add
@@ -2920,7 +2972,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['compare','Compare'],['ai','Assistant']];
+    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['analytics','Analytics'],['compare','Compare'],['ai','Assistant']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -3201,6 +3253,123 @@ const vtx = {
                 <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${tc.fg};margin-top:2px;">${(c.changePct>=0?'+':'')+c.changePct.toFixed(2)}%</div>
               </div>`;
             }).join('') + `</div></div>`;
+      }
+    }
+    else if (s.tab === 'analytics') {
+      const syms = s.tickers.map(t => t.sym);
+      const bench = this._chartData && this._chartData['^GSPC'] && this._chartData['^GSPC']['1Y'];
+      const perSym = {};
+      syms.forEach(sym => {
+        const entry = this._chartData && this._chartData[sym] && this._chartData[sym]['1Y'];
+        if (entry && entry.prices && entry.prices.length >= 2) perSym[sym] = { prices: entry.prices, returns: this.periodReturns(entry.prices) };
+      });
+      const readySyms = syms.filter(sym => perSym[sym]);
+      if (!readySyms.length || !bench) {
+        el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading 1-year price history for the watchlist…</div>`;
+      } else {
+        const benchReturns = this.periodReturns(bench.prices);
+        const rf = (this.YIELD_CURVE && this.YIELD_CURVE.points.find(p => p.months === 3));
+        const rfRate = rf ? rf.yield / 100 : 0;
+
+        // --- Risk & Return Leaderboard ---
+        const rows = readySyms.map(sym => {
+          const { prices, returns } = perSym[sym];
+          const totalReturn = prices.length > 1 ? prices[prices.length-1]/prices[0] - 1 : null;
+          const vol = this.annualizedVol(returns, 52);
+          const beta = this.betaVs(returns, benchReturns);
+          const dd = this.maxDrawdown(prices);
+          const annReturn = totalReturn; // ~1 year of data, so total ≈ annualized
+          const sharpe = (annReturn != null && vol) ? (annReturn - rfRate) / vol : null;
+          return { sym, totalReturn, vol, beta, dd, sharpe };
+        }).sort((a,b) => (b.sharpe ?? -99) - (a.sharpe ?? -99));
+        const pctOrDash = v => v == null ? '—' : (v>=0?'+':'')+(v*100).toFixed(1)+'%';
+        const numOrDash = v => v == null ? '—' : v.toFixed(2);
+        const leaderboardHtml = `
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:11px;">
+              <thead><tr style="color:var(--mut);font-size:9px;letter-spacing:.06em;text-transform:uppercase;">
+                <th style="text-align:left;padding:6px 8px;">Ticker</th>
+                <th style="text-align:right;padding:6px 8px;">1Y Return</th>
+                <th style="text-align:right;padding:6px 8px;">Volatility (ann.)</th>
+                <th style="text-align:right;padding:6px 8px;">Beta vs S&amp;P 500</th>
+                <th style="text-align:right;padding:6px 8px;">Max Drawdown</th>
+                <th style="text-align:right;padding:6px 8px;">Sharpe (rf 3M T-bill)</th>
+              </tr></thead>
+              <tbody>
+                ${rows.map(r => `<tr style="border-top:1px solid var(--line);">
+                  <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.jumpToTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span></td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.totalReturn==null?'var(--mut)':(r.totalReturn>=0?'var(--pos)':'var(--neg)')};">${pctOrDash(r.totalReturn)}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${r.vol==null?'—':(r.vol*100).toFixed(1)+'%'}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${numOrDash(r.beta)}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--neg);">${pctOrDash(r.dd)}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.sharpe==null?'var(--mut)':(r.sharpe>=0?'var(--pos)':'var(--neg)')};">${numOrDash(r.sharpe)}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+
+        // --- Correlation Matrix ---
+        const corrColor = c => {
+          if (c == null) return 'rgba(255,255,255,.03)';
+          const a = Math.min(1, Math.abs(c));
+          return c >= 0 ? `rgba(31,209,151,${(0.08+a*0.55).toFixed(3)})` : `rgba(255,77,94,${(0.08+a*0.55).toFixed(3)})`;
+        };
+        const corrHtml = readySyms.length < 2
+          ? `<div style="font-size:11px;color:var(--mut);">Add at least 2 tickers to the watchlist to see correlations.</div>`
+          : `<div style="overflow-x:auto;">
+              <table style="border-collapse:collapse;font-size:10px;">
+                <thead><tr><th></th>${readySyms.map(s2=>`<th style="padding:4px 7px;font-family:var(--mono);color:var(--mut);font-weight:700;">${s2}</th>`).join('')}</tr></thead>
+                <tbody>
+                  ${readySyms.map(rowSym => `<tr>
+                    <th style="padding:4px 7px;text-align:left;font-family:var(--mono);color:var(--mut);font-weight:700;">${rowSym}</th>
+                    ${readySyms.map(colSym => {
+                      const c = rowSym===colSym ? 1 : this.pearsonCorr(perSym[rowSym].returns, perSym[colSym].returns);
+                      return `<td style="padding:6px 9px;text-align:center;font-family:var(--mono);background:${corrColor(c)};color:var(--txt);" title="${rowSym} vs ${colSym}">${c==null?'—':c.toFixed(2)}</td>`;
+                    }).join('')}
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>`;
+
+        // --- Sector Rotation (reuses the sector heatmap already loaded for the Sectors tab) ---
+        const heat = s.heatmap;
+        let sectorRotHtml = `<div style="font-size:11px;color:var(--mut);">Loading sector heatmap…</div>`;
+        if (heat) {
+          const sectors = Object.keys(heat).filter(name => heat[name].length > 0).map(name => {
+            const items = heat[name];
+            const avg = items.reduce((sum,c)=>sum+c.changePct,0)/items.length;
+            return { name, avg };
+          }).sort((a,b)=>b.avg-a.avg);
+          const maxAbs = Math.max(...sectors.map(g=>Math.abs(g.avg)), 1);
+          sectorRotHtml = sectors.map(g => {
+            const up = g.avg >= 0;
+            return `<div onclick="vtx.setTab('movers');vtx.openSector('${g.name}')" style="cursor:pointer;display:flex;align-items:center;gap:9px;padding:5px 0;">
+              <span style="width:96px;flex-shrink:0;font-size:10.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${g.name}</span>
+              <div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.04);position:relative;overflow:hidden;">
+                <div style="position:absolute;top:0;bottom:0;${up?'left:50%;':'right:50%;'}width:${(Math.abs(g.avg)/maxAbs*50).toFixed(1)}%;background:${up?'var(--pos)':'var(--neg)'};"></div>
+                <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.15);"></div>
+              </div>
+              <span style="width:52px;flex-shrink:0;text-align:right;font-family:var(--mono);font-size:10.5px;font-weight:700;color:${up?'var(--pos)':'var(--neg)'};">${(up?'+':'')+g.avg.toFixed(2)}%</span>
+            </div>`;
+          }).join('');
+        }
+
+        el.innerHTML = `
+          <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Risk &amp; Return Leaderboard</div>
+            ${leaderboardHtml}
+            <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Computed from 1 year of real weekly closes (Yahoo Finance) · beta vs S&amp;P 500 (^GSPC) · risk-free rate = real 3M Treasury yield (FRED) · sorted by Sharpe.</div>
+          </div>
+          <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Correlation Matrix</div>
+            ${corrHtml}
+            <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Pearson correlation of weekly returns, trailing 1 year. Green = move together, red = move opposite.</div>
+          </div>
+          <div style="padding:12px 14px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Sector Rotation — Today</div>
+            ${sectorRotHtml}
+            <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Ranked by today's average change across the same real sector-heatmap universe used in Sectors. Click a sector to jump there.</div>
+          </div>`;
       }
     }
     else if (s.tab === 'compare') {
