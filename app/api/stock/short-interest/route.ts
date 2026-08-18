@@ -126,7 +126,11 @@ export async function GET(request: NextRequest) {
   if (!symbolParam) return NextResponse.json({ error: "symbol is required" }, { status: 400 });
   const sym = symbolParam.toUpperCase();
 
-  const cacheKey = `short-interest:${sym}`;
+  // v2: fixes the CSV parser dropping unquoted empty fields, which
+  // misaligned every column after stockSplitFlag/revisionFlag — bumped so
+  // a stale v1 cache entry with wrong avgDailyVolume/daysToCover values
+  // never gets served to the corrected frontend.
+  const cacheKey = `short-interest:${sym}:v2`;
   const cached = await kvGet<{ points: Point[] }>(cacheKey);
   if (cached) return NextResponse.json(cached);
 
