@@ -357,6 +357,7 @@ const vtx = {
   ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
   YIELD_CURVE: null, // populated by loadYieldCurve() — real FRED Treasury data, no seed
   MACRO_DASH: {}, // populated by loadMacroDashboard() — real FRED data per series id, no seed
+  TREASURY_AUCTIONS: null, // populated by loadTreasuryAuctions() — real api.fiscaldata.treasury.gov data, no seed
 
   // Curated FRED series for the Macro tab's dashboard grid — every id/title/
   // units/frequency below was verified live against /api/intel/econ-search
@@ -759,6 +760,7 @@ const vtx = {
     this.loadEconCalendar();
     this.loadYieldCurve();
     this.loadMacroDashboard();
+    this.loadTreasuryAuctions();
     this.loadMarketSnapshot();
     this.loadCryptoSnapshot();
     this.loadVixHistory();
@@ -1576,6 +1578,20 @@ const vtx = {
         this.MACRO_DASH[id] = { failed: true };
       }
     }));
+    if (this.state.tab === 'econ') this.renderRight();
+  },
+
+  // Real Treasury auction schedule — official, free, keyless
+  // api.fiscaldata.treasury.gov endpoint, verified live before building.
+  async loadTreasuryAuctions() {
+    try {
+      const res = await fetch(`/api/intel/treasury-auctions`);
+      if (!res.ok) { this.TREASURY_AUCTIONS = { failed: true }; if (this.state.tab === 'econ') this.renderRight(); return; }
+      const data = await res.json();
+      this.TREASURY_AUCTIONS = data.auctions || [];
+    } catch (e) {
+      this.TREASURY_AUCTIONS = { failed: true };
+    }
     if (this.state.tab === 'econ') this.renderRight();
   },
 
@@ -3269,7 +3285,47 @@ const vtx = {
           <div style="font-size:8px;color:var(--mut);padding:0 0 9px;opacity:.7;">Real FRED data · click any tile for its full history · updates every 6h.</div>
         </div>`;
 
-      el.innerHTML = `<div style="border-bottom:1px solid var(--line);">${ycHtml}</div>${macroDashHtml}${econHtml}`;
+      // Treasury Auction Calendar — real, official, keyless api.fiscaldata.
+      // treasury.gov data. Split into upcoming (today or later) and the most
+      // recent completed auctions (which carry real results: high yield,
+      // bid-to-cover) — both real slices of the same feed, not two sources.
+      const ta = this.TREASURY_AUCTIONS;
+      let auctionsHtml;
+      if (!ta) {
+        auctionsHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading Treasury auction calendar…</div>`;
+      } else if (ta.failed) {
+        auctionsHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load the auction calendar. <button onclick="vtx.loadTreasuryAuctions()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const upcoming = ta.filter(a => a.auctionDate >= todayStr).slice(0, 6);
+        const recent = ta.filter(a => a.auctionDate < todayStr && a.highYield != null).slice(-4).reverse();
+        const fmtAmt = v => v == null ? '—' : v >= 1e9 ? '$'+(v/1e9).toFixed(1)+'B' : v >= 1e6 ? '$'+(v/1e6).toFixed(0)+'M' : '$'+v.toLocaleString();
+        const rowHtml = (a, showResults) => `
+          <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--txt);">${a.securityType} — ${a.securityTerm}</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">Auction ${a.auctionDate} · Issue ${a.issueDate}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--txt);">${fmtAmt(a.offeringAmount)}</div>
+              ${showResults && a.highYield != null ? `<div style="font-family:var(--mono);font-size:9.5px;color:var(--acc2);margin-top:2px;">${a.highYield.toFixed(3)}% yield${a.bidToCoverRatio!=null?' · '+a.bidToCoverRatio.toFixed(2)+'x cover':''}</div>` : ''}
+            </div>
+          </div>`;
+        auctionsHtml = `
+          <div style="padding:11px 14px 4px;border-bottom:1px solid var(--line);">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Treasury Auction Calendar</div>
+            ${upcoming.length ? `
+              <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);opacity:.75;margin-bottom:6px;">Upcoming</div>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">${upcoming.map(a=>rowHtml(a,false)).join('')}</div>` : ''}
+            ${recent.length ? `
+              <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);opacity:.75;margin-bottom:6px;">Recent Results</div>
+              <div style="display:flex;flex-direction:column;gap:6px;">${recent.map(a=>rowHtml(a,true)).join('')}</div>` : ''}
+            ${!upcoming.length && !recent.length ? `<div style="font-size:11px;color:var(--mut);">No auction data currently available.</div>` : ''}
+            <div style="font-size:8px;color:var(--mut);margin-top:11px;padding-bottom:9px;opacity:.7;">Real U.S. Treasury auction schedule and results — api.fiscaldata.treasury.gov.</div>
+          </div>`;
+      }
+
+      el.innerHTML = `<div style="border-bottom:1px solid var(--line);">${ycHtml}</div>${macroDashHtml}${auctionsHtml}${econHtml}`;
     }
     else if (s.tab === 'movers') {
       const cPos='var(--pos)', cNeg='var(--neg)';
