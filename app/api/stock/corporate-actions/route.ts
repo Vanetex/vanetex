@@ -57,6 +57,10 @@ export async function GET(request: NextRequest) {
 
     const dividends: FinnhubDividend[] = divRes.ok ? await divRes.json() : [];
     const splits: FinnhubSplit[] = splitRes.ok ? await splitRes.json() : [];
+    // TEMP DEBUG — remove before finalizing
+    console.error(`[corporate-actions DEBUG] div status=${divRes.status} split status=${splitRes.status}`);
+    if (!divRes.ok) console.error(`[corporate-actions DEBUG] div body=${await divRes.text().catch(()=>"")}`);
+    if (!splitRes.ok) console.error(`[corporate-actions DEBUG] split body=${await splitRes.text().catch(()=>"")}`);
 
     const body = {
       dividends: (dividends ?? [])
