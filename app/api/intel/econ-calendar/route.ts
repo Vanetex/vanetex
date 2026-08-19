@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 const FOMC_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm";
-const CACHE_KEY = "intel:econ-calendar:v2"; // v2: date format changed to "D Mon"
+const CACHE_KEY = "intel:econ-calendar:v3"; // v3: added Housing Starts release
 const CACHE_TTL_S = 24 * 60 * 60; // these dates are scheduled far in advance
 const WINDOW_DAYS = 90;
 
@@ -31,11 +31,17 @@ const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // FRED release IDs: 10 = Consumer Price Index, 50 = Employment Situation
-// (contains Nonfarm Payrolls), 54 = Personal Income and Outlays (PCE).
+// (contains Nonfarm Payrolls), 54 = Personal Income and Outlays (PCE),
+// 27 = New Residential Construction (contains Housing Starts, the series
+// this app tracks as HOUST). ISM Manufacturing PMI has no free release
+// here — FRED stopped redistributing it in 2016 over ISM's licensing
+// terms, and no free keyless replacement carries the actual headline
+// number, so it's deliberately not included.
 const FRED_RELEASES: { id: number; name: string; time: string }[] = [
   { id: 10, name: "CPI Report", time: "08:30" },
   { id: 50, name: "Jobs Report (NFP)", time: "08:30" },
   { id: 54, name: "PCE Report", time: "08:30" },
+  { id: 27, name: "Housing Starts", time: "08:30" },
 ];
 
 function toEconEvent(dateStr: string, name: string, time: string): DatedEvent {
@@ -119,7 +125,7 @@ async function buildCalendar(fredApiKey: string): Promise<EconEvent[]> {
   }
 
   events.sort((a, b) => a.isoDate.localeCompare(b.isoDate));
-  return events.slice(0, 10).map(({ isoDate, ...rest }) => rest);
+  return events.slice(0, 14).map(({ isoDate, ...rest }) => rest);
 }
 
 export async function GET(request: NextRequest) {

@@ -349,7 +349,8 @@ const vtx = {
     chatInput: '', aiTyping: false, latency: null, // set by loadQuotes() from a real measured round-trip time
     indicators: { sma9: false, sma20: false },
     moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null,
-    screenerSort: { key: 'chg', dir: -1 }
+    screenerSort: { key: 'chg', dir: -1 },
+    leaderboardTf: '1Y'
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company-news data, no seed
@@ -383,6 +384,7 @@ const vtx = {
       { id:'RSAFS', label:'Retail Sales', units:'Millions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'Advance Retail Sales: Retail Trade and Food Services', type:'num' },
     ]},
     { group: 'Money, Rates & Dollar', items: [
+      { id:'FEDFUNDS', label:'Fed Funds Rate', units:'Percent', frequency:'Monthly', seasonalAdjustment:'NSA', title:'Federal Funds Effective Rate', type:'pct' },
       { id:'M2SL', label:'M2 Money Supply', units:'Billions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'M2', type:'num' },
       { id:'DFII10', label:'10Y Real (TIPS) Yield', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed', type:'pct' },
       { id:'T10YIE', label:'10Y Breakeven Inflation', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'10-Year Breakeven Inflation Rate', type:'pct' },
@@ -994,12 +996,18 @@ const vtx = {
   // tab already use. Correlation/beta/vol/drawdown/Sharpe are all pure
   // computation on top of this — no new API, no new backend route.
   async loadAnalyticsData() {
+    const tf = this.state.leaderboardTf;
     const syms = this.state.tickers.map(t => t.sym);
-    const need = ['^GSPC', ...syms].filter(s => !(this._chartData && this._chartData[s] && this._chartData[s]['1Y']));
+    const need = ['^GSPC', ...syms].filter(s => !(this._chartData && this._chartData[s] && this._chartData[s][tf]));
     if (!need.length) { this.renderRight(); return; }
-    await Promise.all(need.map(s => this.loadChartData(s, '1Y')));
+    await Promise.all(need.map(s => this.loadChartData(s, tf)));
     if (this.state.tab === 'analytics') this.renderRight();
   },
+  setLeaderboardTf(tf) { this.state.leaderboardTf = tf; this.loadAnalyticsData(); this.renderRight(); },
+  // Periods/year for annualizing vol — matches the real interval the
+  // candles route actually returns for each range (daily for 1M, weekly
+  // for 6M/1Y), not a guess.
+  LEADERBOARD_TF_PERIODS_PER_YEAR: { '1M': 252, '6M': 52, '1Y': 52 },
   // --- Cross-asset analytics math — every function below operates only on
   // real price history already fetched via loadChartData(); nothing here
   // fabricates or estimates a missing value, a symbol with insufficient
@@ -2140,12 +2148,20 @@ const vtx = {
       const spread = yc.spread10y2y;
       const spreadHtml = spread != null ? `<span style="margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;color:${yc.inverted?'var(--neg)':'var(--pos)'};">10Y−2Y ${spread>=0?'+':''}${spread.toFixed(2)}%${yc.inverted?' · INVERTED':''}</span>` : '';
       const labelsHtml = yc.points.map(p => `<span style="font-size:8.5px;font-family:var(--mono);color:var(--mut);">${p.label}</span>`).join('');
+      // yieldCurveSvg uses preserveAspectRatio="none" to fill the card
+      // edge-to-edge, which non-uniformly stretches everything inside —
+      // including the value labels — by (actual rendered width / viewBox
+      // width). Passing the real measured card width as the viewBox width
+      // keeps that ratio ~1:1 so the numbers render undistorted instead of
+      // squished to fit a viewBox that assumed a wider card (28 = the
+      // card's own 14px left/right padding).
+      const ycWidth = Math.max(240, el.clientWidth - 28);
       ycHtml = `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
           <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">US Treasury Yield Curve</span>
           ${spreadHtml}
         </div>
-        ${this.yieldCurveSvg(yc.points, 760, 100)}
+        ${this.yieldCurveSvg(yc.points, ycWidth, 100)}
         <div style="display:flex;justify-content:space-between;margin-top:4px;">${labelsHtml}</div>
         <div style="font-size:8px;color:var(--mut);margin-top:5px;">As of ${yc.points[yc.points.length-1].date} · FRED Treasury Constant Maturity Rates</div>`;
     }
@@ -3264,13 +3280,20 @@ const vtx = {
         const spread = yc.spread10y2y;
         const spreadHtml = spread!=null ? `<span style="margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;color:${yc.inverted?'var(--neg)':'var(--pos)'};">10Y−2Y ${spread>=0?'+':''}${spread.toFixed(2)}%${yc.inverted?' · INVERTED':''}</span>` : '';
         const labelsHtml = yc.points.map(p => `<span style="font-size:8.5px;font-family:var(--mono);color:var(--mut);">${p.label}</span>`).join('');
+        // Same reasoning as the Overview card's yield curve: measure the
+        // real container width (tabContent is much narrower than a fixed
+        // 760 viewBox assumed) so preserveAspectRatio="none" doesn't
+        // squish the number labels — this is the panel the squish was
+        // actually reported in (right-hand tab column, ~350px wide vs.
+        // the hardcoded 760 that assumed a full-width center panel).
+        const ycWidth = Math.max(240, el.clientWidth - 28);
         ycHtml = `
           <div style="display:flex;align-items:center;gap:8px;padding:11px 14px 2px;">
             <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">US Treasury Yield Curve</span>
             ${spreadHtml}
           </div>
           <div style="padding:14px 14px 4px;">
-            ${this.yieldCurveSvg(yc.points, 760, 130)}
+            ${this.yieldCurveSvg(yc.points, ycWidth, 130)}
             <div style="display:flex;justify-content:space-between;margin-top:6px;">${labelsHtml}</div>
             <div style="font-size:8.5px;color:var(--mut);margin-top:8px;">As of ${yc.points[yc.points.length-1].date} · FRED Treasury Constant Maturity Rates</div>
           </div>`;
@@ -3502,15 +3525,21 @@ const vtx = {
         </div>`;
 
       const syms = s.tickers.map(t => t.sym);
-      const bench = this._chartData && this._chartData['^GSPC'] && this._chartData['^GSPC']['1Y'];
+      const tf = s.leaderboardTf;
+      const periodsPerYear = this.LEADERBOARD_TF_PERIODS_PER_YEAR[tf];
+      const bench = this._chartData && this._chartData['^GSPC'] && this._chartData['^GSPC'][tf];
       const perSym = {};
       syms.forEach(sym => {
-        const entry = this._chartData && this._chartData[sym] && this._chartData[sym]['1Y'];
+        const entry = this._chartData && this._chartData[sym] && this._chartData[sym][tf];
         if (entry && entry.prices && entry.prices.length >= 2) perSym[sym] = { prices: entry.prices, returns: this.periodReturns(entry.prices) };
       });
       const readySyms = syms.filter(sym => perSym[sym]);
+      const tfLabel = { '1M': '1 Month', '6M': '6 Months', '1Y': '1 Year' }[tf];
+      const tfGranularity = tf === '1M' ? 'daily' : 'weekly';
+      const tfButtonsHtml = ['1M','6M','1Y'].map(l => `
+        <button onclick="vtx.setLeaderboardTf('${l}')" style="font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border:none;border-radius:6px;cursor:pointer;background:${l===tf?'rgba(var(--glow),.2)':'transparent'};color:${l===tf?'var(--acc2)':'var(--mut)'};">${l}</button>`).join('');
       if (!readySyms.length || !bench) {
-        el.innerHTML = screenerHtml + `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading 1-year price history for the watchlist…</div>`;
+        el.innerHTML = screenerHtml + `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading ${tfLabel.toLowerCase()} price history for the watchlist…</div>`;
       } else {
         const benchReturns = this.periodReturns(bench.prices);
         const rf = (this.YIELD_CURVE && this.YIELD_CURVE.points.find(p => p.months === 3));
@@ -3520,10 +3549,12 @@ const vtx = {
         const rows = readySyms.map(sym => {
           const { prices, returns } = perSym[sym];
           const totalReturn = prices.length > 1 ? prices[prices.length-1]/prices[0] - 1 : null;
-          const vol = this.annualizedVol(returns, 52);
+          const vol = this.annualizedVol(returns, periodsPerYear);
           const beta = this.betaVs(returns, benchReturns);
           const dd = this.maxDrawdown(prices);
-          const annReturn = totalReturn; // ~1 year of data, so total ≈ annualized
+          // Properly annualize by compounding rather than assuming the raw
+          // window return already is one — only exact for the 1Y tf.
+          const annReturn = (totalReturn != null && returns.length) ? Math.pow(1 + totalReturn, periodsPerYear / returns.length) - 1 : null;
           const sharpe = (annReturn != null && vol) ? (annReturn - rfRate) / vol : null;
           return { sym, totalReturn, vol, beta, dd, sharpe };
         }).sort((a,b) => (b.sharpe ?? -99) - (a.sharpe ?? -99));
@@ -3534,7 +3565,7 @@ const vtx = {
             <table style="width:100%;border-collapse:collapse;font-size:11px;">
               <thead><tr style="color:var(--mut);font-size:9px;letter-spacing:.06em;text-transform:uppercase;">
                 <th style="text-align:left;padding:6px 8px;">Ticker</th>
-                <th style="text-align:right;padding:6px 8px;">1Y Return</th>
+                <th style="text-align:right;padding:6px 8px;">${tf} Return</th>
                 <th style="text-align:right;padding:6px 8px;">Volatility (ann.)</th>
                 <th style="text-align:right;padding:6px 8px;">Beta vs S&amp;P 500</th>
                 <th style="text-align:right;padding:6px 8px;">Max Drawdown</th>
@@ -3601,14 +3632,17 @@ const vtx = {
 
         el.innerHTML = screenerHtml + `
           <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Risk &amp; Return Leaderboard</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+              <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Risk &amp; Return Leaderboard</div>
+              <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;margin-left:auto;">${tfButtonsHtml}</div>
+            </div>
             ${leaderboardHtml}
-            <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Computed from 1 year of real weekly closes (Yahoo Finance) · beta vs S&amp;P 500 (^GSPC) · risk-free rate = real 3M Treasury yield (FRED) · sorted by Sharpe.</div>
+            <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Computed from ${tfLabel.toLowerCase()} of real ${tfGranularity} closes (Yahoo Finance) · beta vs S&amp;P 500 (^GSPC) · risk-free rate = real 3M Treasury yield (FRED) · sorted by Sharpe.</div>
           </div>
           <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
             <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Correlation Matrix</div>
             ${corrHtml}
-            <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Pearson correlation of weekly returns, trailing 1 year. Green = move together, red = move opposite.</div>
+            <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Pearson correlation of ${tfGranularity} returns, trailing ${tfLabel.toLowerCase()}. Green = move together, red = move opposite.</div>
           </div>
           <div style="padding:12px 14px;">
             <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Sector Rotation — Today</div>
