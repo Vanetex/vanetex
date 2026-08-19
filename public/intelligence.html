@@ -350,7 +350,12 @@ const vtx = {
     indicators: { sma9: false, sma20: false },
     moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null,
     screenerSort: { key: 'chg', dir: -1 },
-    leaderboardTf: '1Y'
+    leaderboardTf: '1Y',
+    // A ticker viewed from search but not yet added to the real
+    // watchlist — never persisted (saveWatchlist() never touches it),
+    // holds at most one symbol, and is silently replaced/discarded the
+    // moment the user views something else without adding it.
+    previewTicker: null
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company-news data, no seed
@@ -1175,6 +1180,73 @@ const vtx = {
       this.loadNews();
     } catch(e) {}
   },
+  // Search results land here, not addTicker() — looking a symbol up
+  // shouldn't silently commit it to the permanent watchlist. Mirrors
+  // addTicker()'s fetch/render sequence but writes into previewTicker
+  // instead of pushing into state.tickers, so it never reaches
+  // saveWatchlist() or the sidebar list unless the user explicitly
+  // opts in via addPreviewToWatchlist().
+  async viewTicker(sym, name, sector) {
+    sym = sym.toUpperCase();
+    if (this.state.tickers.some(t=>t.sym===sym)) { this.selectTicker(sym); return; }
+    const t = {
+      sym, name: name || sym, sector: sector || '—', price: 100,
+      open: 100, hist: [100,100], // flat placeholder until real data resolves below
+    };
+    this.state.previewTicker = t;
+    this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[];
+    document.getElementById('searchInput').value=''; this.closeSearch();
+    this.state.focus = sym;
+    this.state.view = 'ticker';
+    this.render();
+    this.loadChartData(sym, this.state.tf);
+    this.loadDepth(sym);
+    this.loadEtfHoldings(sym);
+    this.loadFinancialsReported(sym);
+    this.loadPeerPercentile(sym);
+    this.loadShortInterest(sym);
+    this.loadSparklines([sym]);
+    try {
+      const [q, fin, analyst, earn] = await Promise.all([
+        fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+        fetch(`/api/stock/financials?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+        fetch(`/api/stock/recommendation?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+        fetch(`/api/stock/earnings-history?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+      ]);
+      const merge = (x) => {
+        let upd = {...x};
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null}; }
+        if (fin && !fin.error) upd.fin = fin;
+        if (analyst && !analyst.error) upd.analyst = analyst;
+        if (earn && !earn.error) upd.earnHistory = earn.quarters;
+        return upd;
+      };
+      // The user may have explicitly added this symbol (addPreviewToWatchlist)
+      // while these requests were still in flight — write the real data
+      // back to wherever the symbol actually lives now, or an add-before-
+      // load-finishes would strand the new watchlist row on its $100
+      // placeholder forever.
+      if (this.state.tickers.some(x=>x.sym===sym)) {
+        this.state.tickers = this.state.tickers.map(x => x.sym===sym ? merge(x) : x);
+        this.saveWatchlist();
+      } else if (this.state.previewTicker && this.state.previewTicker.sym === sym) {
+        this.state.previewTicker = merge(this.state.previewTicker);
+      }
+      this.render();
+    } catch(e) {}
+  },
+  addPreviewToWatchlist() {
+    const t = this.state.previewTicker;
+    if (!t || this.state.tickers.some(x=>x.sym===t.sym)) return;
+    this.state.tickers.push(t);
+    this.subscribeSymbol(t.sym);
+    this.saveWatchlist();
+    this.state.previewTicker = null;
+    this.render();
+    this.loadDarkPool();
+    this.loadCalendar();
+    this.loadNews();
+  },
   removeTicker(sym) {
     if (this.state.tickers.length<=1) return;
     this.state.tickers = this.state.tickers.filter(t=>t.sym!==sym);
@@ -1334,12 +1406,16 @@ const vtx = {
         <span style="font-size:10px;color:var(--mut);">${t.sector}</span>
       </div>`).join('');
     if (remote.length) {
-      html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Add to watchlist</div>`;
+      html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Other results</div>`;
+      // Clicking here only opens the ticker view — it does NOT add to
+      // the watchlist. Adding is an explicit action from that view now
+      // (see addPreviewToWatchlist()), not an automatic side effect of
+      // looking a symbol up.
       html += remote.map(t => `
-        <div class="srchrow" onmousedown="vtx.addTicker('${t.symbol}',${JSON.stringify(t.name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+        <div class="srchrow" onmousedown="vtx.viewTicker('${t.symbol}',${JSON.stringify(t.name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.symbol}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
-          <span style="font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--acc2);border:1px solid rgba(var(--glow),.35);border-radius:5px;padding:2px 6px;">+ ADD</span>
+          <span style="font-size:9px;color:var(--mut);">not tracked</span>
         </div>`).join('');
     }
     if (instruments.length) {
@@ -2506,7 +2582,7 @@ const vtx = {
 
   render() {
     const s = this.state, T = s.tickers;
-    const f = T.find(t=>t.sym===s.focus) || T[0];
+    const f = T.find(t=>t.sym===s.focus) || (s.previewTicker && s.previewTicker.sym===s.focus ? s.previewTicker : null) || T[0];
     const cPos='var(--pos)', cNeg='var(--neg)';
 
     // Ticker tape — uses fixed bar data, not watchlist
@@ -2575,6 +2651,8 @@ const vtx = {
             <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${dollarUp?cPos:cNeg};">${(dollarUp?'+':'')+dollarChange.toFixed(2)}</span>
             <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${fup?cPos:cNeg};background:${fup?'rgba(31,209,151,.1)':'rgba(255,77,94,.1)'};border:1px solid ${fup?'rgba(31,209,151,.3)':'rgba(255,77,94,.3)'};border-radius:99px;padding:3px 9px;">${(fup?'+':'')+fp.toFixed(2)}% ${fup?'▲':'▼'}</span>
           </div>
+          ${!T.some(x=>x.sym===f.sym) ? `
+          <button onclick="vtx.addPreviewToWatchlist()" style="margin-top:9px;font-family:var(--ui);font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--bg0);background:var(--acc2);border:none;border-radius:8px;padding:6px 12px;cursor:pointer;">+ Add to Watchlist</button>` : ''}
         </div>
       </div>`;
 
@@ -3143,7 +3221,7 @@ const vtx = {
       }
     }
     else if (s.tab === 'dark') {
-      const f = T.find(t=>t.sym===s.focus) || T[0];
+      const f = T.find(t=>t.sym===s.focus) || (s.previewTicker && s.previewTicker.sym===s.focus ? s.previewTicker : null) || T[0];
       const focusRow = (this.DARK||[]).find(d=>d.sym===f.sym);
       const hasReal = focusRow && focusRow.dpiPct != null && focusRow.litPct != null;
       const dpi = hasReal ? focusRow.dpiPct.toFixed(1)+'%' : '—';
@@ -3721,7 +3799,7 @@ const vtx = {
   },
 
   renderChat() {
-    const f = this.state.tickers.find(t=>t.sym===this.state.focus) || this.state.tickers[0];
+    const f = this.state.tickers.find(t=>t.sym===this.state.focus) || (this.state.previewTicker && this.state.previewTicker.sym===this.state.focus ? this.state.previewTicker : null) || this.state.tickers[0];
     const cm = document.getElementById('chatMessages');
     if (!cm) return;
     cm.innerHTML = this.state.chat.map(m => {
@@ -3754,7 +3832,7 @@ const vtx = {
     // silently gets answered about whatever happens to be focused, which is
     // wrong more often than it's right once there's more than one ticker.
     const mentioned = this.state.tickers.find(t => new RegExp(`\\b${t.sym}\\b`, 'i').test(q));
-    const f = mentioned || this.state.tickers.find(t=>t.sym===this.state.focus) || this.state.tickers[0];
+    const f = mentioned || this.state.tickers.find(t=>t.sym===this.state.focus) || (this.state.previewTicker && this.state.previewTicker.sym===this.state.focus ? this.state.previewTicker : null) || this.state.tickers[0];
     const p = this.pctOf(f);
     const dir = p>=0 ? 'up' : 'down';
     const fin = f.fin || {};
