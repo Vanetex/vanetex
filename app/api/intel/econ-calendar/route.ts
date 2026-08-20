@@ -167,16 +167,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "FRED_API_KEY is not configured" }, { status: 500 });
   }
 
+  // The server-side KV cache below (24h) is what actually protects FRED/
+  // FOMC from repeat hits — this HTTP-level Cache-Control just bounds how
+  // long a stale response can linger in front of it (browser/CDN) after a
+  // code change reshapes what this route returns. A 24h value here meant
+  // shipping a real content change (like the relevance-sort/expanded-
+  // release-set update this was set to) stayed invisible to every visitor,
+  // new tabs included, for up to a full day — confirmed live: a brand
+  // new browser tab still got the pre-deploy 14-event response until this
+  // was shortened, even though the route itself was already computing the
+  // correct 40-event one under cache:'no-store'.
+  const HTTP_CACHE_HEADER = { "Cache-Control": "public, max-age=300" };
+
   const cached = await kvGet<{ events: EconEvent[] }>(CACHE_KEY);
   if (cached) {
-    return NextResponse.json(cached, { headers: { "Cache-Control": "public, max-age=86400" } });
+    return NextResponse.json(cached, { headers: HTTP_CACHE_HEADER });
   }
 
   try {
     const events = await buildCalendar(fredApiKey);
     const body = { events };
     await kvSet(CACHE_KEY, body, CACHE_TTL_S);
-    return NextResponse.json(body, { headers: { "Cache-Control": "public, max-age=86400" } });
+    return NextResponse.json(body, { headers: HTTP_CACHE_HEADER });
   } catch (err) {
     console.error("[intel/econ-calendar] error:", err);
     return NextResponse.json({ error: "Failed to fetch economic calendar" }, { status: 500 });
