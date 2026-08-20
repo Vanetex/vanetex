@@ -874,7 +874,10 @@ const vtx = {
     this.loadInstrumentData(code);
     this.loadNews();
     if (inst.category === 'Crypto') this.loadCryptoDetail(code);
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) { this.loadCftcCot(code); this.loadSeasonality(code); this.loadFuturesCurve(code); }
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+      this.loadCftcCot(code); this.loadSeasonality(code); this.loadFuturesCurve(code);
+      this.loadDollarCorrelation(code); this.loadVolatilityPercentile(code);
+    }
   },
   COMMODITY_CATEGORIES: ['Metals', 'Energy', 'Agriculture'],
   // Real CFTC Commitment of Traders positioning — who's actually long/
@@ -947,6 +950,112 @@ const vtx = {
       this._futuresCurve[code] = { __failed: true };
     }
     if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
+  },
+  // Correlation with the US Dollar Index — commodities are dollar-priced,
+  // so this is the textbook cross-asset relationship traders watch.
+  // Computed on returns (not raw price levels — correlating levels of two
+  // trending series is a classic statistical trap), using 6M weekly bars
+  // since that's an existing candles range option (no backend change).
+  DOLLAR_INDEX_SYMBOL: 'DX-Y.NYB',
+  async loadDollarCorrelation(code) {
+    this._dollarCorr = this._dollarCorr || {};
+    const inst = this.INSTRUMENTS[code];
+    if (!inst) return;
+    try {
+      // DXY's own series is identical for every commodity's correlation
+      // calc — fetch it once per session and reuse, rather than
+      // re-requesting it (and re-spending rate-limit budget) on every
+      // commodity the user drills into.
+      if (!this._dxy6m) {
+        const dRes = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(this.DOLLAR_INDEX_SYMBOL)}&range=6M`);
+        if (!dRes.ok) throw new Error('bad status');
+        this._dxy6m = await dRes.json();
+      }
+      const cRes = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(inst.yahooSymbol)}&range=6M`);
+      if (!cRes.ok) throw new Error('bad status');
+      const cData = await cRes.json();
+      this._dollarCorr[code] = this.computeCorrelation(cData, this._dxy6m);
+    } catch (e) {
+      this._dollarCorr[code] = { __failed: true };
+    }
+    if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
+  },
+  computeCorrelation(aData, bData) {
+    const aTimes = aData && aData.times, aPrices = aData && aData.prices;
+    const bTimes = bData && bData.times, bPrices = bData && bData.prices;
+    if (!aTimes || !bTimes || aTimes.length < 8 || bTimes.length < 8) return { __failed: true };
+    // Both series are independently weekly-bucketed by Yahoo and don't
+    // always land on identical timestamps — align each bar to its
+    // nearest counterpart within a few days rather than assuming
+    // index-for-index alignment.
+    const aligned = [];
+    for (let i = 0; i < aTimes.length; i++) {
+      let best = null, bestDiff = Infinity;
+      for (let j = 0; j < bTimes.length; j++) {
+        const diff = Math.abs(bTimes[j] - aTimes[i]);
+        if (diff < bestDiff) { bestDiff = diff; best = bPrices[j]; }
+      }
+      if (best != null && bestDiff < 4 * 24 * 3600) aligned.push({ a: aPrices[i], b: best });
+    }
+    if (aligned.length < 8) return { __failed: true };
+    const aRets = [], bRets = [];
+    for (let i = 1; i < aligned.length; i++) {
+      aRets.push((aligned[i].a - aligned[i - 1].a) / aligned[i - 1].a);
+      bRets.push((aligned[i].b - aligned[i - 1].b) / aligned[i - 1].b);
+    }
+    const n = aRets.length;
+    const mean = arr => arr.reduce((x, y) => x + y, 0) / arr.length;
+    const mA = mean(aRets), mB = mean(bRets);
+    let cov = 0, varA = 0, varB = 0;
+    for (let i = 0; i < n; i++) {
+      const da = aRets[i] - mA, db = bRets[i] - mB;
+      cov += da * db; varA += da * da; varB += db * db;
+    }
+    const denom = Math.sqrt(varA * varB);
+    const r = denom > 0 ? cov / denom : 0;
+    return { r, n };
+  },
+  // Realized volatility percentile — where the commodity's current 20-day
+  // annualized volatility sits relative to its own trailing 2-year
+  // distribution of 20-day volatility readings. Needs real daily bars
+  // (not weekly/monthly), hence the dedicated 2Y candles range.
+  VOL_WINDOW_DAYS: 20,
+  async loadVolatilityPercentile(code) {
+    this._volPercentile = this._volPercentile || {};
+    const inst = this.INSTRUMENTS[code];
+    if (!inst) return;
+    try {
+      const res = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(inst.yahooSymbol)}&range=2Y`);
+      if (!res.ok) throw new Error('bad status');
+      const data = await res.json();
+      this._volPercentile[code] = this.computeVolatilityPercentile(data);
+    } catch (e) {
+      this._volPercentile[code] = { __failed: true };
+    }
+    if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
+  },
+  computeVolatilityPercentile(data) {
+    const prices = data && data.prices;
+    const W = this.VOL_WINDOW_DAYS;
+    if (!prices || prices.length < W + 20) return { __failed: true };
+    const logRets = [];
+    for (let i = 1; i < prices.length; i++) {
+      if (prices[i] > 0 && prices[i - 1] > 0) logRets.push(Math.log(prices[i] / prices[i - 1]));
+    }
+    if (logRets.length < W + 20) return { __failed: true };
+    const stdev = arr => {
+      const m = arr.reduce((a, b) => a + b, 0) / arr.length;
+      const v = arr.reduce((a, b) => a + (b - m) * (b - m), 0) / (arr.length - 1);
+      return Math.sqrt(v);
+    };
+    const rollingVols = [];
+    for (let i = W; i <= logRets.length; i++) {
+      rollingVols.push(stdev(logRets.slice(i - W, i)) * Math.sqrt(252) * 100);
+    }
+    const current = rollingVols[rollingVols.length - 1];
+    const below = rollingVols.filter(v => v <= current).length;
+    const percentile = below / rollingVols.length * 100;
+    return { current, percentile, sampleSize: rollingVols.length };
   },
   setInstrumentTf(tf) { this.state.tf = tf; this.render(); this.loadInstrumentData(this.state.instrument); },
   // Richer per-coin detail (market cap, supply, ATH/ATL, multi-period
@@ -2928,6 +3037,68 @@ const vtx = {
       }
     }
 
+    // Commodity-only detail — USD correlation + realized volatility
+    // percentile, grouped into one "Market Dynamics" card (mirrors how
+    // the crypto card bundles several stats rather than one-card-per-stat).
+    let marketDynamicsHtml = '';
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+      const dc = this._dollarCorr && this._dollarCorr[code];
+      const vp = this._volPercentile && this._volPercentile[code];
+      let corrBlock;
+      if (!dc) {
+        corrBlock = `<div style="text-align:center;color:var(--mut);font-size:11px;padding:6px 0;">Loading…</div>`;
+      } else if (dc.__failed) {
+        corrBlock = `<div style="text-align:center;color:var(--mut);font-size:11px;padding:6px 0;">Couldn't load. <button onclick="vtx.loadDollarCorrelation('${code}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        const r = dc.r;
+        const pct = (r + 1) / 2 * 100;
+        const strength = Math.abs(r) >= 0.6 ? 'Strong' : Math.abs(r) >= 0.3 ? 'Moderate' : 'Weak';
+        const direction = r >= 0 ? 'positive' : 'inverse';
+        corrBlock = `
+          <div style="font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--txt);margin-bottom:6px;">USD Correlation</div>
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-family:var(--mono);font-size:20px;font-weight:800;color:var(--acc2);">${r>=0?'+':''}${r.toFixed(2)}</span>
+            <span style="font-size:10px;color:var(--mut);">${strength} ${direction} vs DXY</span>
+          </div>
+          <div style="position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.08);margin:10px 0 4px;">
+            <div style="position:absolute;top:50%;left:50%;width:1px;height:11px;background:var(--line);transform:translate(-50%,-50%);"></div>
+            <div style="position:absolute;top:50%;left:${pct.toFixed(1)}%;width:10px;height:10px;margin-left:-5px;margin-top:-5px;border-radius:50%;background:var(--acc2);"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:7.5px;color:var(--mut);">
+            <span>-1</span><span>0</span><span>+1</span>
+          </div>`;
+      }
+      let volBlock;
+      if (!vp) {
+        volBlock = `<div style="text-align:center;color:var(--mut);font-size:11px;padding:6px 0;">Loading…</div>`;
+      } else if (vp.__failed) {
+        volBlock = `<div style="text-align:center;color:var(--mut);font-size:11px;padding:6px 0;">Couldn't load. <button onclick="vtx.loadVolatilityPercentile('${code}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        const p = vp.percentile;
+        const zoneLabel = p >= 80 ? 'High' : p >= 50 ? 'Elevated' : p >= 20 ? 'Normal' : 'Low';
+        const zoneColor = p >= 80 ? cNeg : p >= 50 ? 'var(--warn)' : 'var(--acc2)';
+        volBlock = `
+          <div style="font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--txt);margin-bottom:6px;">Volatility</div>
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span style="font-family:var(--mono);font-size:20px;font-weight:800;color:${zoneColor};">${Math.round(p)}th</span>
+            <span style="font-size:10px;color:var(--mut);">pct · ${zoneLabel} (${vp.current.toFixed(1)}% ann., 20d)</span>
+          </div>
+          <div style="position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.08);margin:10px 0 4px;">
+            <div style="position:absolute;top:50%;left:${p.toFixed(1)}%;width:10px;height:10px;margin-left:-5px;margin-top:-5px;border-radius:50%;background:${zoneColor};"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:7.5px;color:var(--mut);">
+            <span>Calm</span><span>Median</span><span>Turbulent</span>
+          </div>`;
+      }
+      marketDynamicsHtml = `
+        <div style="padding:14px;display:flex;flex-direction:column;gap:14px;">
+          <div>${corrBlock}</div>
+          <div style="height:1px;background:var(--line);"></div>
+          <div>${volBlock}</div>
+          <div style="font-size:8px;color:var(--mut);opacity:.7;">USD correlation: 6-month weekly returns vs ICE Dollar Index (DXY). Volatility: 20-day realized vs its own trailing 2-year range. Yahoo Finance.</div>
+        </div>`;
+    }
+
     el.innerHTML = `
       <div style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);">
         <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 10px;cursor:pointer;">← Overview</button>
@@ -2967,6 +3138,10 @@ const vtx = {
       ${futuresCurveHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Forward Curve</div>
         ${futuresCurveHtml}
+      </div>` : ''}
+      ${marketDynamicsHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Market Dynamics</div>
+        ${marketDynamicsHtml}
       </div>` : ''}
       <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;

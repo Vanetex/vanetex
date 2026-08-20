@@ -7,7 +7,12 @@ export const runtime = "nodejs";
 const CACHE_TTL_S = 30 * 60; // 30 minutes
 
 export async function GET(request: NextRequest) {
-  const rl = checkRateLimit("stock:candles", clientIdFromRequest(request), 20, 60_000);
+  // Initial page load alone (watchlist sparklines, global markets tiles)
+  // already burns a big share of a 20/60s budget; drilling into a
+  // commodity's Instrument View now fires several more (main chart +
+  // seasonality + correlation + volatility), so this needed headroom to
+  // avoid legitimate navigation tripping the limit.
+  const rl = checkRateLimit("stock:candles", clientIdFromRequest(request), 40, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } });
   }
@@ -23,6 +28,11 @@ export async function GET(request: NextRequest) {
     "6M":  { interval: "1wk", range: "6mo", limit: 26  },
     "1Y":  { interval: "1wk", range: "1y",  limit: 52  },
     "MAX": { interval: "1mo", range: "10y", limit: 120 },
+    // Daily granularity over 2 years — not used by the main chart (which
+    // steps down to weekly/monthly beyond 1Y), only by the realized
+    // volatility percentile calc, which needs real daily returns rather
+    // than the coarser weekly/monthly bars the other ranges give.
+    "2Y":  { interval: "1d",  range: "2y",  limit: 520 },
   };
   const cfg = RANGE_MAP[rangeParam] ?? RANGE_MAP["1M"];
   const { interval, range, limit } = cfg;
