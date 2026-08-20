@@ -686,6 +686,8 @@ const vtx = {
 
   WATCHLIST_KEY: 'vtx_watchlist',
   ACCENT_KEY: 'vtx_accent',
+  RECENT_SEARCHES_KEY: 'vtx_recent_searches',
+  RECENT_SEARCHES: [], // loaded from localStorage in init() — {type, key, label, sub, meta?}[], most recent first
 
   init() {
     this._clockOffsetMs = 0;
@@ -712,6 +714,11 @@ const vtx = {
     let savedAccent = null;
     try { savedAccent = localStorage.getItem(this.ACCENT_KEY); } catch(e) {}
     if (savedAccent) this.state.customAccent = savedAccent;
+
+    try {
+      const savedRecent = JSON.parse(localStorage.getItem(this.RECENT_SEARCHES_KEY));
+      if (Array.isArray(savedRecent)) this.RECENT_SEARCHES = savedRecent;
+    } catch(e) {}
 
     this.state.marketOpen = this.isMarketOpen();
     this.applyVariant();
@@ -1361,8 +1368,45 @@ const vtx = {
 
   results() {
     const q = this.state.query.trim().toLowerCase();
-    if (!q) return this.state.tickers.slice(0,6);
+    // Empty query used to fall back to "your first 6 watchlist tickers,"
+    // which just duplicated the sidebar that's already always visible.
+    // Recent Searches (see renderSearch()) replaces that fallback with
+    // something the watchlist can't show: what was actually looked up.
+    if (!q) return [];
     return this.state.tickers.filter(t => t.sym.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)).slice(0,6);
+  },
+  MAX_RECENT_SEARCHES: 8,
+  saveRecentSearches() {
+    try { localStorage.setItem(this.RECENT_SEARCHES_KEY, JSON.stringify(this.RECENT_SEARCHES)); }
+    catch(e) { console.error('[vtx] Failed to persist recent searches.', e); }
+  },
+  // Called alongside the actual navigation (selectTicker/viewTicker/
+  // selectInstrument/selectIndicator) from search result rows only —
+  // clicking a ticker elsewhere in the app (news, sector heatmap, a
+  // holding in an ETF's composition) is browsing, not searching, and
+  // shouldn't pollute this history.
+  recordRecentSearch(entry) {
+    this.RECENT_SEARCHES = [entry, ...this.RECENT_SEARCHES.filter(e => !(e.type===entry.type && e.key===entry.key))].slice(0, this.MAX_RECENT_SEARCHES);
+    this.saveRecentSearches();
+  },
+  removeRecentSearch(type, key) {
+    this.RECENT_SEARCHES = this.RECENT_SEARCHES.filter(e => !(e.type===type && e.key===key));
+    this.saveRecentSearches();
+    this.renderSearch();
+  },
+  clearRecentSearches() {
+    this.RECENT_SEARCHES = [];
+    this.saveRecentSearches();
+    this.renderSearch();
+  },
+  // Re-opening a past ticker search must not silently re-add it to the
+  // watchlist — viewTicker() already redirects to selectTicker() on its
+  // own when the symbol turns out to be tracked, so this stays a preview
+  // for anything that isn't.
+  openRecentSearch(entry) {
+    if (entry.type === 'instrument') this.selectInstrument(entry.key);
+    else if (entry.type === 'indicator') this.selectIndicator(entry.meta);
+    else this.viewTicker(entry.key, entry.label);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[];
@@ -1445,7 +1489,7 @@ const vtx = {
   onSearchFocus() { this.state.searchOpen=true; this.renderSearch(); },
   onSearchBlur() { setTimeout(()=>{ this.state.searchOpen=false; this.closeSearch(); },130); },
   onSearchKey(e) {
-    if (e.key==='Enter') { const r=this.results(); if (r[0]) { this.selectTicker(r[0].sym); e.target.blur(); } }
+    if (e.key==='Enter') { const r=this.results(); if (r[0]) { this.recordRecentSearch({type:'ticker', key:r[0].sym, label:r[0].sym, sub:r[0].name}); this.selectTicker(r[0].sym); e.target.blur(); } }
     else if (e.key==='Escape') { this.state.searchOpen=false; this.state.query=''; e.target.value=''; this.closeSearch(); }
   },
   closeSearch() { document.getElementById('searchDropdown').style.display='none'; },
@@ -1455,10 +1499,33 @@ const vtx = {
     const remote = this.state.remoteResults || [];
     const instruments = this.state.instrumentMatches || [];
     const indicators = this.state.remoteIndicators || [];
-    if (!this.state.searchOpen || (r.length===0 && remote.length===0 && instruments.length===0 && indicators.length===0)) { dd.style.display='none'; return; }
+    const hasQuery = !!this.state.query.trim();
+    const recent = this.RECENT_SEARCHES || [];
+    if (!this.state.searchOpen || (!hasQuery && !recent.length) || (hasQuery && r.length===0 && remote.length===0 && instruments.length===0 && indicators.length===0)) { dd.style.display='none'; return; }
     dd.style.display='block';
+
+    if (!hasQuery) {
+      // Nothing typed yet — recent searches instead of the old "first 6
+      // watchlist tickers" fallback, which just duplicated the sidebar.
+      // Each row's own × removes just that entry (stopPropagation so it
+      // doesn't also re-open the search); "Clear all" wipes the list.
+      const recentRowHtml = e => {
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : '';
+        return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+          <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
+          <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
+          <button onmousedown="event.stopPropagation();event.preventDefault();vtx.removeRecentSearch('${e.type}','${e.key}')" title="Remove" style="width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--mut);cursor:pointer;font-size:14px;line-height:1;border-radius:5px;">×</button>
+        </div>`;
+      };
+      dd.innerHTML = `<div style="display:flex;align-items:center;padding:8px 11px 4px;">
+          <span style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Recent Searches</span>
+          <button onmousedown="event.stopPropagation();event.preventDefault();vtx.clearRecentSearches()" style="margin-left:auto;font-size:9px;color:var(--mut);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0;">Clear all</button>
+        </div>` + recent.map(recentRowHtml).join('');
+      return;
+    }
+
     let html = r.map(t => `
-      <div class="srchrow" onmousedown="vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+      <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'ticker',key:'${t.sym}',label:'${t.sym}',sub:${JSON.stringify(t.name).replace(/"/g,'&quot;')}});vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
         <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.sym}</span>
         <span style="flex:1;font-size:12.5px;color:var(--txt);">${t.name}</span>
         <span style="font-size:10px;color:var(--mut);">${t.sector}</span>
@@ -1470,7 +1537,7 @@ const vtx = {
       // (see addPreviewToWatchlist()), not an automatic side effect of
       // looking a symbol up.
       html += remote.map(t => `
-        <div class="srchrow" onmousedown="vtx.viewTicker('${t.symbol}',${JSON.stringify(t.name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+        <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'ticker',key:'${t.symbol}',label:'${t.symbol}',sub:${JSON.stringify(t.name).replace(/"/g,'&quot;')}});vtx.viewTicker('${t.symbol}',${JSON.stringify(t.name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.symbol}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
           <span style="font-size:9px;color:var(--mut);">not tracked</span>
@@ -1479,7 +1546,7 @@ const vtx = {
     if (instruments.length) {
       html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Markets</div>`;
       html += instruments.map(inst => `
-        <div class="srchrow" onmousedown="vtx.selectInstrument('${inst.code}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+        <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'instrument',key:'${inst.code}',label:'${inst.code}',sub:${JSON.stringify(inst.label).replace(/"/g,'&quot;')}});vtx.selectInstrument('${inst.code}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${inst.code}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${inst.label}</span>
           <span style="font-size:10px;color:var(--mut);">${inst.category}</span>
@@ -1487,11 +1554,16 @@ const vtx = {
     }
     if (indicators.length) {
       html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Economic Indicators · FRED</div>`;
-      html += indicators.map(ind => `
-        <div class="srchrow" onmousedown='vtx.selectIndicator(${JSON.stringify(ind).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+      html += indicators.map(ind => {
+        const recentEntry = { type:'indicator', key:ind.id, label:ind.title, sub:ind.frequency, meta:ind };
+        const recentEntryJson = JSON.stringify(recentEntry).replace(/'/g,"&#39;");
+        const indJson = JSON.stringify(ind).replace(/'/g,"&#39;");
+        return `
+        <div class="srchrow" onmousedown='vtx.recordRecentSearch(${recentEntryJson});vtx.selectIndicator(${indJson})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ind.title}</span>
           <span style="font-size:10px;color:var(--mut);">${ind.frequency}</span>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     }
     dd.innerHTML = html;
   },
