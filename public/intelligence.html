@@ -874,7 +874,7 @@ const vtx = {
     this.loadInstrumentData(code);
     this.loadNews();
     if (inst.category === 'Crypto') this.loadCryptoDetail(code);
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) { this.loadCftcCot(code); this.loadSeasonality(code); }
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) { this.loadCftcCot(code); this.loadSeasonality(code); this.loadFuturesCurve(code); }
   },
   COMMODITY_CATEGORIES: ['Metals', 'Energy', 'Agriculture'],
   // Real CFTC Commitment of Traders positioning — who's actually long/
@@ -934,6 +934,19 @@ const vtx = {
     const counts = byMonth.map(arr => arr.length);
     const yearsSpan = Math.round((times[times.length - 1] - times[0]) / (365.25 * 24 * 3600));
     return { months, counts, yearsSpan };
+  },
+  // Futures term structure — real dated-contract quotes (not the
+  // continuous front-month root), so the curve shows actual contango/
+  // backwardation rather than a single point.
+  async loadFuturesCurve(code) {
+    this._futuresCurve = this._futuresCurve || {};
+    try {
+      const res = await fetch(`/api/market/futures-curve?code=${encodeURIComponent(code)}`);
+      this._futuresCurve[code] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._futuresCurve[code] = { __failed: true };
+    }
+    if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
   },
   setInstrumentTf(tf) { this.state.tf = tf; this.render(); this.loadInstrumentData(this.state.instrument); },
   // Richer per-coin detail (market cap, supply, ATH/ATL, multi-period
@@ -2867,6 +2880,54 @@ const vtx = {
       }
     }
 
+    // Commodity-only detail — the real forward curve across dated
+    // contracts (not the continuous front-month root), revealing whether
+    // the market is in contango or backwardation.
+    let futuresCurveHtml = '';
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+      const fc = this._futuresCurve && this._futuresCurve[code];
+      if (!fc) {
+        futuresCurveHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading forward curve…</div>`;
+      } else if (fc.__failed) {
+        futuresCurveHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load the forward curve. <button onclick="vtx.loadFuturesCurve('${code}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else if (!fc.available) {
+        futuresCurveHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Not enough dated contracts currently listed to plot a curve.</div>`;
+      } else {
+        const pts = fc.points;
+        const prices = pts.map(p => p.price);
+        const minP = Math.min(...prices), maxP = Math.max(...prices);
+        const padP = (maxP - minP) * 0.15 || maxP * 0.02;
+        const lo = minP - padP, hi = maxP + padP;
+        const STEP = 58, PADL = 12;
+        const W = STEP * (pts.length - 1) + PADL * 2, H = 74;
+        const xAt = i => PADL + i * STEP;
+        const yAt = p => H - 16 - ((p - lo) / (hi - lo || 1)) * (H - 26);
+        const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(p.price).toFixed(1)}`).join(' ');
+        const shapeColor = fc.shape === 'backwardation' ? 'var(--warn)' : fc.shape === 'contango' ? 'var(--acc2)' : 'var(--mut)';
+        const shapeLabel = fc.shape === 'backwardation' ? 'Backwardation' : fc.shape === 'contango' ? 'Contango' : 'Flat';
+        const shapeDesc = fc.shape === 'backwardation'
+          ? 'Further-dated contracts are cheaper than near-dated ones — often a sign of near-term supply tightness.'
+          : fc.shape === 'contango'
+          ? 'Further-dated contracts are pricier than near-dated ones — the normal cost-of-carry state for storable commodities.'
+          : 'Little slope across the currently listed contracts.';
+        futuresCurveHtml = `
+          <div style="padding:14px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+              <span style="font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${shapeColor};border:1px solid ${shapeColor};background:rgba(255,255,255,.04);border-radius:99px;padding:3px 10px;">${shapeLabel}</span>
+              <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${shapeColor};">${fc.pctChange>=0?'+':''}${fc.pctChange.toFixed(1)}% front → back</span>
+            </div>
+            <div style="overflow-x:auto;">
+              <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;min-width:${W}px;">
+                <path d="${linePath}" fill="none" stroke="${shapeColor}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"></path>
+                ${pts.map((p, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.price).toFixed(1)}" r="2.6" fill="${shapeColor}"></circle>`).join('')}
+                ${pts.map((p, i) => `<text x="${xAt(i).toFixed(1)}" y="${H-3}" font-family="var(--mono)" font-size="7.5" fill="var(--mut)" text-anchor="middle">${p.label}</text>`).join('')}
+              </svg>
+            </div>
+            <div style="font-size:8px;color:var(--mut);margin-top:10px;opacity:.7;">${shapeDesc} Live dated-contract quotes: Yahoo Finance.</div>
+          </div>`;
+      }
+    }
+
     el.innerHTML = `
       <div style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);">
         <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 10px;cursor:pointer;">← Overview</button>
@@ -2902,6 +2963,10 @@ const vtx = {
       ${seasonalityHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Seasonality</div>
         ${seasonalityHtml}
+      </div>` : ''}
+      ${futuresCurveHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Forward Curve</div>
+        ${futuresCurveHtml}
       </div>` : ''}
       <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
