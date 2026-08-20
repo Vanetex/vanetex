@@ -31,10 +31,13 @@ type NewsItem = {
 async function getGeneralNews(apiKey: string): Promise<NewsItem[]> {
   const cacheKey = "news:general";
   const cached = await kvGet<NewsItem[]>(cacheKey);
-  if (cached) return cached;
+  if (cached && cached.length) return cached;
 
   const res = await fetch(`${FINNHUB_BASE}/news?category=general&token=${apiKey}`);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error(`[intel/news] general fetch failed: status=${res.status} body=${await res.text().catch(() => "")}`);
+    return [];
+  }
 
   const rows = (await res.json()) as FinnhubNews[];
   const items: NewsItem[] = (rows ?? [])
@@ -48,6 +51,17 @@ async function getGeneralNews(apiKey: string): Promise<NewsItem[]> {
       headline: r.headline,
       url: r.url,
     }));
+
+  // A real 200 with genuinely zero usable headlines is implausible for
+  // a general news feed — far more likely a transient parse/shape
+  // issue. Never cache that, or one bad response freezes the whole
+  // panel empty for the full TTL (this is exactly what happened on
+  // first deploy: an empty result got cached and every request within
+  // the window kept serving it back).
+  if (!rows || !Array.isArray(rows)) {
+    console.error(`[intel/news] general response not an array: ${JSON.stringify(rows).slice(0, 300)}`);
+  }
+  if (!items.length) return items;
 
   await kvSet(cacheKey, items, GENERAL_CACHE_TTL_S);
   return items;
