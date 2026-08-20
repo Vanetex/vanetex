@@ -28,14 +28,72 @@ type NewsItem = {
   url: string;
 };
 
-async function getGeneralNews(apiKey: string): Promise<NewsItem[]> {
-  const cacheKey = "news:general";
+// Real headline keyword lists per non-stock instrument — used to filter
+// Finnhub's category feeds (which aren't per-instrument) down to what's
+// actually relevant, e.g. "gold" for GOLD, "bitcoin"/"BTC" for BTC.
+// Every phrase is matched with word boundaries (see matchesKeywords) so
+// e.g. "gold" never matches inside "Goldman" and "corn" never matches
+// inside "Cornerstone".
+const INSTRUMENT_NEWS_KEYWORDS: Record<string, string[]> = {
+  SPX: ["S&P 500", "S&P500"],
+  NDX: ["Nasdaq Composite", "Nasdaq index", "Nasdaq 100"],
+  DOW: ["Dow Jones"],
+  RUSSELL2000: ["Russell 2000"],
+  VIX: ["VIX", "volatility index"],
+  FTSE: ["FTSE 100", "FTSE"],
+  NIKKEI: ["Nikkei"],
+  HSI: ["Hang Seng"],
+  ES: ["S&P 500", "S&P500"],
+  NQ: ["Nasdaq"],
+  YM: ["Dow Jones"],
+  RTY: ["Russell 2000"],
+  GOLD: ["gold"],
+  SILVER: ["silver"],
+  PLATINUM: ["platinum"],
+  PALLADIUM: ["palladium"],
+  COPPER: ["copper"],
+  OIL: ["crude oil", "WTI", "OPEC", "oil price", "oil prices"],
+  BRENT: ["Brent crude", "Brent oil"],
+  NATGAS: ["natural gas"],
+  HEATOIL: ["heating oil"],
+  GASOLINE: ["gasoline", "RBOB"],
+  CORN: ["corn"],
+  WHEAT: ["wheat"],
+  SOYBEANS: ["soybean", "soybeans"],
+  COFFEE: ["coffee"],
+  COTTON: ["cotton"],
+  SUGAR: ["sugar"],
+  UST3M: ["Treasury yield", "T-bill"],
+  UST5Y: ["Treasury yield", "5-year Treasury"],
+  UST10Y: ["Treasury yield", "10-year Treasury", "10-year note"],
+  UST30Y: ["Treasury yield", "30-year Treasury", "long bond"],
+  EURUSD: ["euro", "EUR/USD"],
+  USDJPY: ["yen", "USD/JPY"],
+  GBPUSD: ["pound sterling", "GBP/USD", "British pound"],
+  BTC: ["bitcoin", "BTC"],
+  ETH: ["ethereum", "ETH"],
+  SOL: ["solana"],
+  XRP: ["XRP", "ripple"],
+  DOGE: ["dogecoin"],
+};
+const CRYPTO_INSTRUMENT_CODES = new Set(["BTC", "ETH", "SOL", "XRP", "DOGE"]);
+const MIN_INSTRUMENT_MATCHES = 2;
+
+function matchesKeywords(headline: string, keywords: string[]): boolean {
+  return keywords.some((kw) => {
+    const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${esc}\\b`, "i").test(headline);
+  });
+}
+
+async function getCategoryNews(category: "general" | "crypto", apiKey: string): Promise<NewsItem[]> {
+  const cacheKey = `news:category:${category}`;
   const cached = await kvGet<NewsItem[]>(cacheKey);
   if (cached && cached.length) return cached;
 
-  const res = await fetch(`${FINNHUB_BASE}/news?category=general&token=${apiKey}`);
+  const res = await fetch(`${FINNHUB_BASE}/news?category=${category}&token=${apiKey}`);
   if (!res.ok) {
-    console.error(`[intel/news] general fetch failed: status=${res.status} body=${await res.text().catch(() => "")}`);
+    console.error(`[intel/news] ${category} fetch failed: status=${res.status} body=${await res.text().catch(() => "")}`);
     return [];
   }
 
@@ -59,12 +117,39 @@ async function getGeneralNews(apiKey: string): Promise<NewsItem[]> {
   // first deploy: an empty result got cached and every request within
   // the window kept serving it back).
   if (!rows || !Array.isArray(rows)) {
-    console.error(`[intel/news] general response not an array: ${JSON.stringify(rows).slice(0, 300)}`);
+    console.error(`[intel/news] ${category} response not an array: ${JSON.stringify(rows).slice(0, 300)}`);
   }
   if (!items.length) return items;
 
   await kvSet(cacheKey, items, GENERAL_CACHE_TTL_S);
   return items;
+}
+
+async function getGeneralNews(apiKey: string): Promise<NewsItem[]> {
+  return getCategoryNews("general", apiKey);
+}
+
+// Finnhub has no per-commodity/per-coin news endpoint, so instrument news
+// is real category-feed headlines (crypto category for crypto codes,
+// general for everything else) filtered down by keyword relevance. If
+// too few real matches turn up (thin coverage that day, or an instrument
+// whose keywords are just narrower), falls back to the full category
+// pool rather than showing an artificially sparse or empty panel — same
+// fallback discipline as the rest of this route.
+async function getInstrumentNews(
+  code: string,
+  apiKey: string,
+): Promise<{ items: NewsItem[]; matched: boolean; category: "general" | "crypto" }> {
+  const keywords = INSTRUMENT_NEWS_KEYWORDS[code];
+  const category: "general" | "crypto" = CRYPTO_INSTRUMENT_CODES.has(code) ? "crypto" : "general";
+  const pool = await getCategoryNews(category, apiKey);
+  if (!keywords) return { items: pool, matched: false, category };
+
+  const filtered = pool.filter((item) => matchesKeywords(item.headline, keywords));
+  if (filtered.length >= MIN_INSTRUMENT_MATCHES) {
+    return { items: filtered.slice(0, MAX_GENERAL_RESULTS), matched: true, category };
+  }
+  return { items: pool, matched: false, category };
 }
 
 async function getSymbolNews(symbol: string, apiKey: string): Promise<NewsItem[]> {
@@ -110,13 +195,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "FINNHUB_API_KEY is not configured" }, { status: 500 });
   }
 
+  const instrumentCode = request.nextUrl.searchParams.get("instrument")?.trim().toUpperCase();
+  if (instrumentCode) {
+    try {
+      const { items, matched, category } = await getInstrumentNews(instrumentCode, apiKey);
+      return NextResponse.json({ items, matched, category }, { headers: { "Cache-Control": "private, max-age=300" } });
+    } catch (err) {
+      console.error("[intel/news] instrument error:", err);
+      return NextResponse.json({ error: "Failed to fetch news" }, { status: 500 });
+    }
+  }
+
   const symbolsParam = request.nextUrl.searchParams.get("symbols") ?? "";
   const symbols = [...new Set(symbolsParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, MAX_SYMBOLS);
 
   // No symbols requested — e.g. the Market Overview screen, or an
-  // instrument/indicator view where there's no single company this news
-  // could be "about" — falls back to real general market/business news
-  // instead of an empty panel.
+  // indicator view where there's no single company this news could be
+  // "about" — falls back to real general market/business news instead
+  // of an empty panel.
   if (symbols.length === 0) {
     try {
       const items = await getGeneralNews(apiKey);
