@@ -271,6 +271,15 @@ input{font-family:var(--ui)}
           <div id="shortInterestBody" style="padding:11px 14px;"></div>
         </div>
 
+        <!-- federal contracts — real USASpending.gov awards, searched by
+             company name (official free public API, no key). -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Federal Contracts</span>
+          </div>
+          <div id="federalContractsBody" style="padding:11px 14px;"></div>
+        </div>
+
         <!-- extended financials -->
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
           <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Financials</div>
@@ -851,7 +860,7 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); this.loadNews(); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
   backToOverview() { this.state.view = 'overview'; this.render(); this.loadNews(); },
   selectInstrument(code) {
     if (!this.INSTRUMENTS[code]) return;
@@ -1186,6 +1195,7 @@ const vtx = {
     this.loadFinancialsReported(sym);
     this.loadPeerPercentile(sym);
     this.loadShortInterest(sym);
+    this.loadFederalContracts(sym, name);
     this.loadSparklines([sym]);
     this.loadNews();
     try {
@@ -1235,6 +1245,7 @@ const vtx = {
     this.loadFinancialsReported(sym);
     this.loadPeerPercentile(sym);
     this.loadShortInterest(sym);
+    this.loadFederalContracts(sym, name);
     this.loadSparklines([sym]);
     this.loadNews();
     try {
@@ -2137,6 +2148,24 @@ const vtx = {
       }
     } catch (e) {
       this._shortInterest[sym] = { __failed: true };
+    }
+    if (this.state.focus === sym && this.state.view === 'ticker') this.render();
+  },
+
+  // Real USASpending.gov federal contract awards — "who does this company
+  // sell to in Washington," searched by company name (not ticker; the
+  // government doesn't index by CUSIP/symbol). A genuinely empty result is
+  // real and common (most companies have no federal contracts) — shown
+  // the same as any other "confirmed, nothing here" state elsewhere in
+  // this app, not treated as a failure.
+  async loadFederalContracts(sym, name) {
+    if (!this._federalContracts) this._federalContracts = {};
+    if (!name) { this._federalContracts[sym] = { contracts: [] }; if (this.state.focus === sym && this.state.view === 'ticker') this.render(); return; }
+    try {
+      const res = await fetch(`/api/stock/federal-contracts?name=${encodeURIComponent(name)}`);
+      this._federalContracts[sym] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._federalContracts[sym] = { __failed: true };
     }
     if (this.state.focus === sym && this.state.view === 'ticker') this.render();
   },
@@ -3385,6 +3414,35 @@ const vtx = {
         ${sparkline}
         ${clusterHtml}
         <div style="margin-top:9px;font-size:8px;color:var(--mut);opacity:.7;">FINRA Rule 4560 consolidated short interest, settles twice monthly (15th &amp; month-end) with an ~8-business-day publish lag — this is the most recent cycle on file, not real-time.${pts.length>1?` ${pts.length} cycles shown.`:''}</div>`;
+    }
+
+    // Federal contracts — real USASpending.gov awards, searched by company
+    // name (the government indexes recipients by name/UEI, not ticker).
+    // A genuinely empty result is common and real (most companies have no
+    // federal contracts) — shown as a plain fact, not an error.
+    const fc = this._federalContracts && this._federalContracts[f.sym];
+    const fcEl = document.getElementById('federalContractsBody');
+    const fmtUsd = v => v == null ? '—' : v >= 1e9 ? '$'+(v/1e9).toFixed(2)+'B' : v >= 1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+v.toLocaleString();
+    if (!fc) {
+      fcEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading federal contracts…</div>`;
+    } else if (fc.__failed) {
+      fcEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Couldn't load federal contract data. <button onclick="vtx.loadFederalContracts('${f.sym}',${JSON.stringify(f.name).replace(/"/g,'&quot;')})" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else if (!fc.contracts.length) {
+      fcEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">No federal contracts on file for ${f.sym}.</div>`;
+    } else {
+      fcEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${fc.contracts.map(c => `
+            <div style="padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.03);">
+              <div style="display:flex;align-items:baseline;gap:8px;">
+                <span style="font-family:var(--mono);font-size:13px;font-weight:800;color:var(--acc2);">${fmtUsd(c.amount)}</span>
+                <span style="font-size:10px;color:var(--mut);margin-left:auto;">${c.startDate||'—'}${c.endDate?' – '+c.endDate:''}</span>
+              </div>
+              <div style="font-size:10.5px;color:var(--txt);margin-top:3px;">${c.agency||'—'}${c.subAgency&&c.subAgency!==c.agency?' · '+c.subAgency:''}</div>
+              ${c.description ? `<div style="font-size:10px;color:var(--mut);margin-top:4px;line-height:1.5;">${c.description.length>160?c.description.slice(0,160)+'…':c.description}</div>` : ''}
+            </div>`).join('')}
+        </div>
+        <div style="margin-top:9px;font-size:8px;color:var(--mut);opacity:.7;">Top ${fc.contracts.length} contract${fc.contracts.length===1?'':'s'} by award value, matched by company name (not ticker) — USASpending.gov, official federal award data.</div>`;
     }
 
     // ETF holdings — real data is only fetchable for SPDR-family funds
