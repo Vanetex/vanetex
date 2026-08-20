@@ -863,7 +863,8 @@ const vtx = {
   selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
   backToOverview() { this.state.view = 'overview'; this.render(); this.loadNews(); },
   selectInstrument(code) {
-    if (!this.INSTRUMENTS[code]) return;
+    const inst = this.INSTRUMENTS[code];
+    if (!inst) return;
     this.state.view = 'instrument';
     this.state.instrument = code;
     this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
@@ -872,8 +873,23 @@ const vtx = {
     this.render();
     this.loadInstrumentData(code);
     this.loadNews();
+    if (inst.category === 'Crypto') this.loadCryptoDetail(code);
   },
   setInstrumentTf(tf) { this.state.tf = tf; this.render(); this.loadInstrumentData(this.state.instrument); },
+  // Richer per-coin detail (market cap, supply, ATH/ATL, multi-period
+  // change, crypto Fear & Greed) — only fetched when a crypto Instrument
+  // View is actually open, separate from the 60s market/crypto snapshot
+  // poll that only needs price + 24h change for the Global Markets tiles.
+  async loadCryptoDetail(code) {
+    this._cryptoDetail = this._cryptoDetail || {};
+    try {
+      const res = await fetch(`/api/market/crypto-detail?symbol=${encodeURIComponent(code)}`);
+      this._cryptoDetail[code] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._cryptoDetail[code] = { __failed: true };
+    }
+    if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
+  },
 
   // Economic indicator view — a real FRED series (any of the thousands
   // discoverable via /api/intel/econ-search), not a fixed list like
@@ -2633,6 +2649,67 @@ const vtx = {
         </div>`;
     }
 
+    // Crypto-only detail — market cap/supply/ATH-ATL/multi-period change
+    // (CoinGecko) plus a real, separate crypto-specific Fear & Greed
+    // Index (alternative.me) — distinct from this app's own composite
+    // Fear & Greed elsewhere, which is equity-market-focused.
+    let cryptoDetailHtml = '';
+    if (inst.category === 'Crypto') {
+      const cd = this._cryptoDetail && this._cryptoDetail[code];
+      const fmtSupply = v => v == null ? '—' : v >= 1e9 ? (v/1e9).toFixed(2)+'B' : v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v.toLocaleString();
+      const fmtPct = v => v == null ? '—' : (v>=0?'+':'')+v.toFixed(1)+'%';
+      const pctColor = v => v == null ? 'var(--mut)' : (v>=0?cPos:cNeg);
+      if (!cd) {
+        cryptoDetailHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading market cap, supply &amp; sentiment…</div>`;
+      } else if (cd.__failed) {
+        cryptoDetailHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load extended crypto data. <button onclick="vtx.loadCryptoDetail('${code}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        const supplyPct = (cd.circulatingSupply!=null && cd.maxSupply) ? Math.min(100, cd.circulatingSupply/cd.maxSupply*100) : null;
+        const athDrawdown = (cd.athPrice && quote) ? (quote.price/cd.athPrice - 1) * 100 : null;
+        const fngColor = cd.fearGreedValue == null ? 'var(--mut)' : cd.fearGreedValue >= 55 ? cPos : cd.fearGreedValue <= 45 ? cNeg : 'var(--warn)';
+        cryptoDetailHtml = `
+          <div style="padding:14px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div style="background:rgba(255,255,255,.03);border-radius:9px;padding:9px 11px;">
+                <div style="font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);">Market Cap</div>
+                <div style="font-family:var(--mono);font-size:15px;font-weight:800;margin-top:2px;">${cd.marketCap!=null?this.mktCapFromFin(cd.marketCap/1e6):'—'}</div>
+              </div>
+              <div style="background:rgba(255,255,255,.03);border-radius:9px;padding:9px 11px;">
+                <div style="font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);">Crypto Fear &amp; Greed</div>
+                <div style="font-family:var(--mono);font-size:15px;font-weight:800;margin-top:2px;color:${fngColor};">${cd.fearGreedValue!=null?cd.fearGreedValue:'—'}${cd.fearGreedLabel?' · '+cd.fearGreedLabel:''}</div>
+              </div>
+            </div>
+            <div style="margin-top:10px;">
+              <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--mut);margin-bottom:4px;">
+                <span>Circulating Supply</span>
+                <span>${fmtSupply(cd.circulatingSupply)}${cd.maxSupply?' / '+fmtSupply(cd.maxSupply)+' max':cd.totalSupply?' / '+fmtSupply(cd.totalSupply)+' total':''}</span>
+              </div>
+              ${supplyPct!=null ? `<div style="height:6px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden;"><div style="height:100%;width:${supplyPct.toFixed(1)}%;background:var(--acc2);"></div></div>` : ''}
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px;">
+              ${[['24h',cd.changePct24h],['7d',cd.changePct7d],['30d',cd.changePct30d],['1y',cd.changePct1y]].map(([label,v]) => `
+                <div style="text-align:center;background:rgba(255,255,255,.03);border-radius:8px;padding:6px 4px;">
+                  <div style="font-size:7.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);">${label}</div>
+                  <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:${pctColor(v)};margin-top:1px;">${fmtPct(v)}</div>
+                </div>`).join('')}
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+              <div style="background:rgba(255,255,255,.03);border-radius:9px;padding:9px 11px;">
+                <div style="font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);">All-Time High</div>
+                <div style="font-family:var(--mono);font-size:13px;font-weight:800;margin-top:2px;">${cd.athPrice!=null?this.fmt(cd.athPrice):'—'}</div>
+                <div style="font-size:9px;color:var(--mut);margin-top:1px;">${cd.athDate||''}${athDrawdown!=null?` · ${fmtPct(athDrawdown)} from ATH`:''}</div>
+              </div>
+              <div style="background:rgba(255,255,255,.03);border-radius:9px;padding:9px 11px;">
+                <div style="font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);">All-Time Low</div>
+                <div style="font-family:var(--mono);font-size:13px;font-weight:800;margin-top:2px;">${cd.atlPrice!=null?this.fmt(cd.atlPrice):'—'}</div>
+                <div style="font-size:9px;color:var(--mut);margin-top:1px;">${cd.atlDate||''}</div>
+              </div>
+            </div>
+            <div style="font-size:8px;color:var(--mut);margin-top:10px;opacity:.7;">Market cap, supply &amp; ATH/ATL: CoinGecko · Fear &amp; Greed Index: alternative.me, updates once daily.</div>
+          </div>`;
+      }
+    }
+
     el.innerHTML = `
       <div style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);">
         <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 10px;cursor:pointer;">← Overview</button>
@@ -2657,6 +2734,10 @@ const vtx = {
         <div style="padding:8px 6px 4px;position:relative;">${chartHtml}</div>
       </div>
       ${statsHtml}
+      ${cryptoDetailHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Market Data &amp; Sentiment</div>
+        ${cryptoDetailHtml}
+      </div>` : ''}
       <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
     // The chart SVG above was just rebuilt via innerHTML, so its hover
