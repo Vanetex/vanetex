@@ -874,7 +874,7 @@ const vtx = {
     this.loadInstrumentData(code);
     this.loadNews();
     if (inst.category === 'Crypto') this.loadCryptoDetail(code);
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) this.loadCftcCot(code);
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) { this.loadCftcCot(code); this.loadSeasonality(code); }
   },
   COMMODITY_CATEGORIES: ['Metals', 'Energy', 'Agriculture'],
   // Real CFTC Commitment of Traders positioning — who's actually long/
@@ -892,6 +892,48 @@ const vtx = {
       this._cftcCot[code] = { __failed: true };
     }
     if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
+  },
+  // Seasonality — needs no new API. Reuses the same /api/stock/candles
+  // route the main chart already calls, just always at MAX (~10y monthly)
+  // regardless of whatever timeframe the chart itself is currently on, so
+  // it's computed once per instrument view and doesn't get re-fetched when
+  // the user flips chart timeframes.
+  async loadSeasonality(code) {
+    this._seasonality = this._seasonality || {};
+    const inst = this.INSTRUMENTS[code];
+    if (!inst) return;
+    try {
+      const res = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(inst.yahooSymbol)}&range=MAX`);
+      if (!res.ok) throw new Error('bad status');
+      const data = await res.json();
+      this._seasonality[code] = this.computeSeasonality(data);
+    } catch (e) {
+      this._seasonality[code] = { __failed: true };
+    }
+    if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
+  },
+  // Average month-over-month % change, grouped by calendar month across
+  // every year of real history Yahoo returns — the standard "seasonality"
+  // view (e.g. corn's historical pre-harvest rally). A real average of real
+  // past returns, not a projection; needs a minimum sample so a thin
+  // history (a newly-listed contract, or a Yahoo hiccup) doesn't render a
+  // confident-looking chart off 2-3 data points.
+  MIN_SEASONALITY_POINTS: 25,
+  computeSeasonality(data) {
+    const prices = data && data.prices, times = data && data.times;
+    if (!prices || !times || prices.length < this.MIN_SEASONALITY_POINTS) return { __failed: true };
+    const byMonth = Array.from({ length: 12 }, () => []);
+    for (let i = 1; i < prices.length; i++) {
+      const prev = prices[i - 1], cur = prices[i];
+      if (prev == null || cur == null || prev === 0) continue;
+      const ret = (cur - prev) / prev * 100;
+      const d = new Date(times[i] * 1000);
+      byMonth[d.getUTCMonth()].push(ret);
+    }
+    const months = byMonth.map(arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+    const counts = byMonth.map(arr => arr.length);
+    const yearsSpan = Math.round((times[times.length - 1] - times[0]) / (365.25 * 24 * 3600));
+    return { months, counts, yearsSpan };
   },
   setInstrumentTf(tf) { this.state.tf = tf; this.render(); this.loadInstrumentData(this.state.instrument); },
   // Richer per-coin detail (market cap, supply, ATH/ATL, multi-period
@@ -2789,6 +2831,42 @@ const vtx = {
       }
     }
 
+    // Commodity-only detail — average seasonal (month-over-month) pattern
+    // from real historical monthly closes. Same COMMODITY_CATEGORIES gate
+    // as CFTC above.
+    let seasonalityHtml = '';
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+      const se = this._seasonality && this._seasonality[code];
+      if (!se) {
+        seasonalityHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading seasonal pattern…</div>`;
+      } else if (se.__failed) {
+        seasonalityHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Not enough historical data for a seasonal pattern. <button onclick="vtx.loadSeasonality('${code}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const HALF_H = 24;
+        const maxAbs = Math.max(1, ...se.months.map(v => v == null ? 0 : Math.abs(v)));
+        const cells = se.months.map((v, i) => {
+          const color = v == null ? 'var(--mut)' : v >= 0 ? cPos : cNeg;
+          const mag = v == null ? 0 : Math.max(2, Math.abs(v) / maxAbs * HALF_H);
+          return `
+            <div style="display:flex;flex-direction:column;align-items:center;">
+              <div style="display:flex;flex-direction:column;height:${HALF_H*2}px;width:100%;">
+                <div style="flex:1;display:flex;align-items:flex-end;justify-content:center;">${v!=null && v>=0 ? `<div style="width:9px;height:${mag.toFixed(1)}px;background:${color};border-radius:2px 2px 0 0;"></div>` : ''}</div>
+                <div style="height:1px;background:var(--line);"></div>
+                <div style="flex:1;display:flex;align-items:flex-start;justify-content:center;">${v!=null && v<0 ? `<div style="width:9px;height:${mag.toFixed(1)}px;background:${color};border-radius:0 0 2px 2px;"></div>` : ''}</div>
+              </div>
+              <div style="font-size:7.5px;color:var(--mut);margin-top:4px;">${MONTHS[i]}</div>
+              <div style="font-family:var(--mono);font-size:7.5px;font-weight:700;color:${color};">${v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%'}</div>
+            </div>`;
+        }).join('');
+        seasonalityHtml = `
+          <div style="padding:14px;">
+            <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;">${cells}</div>
+            <div style="font-size:8px;color:var(--mut);margin-top:12px;opacity:.7;">Average month-over-month % change, last ~${se.yearsSpan} years · Yahoo Finance monthly closes. Historical pattern, not a forecast.</div>
+          </div>`;
+      }
+    }
+
     el.innerHTML = `
       <div style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);">
         <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 10px;cursor:pointer;">← Overview</button>
@@ -2820,6 +2898,10 @@ const vtx = {
       ${cftcCotHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Futures Positioning (CFTC)</div>
         ${cftcCotHtml}
+      </div>` : ''}
+      ${seasonalityHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Seasonality</div>
+        ${seasonalityHtml}
       </div>` : ''}
       <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
