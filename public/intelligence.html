@@ -372,31 +372,36 @@ const vtx = {
   // units/frequency below was verified live against /api/intel/econ-search
   // (not guessed) before being hardcoded here. 'type' only controls display
   // formatting (pct vs plain number), never the value itself.
+  // relevance: 3 = core/must-watch for a general investor, 2 = important
+  // but more specialist, 1 = supplementary/niche. Used to sort tiles
+  // within each group (highest first) and badge them in the Macro
+  // Dashboard — a judgment call about typical investor relevance, not
+  // a measured statistic.
   MACRO_SERIES: [
     { group: 'Credit & Stress', items: [
-      { id:'BAA10Y', label:'Baa Corporate Spread', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:"Moody's Seasoned Baa Corporate Bond Yield Relative to Yield on 10-Year Treasury Constant Maturity", type:'pct' },
-      { id:'AAA10Y', label:'Aaa Corporate Spread', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:"Moody's Seasoned Aaa Corporate Bond Yield Relative to Yield on 10-Year Treasury Constant Maturity", type:'pct' },
-      { id:'BAMLH0A0HYM2', label:'High-Yield OAS Spread', units:'Percent', frequency:'Daily, Close', seasonalAdjustment:'NSA', title:'ICE BofA US High Yield Index Option-Adjusted Spread', type:'pct' },
-      { id:'STLFSI4', label:'Fed Financial Stress Index', units:'Index', frequency:'Weekly, Ending Friday', seasonalAdjustment:'NSA', title:'St. Louis Fed Financial Stress Index', type:'num' },
+      { id:'BAMLH0A0HYM2', label:'High-Yield OAS Spread', units:'Percent', frequency:'Daily, Close', seasonalAdjustment:'NSA', title:'ICE BofA US High Yield Index Option-Adjusted Spread', type:'pct', relevance:3 },
+      { id:'STLFSI4', label:'Fed Financial Stress Index', units:'Index', frequency:'Weekly, Ending Friday', seasonalAdjustment:'NSA', title:'St. Louis Fed Financial Stress Index', type:'num', relevance:3 },
+      { id:'BAA10Y', label:'Baa Corporate Spread', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:"Moody's Seasoned Baa Corporate Bond Yield Relative to Yield on 10-Year Treasury Constant Maturity", type:'pct', relevance:2 },
+      { id:'AAA10Y', label:'Aaa Corporate Spread', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:"Moody's Seasoned Aaa Corporate Bond Yield Relative to Yield on 10-Year Treasury Constant Maturity", type:'pct', relevance:1 },
     ]},
     { group: 'Growth & Sentiment', items: [
-      { id:'UMCSENT', label:'Consumer Sentiment', units:'Index 1966:Q1=100', frequency:'Monthly', seasonalAdjustment:'NSA', title:'University of Michigan: Consumer Sentiment', type:'num' },
-      { id:'ICSA', label:'Jobless Claims', units:'Number', frequency:'Weekly, Ending Saturday', seasonalAdjustment:'SA', title:'Initial Claims', type:'num' },
-      { id:'GACDFSA066MSFRBPHI', label:'Philly Fed Mfg. Index', units:'Index', frequency:'Monthly', seasonalAdjustment:'SA', title:'Current General Activity; Diffusion Index for Federal Reserve District 3: Philadelphia', type:'num' },
-      { id:'GACDISA066MSFRBNY', label:'Empire State Mfg. Index', units:'Index', frequency:'Monthly', seasonalAdjustment:'SA', title:'Current General Business Conditions; Diffusion Index for New York', type:'num' },
+      { id:'UMCSENT', label:'Consumer Sentiment', units:'Index 1966:Q1=100', frequency:'Monthly', seasonalAdjustment:'NSA', title:'University of Michigan: Consumer Sentiment', type:'num', relevance:3 },
+      { id:'ICSA', label:'Jobless Claims', units:'Number', frequency:'Weekly, Ending Saturday', seasonalAdjustment:'SA', title:'Initial Claims', type:'num', relevance:3 },
+      { id:'GACDFSA066MSFRBPHI', label:'Philly Fed Mfg. Index', units:'Index', frequency:'Monthly', seasonalAdjustment:'SA', title:'Current General Activity; Diffusion Index for Federal Reserve District 3: Philadelphia', type:'num', relevance:2 },
+      { id:'GACDISA066MSFRBNY', label:'Empire State Mfg. Index', units:'Index', frequency:'Monthly', seasonalAdjustment:'SA', title:'Current General Business Conditions; Diffusion Index for New York', type:'num', relevance:2 },
     ]},
     { group: 'Housing & Consumer', items: [
-      { id:'CSUSHPINSA', label:'Case-Shiller Home Price Index', units:'Index Jan 2000=100', frequency:'Monthly', seasonalAdjustment:'NSA', title:'S&P Cotality Case-Shiller U.S. National Home Price Index', type:'num' },
-      { id:'MORTGAGE30US', label:'30-Year Mortgage Rate', units:'Percent', frequency:'Weekly, Ending Thursday', seasonalAdjustment:'NSA', title:'30-Year Fixed Rate Mortgage Average in the United States', type:'pct' },
-      { id:'RSAFS', label:'Retail Sales', units:'Millions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'Advance Retail Sales: Retail Trade and Food Services', type:'num' },
+      { id:'RSAFS', label:'Retail Sales', units:'Millions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'Advance Retail Sales: Retail Trade and Food Services', type:'num', relevance:3 },
+      { id:'MORTGAGE30US', label:'30-Year Mortgage Rate', units:'Percent', frequency:'Weekly, Ending Thursday', seasonalAdjustment:'NSA', title:'30-Year Fixed Rate Mortgage Average in the United States', type:'pct', relevance:3 },
+      { id:'CSUSHPINSA', label:'Case-Shiller Home Price Index', units:'Index Jan 2000=100', frequency:'Monthly', seasonalAdjustment:'NSA', title:'S&P Cotality Case-Shiller U.S. National Home Price Index', type:'num', relevance:2 },
     ]},
     { group: 'Money, Rates & Dollar', items: [
-      { id:'FEDFUNDS', label:'Fed Funds Rate', units:'Percent', frequency:'Monthly', seasonalAdjustment:'NSA', title:'Federal Funds Effective Rate', type:'pct' },
-      { id:'M2SL', label:'M2 Money Supply', units:'Billions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'M2', type:'num' },
-      { id:'DFII10', label:'10Y Real (TIPS) Yield', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed', type:'pct' },
-      { id:'T10YIE', label:'10Y Breakeven Inflation', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'10-Year Breakeven Inflation Rate', type:'pct' },
-      { id:'WALCL', label:'Fed Balance Sheet', units:'Millions of U.S. Dollars', frequency:'Weekly, As of Wednesday', seasonalAdjustment:'NSA', title:'Assets: Total Assets: Total Assets (Less Eliminations from Consolidation): Wednesday Level', type:'num' },
-      { id:'DTWEXBGS', label:'Trade-Weighted Dollar Index', units:'Index Jan 2006=100', frequency:'Daily', seasonalAdjustment:'NSA', title:'Nominal Broad U.S. Dollar Index', type:'num' },
+      { id:'FEDFUNDS', label:'Fed Funds Rate', units:'Percent', frequency:'Monthly', seasonalAdjustment:'NSA', title:'Federal Funds Effective Rate', type:'pct', relevance:3 },
+      { id:'M2SL', label:'M2 Money Supply', units:'Billions of Dollars', frequency:'Monthly', seasonalAdjustment:'SA', title:'M2', type:'num', relevance:2 },
+      { id:'T10YIE', label:'10Y Breakeven Inflation', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'10-Year Breakeven Inflation Rate', type:'pct', relevance:2 },
+      { id:'WALCL', label:'Fed Balance Sheet', units:'Millions of U.S. Dollars', frequency:'Weekly, As of Wednesday', seasonalAdjustment:'NSA', title:'Assets: Total Assets: Total Assets (Less Eliminations from Consolidation): Wednesday Level', type:'num', relevance:2 },
+      { id:'DTWEXBGS', label:'Trade-Weighted Dollar Index', units:'Index Jan 2006=100', frequency:'Daily', seasonalAdjustment:'NSA', title:'Nominal Broad U.S. Dollar Index', type:'num', relevance:2 },
+      { id:'DFII10', label:'10Y Real (TIPS) Yield', units:'Percent', frequency:'Daily', seasonalAdjustment:'NSA', title:'Market Yield on U.S. Treasury Securities at 10-Year Constant Maturity, Quoted on an Investment Basis, Inflation-Indexed', type:'pct', relevance:1 },
     ]},
   ],
   FIL: null, // populated by loadFilings() — real SEC EDGAR Form 4 data; null = not loaded yet, [] = loaded and genuinely empty
@@ -3525,22 +3530,30 @@ const vtx = {
       // full history), so this is a new front-door into infrastructure the
       // app already has, not a second chart system.
       const fmtMacroVal = (v, type) => v == null ? '—' : (type === 'pct' ? v.toFixed(2)+'%' : v.toLocaleString('en-US',{maximumFractionDigits:2}));
+      // Relevance dots (●●● core, ●●○ important, ●○○ supplementary) —
+      // shown in every tile state, loading/failed included, since the
+      // tier is a property of the indicator itself, not its data.
+      const tierDots = n => `<span title="Relevance: ${n===3?'core':n===2?'important':'supplementary'}" style="font-size:6px;letter-spacing:1px;color:var(--acc2);opacity:${n===3?1:.55};flex-shrink:0;">${'●'.repeat(n)}${'○'.repeat(3-n)}</span>`;
       const macroTile = (item) => {
         const d = this.MACRO_DASH[item.id];
         const meta = { id:item.id, title:item.title, units:item.units, frequency:item.frequency, seasonalAdjustment:item.seasonalAdjustment };
+        const labelRow = `<div style="display:flex;align-items:center;gap:5px;">
+          <span style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${item.label}</span>
+          ${tierDots(item.relevance || 1)}
+        </div>`;
         if (!d) return `<div style="background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px;">
-          <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.label}</div>
+          ${labelRow}
           <div style="font-family:var(--mono);font-size:13px;font-weight:800;margin-top:2px;color:var(--mut);">Loading…</div>
         </div>`;
         if (d.failed) return `<div style="background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px;">
-          <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.label}</div>
+          ${labelRow}
           <div style="font-family:var(--mono);font-size:11px;color:var(--mut);margin-top:2px;">Couldn't load</div>
         </div>`;
         const up = d.change != null && d.change >= 0;
         const chgStr = d.change != null ? `${up?'+':''}${d.change.toLocaleString('en-US',{maximumFractionDigits:2})}` : '—';
         const chgColor = d.change == null ? 'var(--mut)' : (up ? 'var(--pos)' : 'var(--neg)');
         return `<div onclick='vtx.selectIndicator(${JSON.stringify(meta).replace(/'/g,"&#39;")})' title="View ${item.label} chart" style="cursor:pointer;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px;">
-          <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.label}</div>
+          ${labelRow}
           <div style="font-family:var(--mono);font-size:14px;font-weight:800;margin-top:2px;">${fmtMacroVal(d.value, item.type)}</div>
           <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:${chgColor};margin-top:1px;">${chgStr}</div>
         </div>`;
@@ -3553,7 +3566,7 @@ const vtx = {
               <div>
                 <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);opacity:.75;margin-bottom:6px;">${g.group}</div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px;">
-                  ${g.items.map(macroTile).join('')}
+                  ${[...g.items].sort((a,b) => (b.relevance||1) - (a.relevance||1)).map(macroTile).join('')}
                 </div>
               </div>`).join('')}
           </div>
