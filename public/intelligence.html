@@ -351,6 +351,7 @@ const vtx = {
     moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null,
     screenerSort: { key: 'chg', dir: -1 },
     leaderboardTf: '1Y',
+    compareSet: [], compareTf: '6M',
     // A ticker viewed from search but not yet added to the real
     // watchlist — never persisted (saveWatchlist() never touches it),
     // holds at most one symbol, and is silently replaced/discarded the
@@ -1114,8 +1115,14 @@ const vtx = {
     };
     const markOk = () => { if (this._chartLoadFailed && this._chartLoadFailed[sym]) delete this._chartLoadFailed[sym][tf]; };
     const rerenderIfRelevant = () => {
-      const isCompareTarget = this.state.tab === 'compare' && (this.state.compareSet||[]).includes(sym);
-      if ((this.state.focus === sym || isCompareTarget) && this.state.tf === tf) this.render();
+      // Compare has its own independent timeframe (compareTf), separate
+      // from the main ticker chart's tf — each target must be checked
+      // against the tf that's actually relevant to it, or a Compare-only
+      // fetch (e.g. compareTf='1Y' while the focused ticker is on tf='1D')
+      // would never trigger the render that shows its loaded data.
+      const isFocusMatch = this.state.focus === sym && this.state.tf === tf;
+      const isCompareMatch = this.state.tab === 'compare' && (this.state.compareSet||[]).includes(sym) && this.state.compareTf === tf;
+      if (isFocusMatch || isCompareMatch) this.render();
     };
     try {
       const r = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(tf)}`);
@@ -1262,13 +1269,52 @@ const vtx = {
     this.render();
   },
   toggleCompareSymbol(sym) {
+    sym = sym.toUpperCase();
     const set = new Set(this.state.compareSet || []);
     if (set.has(sym)) set.delete(sym); else set.add(sym);
     this.state.compareSet = [...set];
-    const tf = this.state.tf;
-    this.state.compareSet.forEach(s => {
-      if (!(this._chartData && this._chartData[s] && this._chartData[s][tf])) this.loadChartData(s, tf);
-    });
+    this.loadCompareData(sym);
+    this.renderRight();
+  },
+  // Compare isn't limited to watchlist symbols — this fetches whatever a
+  // newly-added symbol is missing (chart data for the Compare tab's own
+  // timeframe, and financials if it's not already a tracked ticker with
+  // fin loaded) without touching the watchlist itself.
+  loadCompareData(sym) {
+    if (!this.state.compareSet.includes(sym)) return;
+    const tf = this.state.compareTf;
+    if (!(this._chartData && this._chartData[sym] && this._chartData[sym][tf])) this.loadChartData(sym, tf);
+    const onWatchlist = this.state.tickers.some(t => t.sym === sym);
+    const haveFin = this._compareFin && this._compareFin[sym] && !this._compareFin[sym].__failed;
+    if (!onWatchlist && !haveFin) {
+      this._compareFin = this._compareFin || {};
+      fetch(`/api/stock/financials?symbol=${encodeURIComponent(sym)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(fin => {
+          this._compareFin[sym] = (fin && !fin.error) ? fin : { __failed: true };
+          if (this.state.tab === 'compare') this.renderRight();
+        })
+        .catch(() => { this._compareFin[sym] = { __failed: true }; });
+    }
+  },
+  setCompareTf(tf) {
+    this.state.compareTf = tf;
+    (this.state.compareSet || []).forEach(sym => this.loadCompareData(sym));
+    this.renderRight();
+  },
+  // Free-text add for a symbol that isn't on the watchlist — the chips
+  // above only cover what's already tracked, so comparing against
+  // anything else (a competitor, an index proxy) needs its own entry
+  // point rather than requiring the user to add it to the watchlist
+  // first just to compare it once.
+  addCompareSymbol(raw) {
+    const sym = (raw || '').trim().toUpperCase();
+    if (!sym) return;
+    const input = document.getElementById('compareAddInput');
+    if (input) input.value = '';
+    if ((this.state.compareSet || []).includes(sym)) return;
+    this.state.compareSet = [...(this.state.compareSet || []), sym];
+    this.loadCompareData(sym);
     this.renderRight();
   },
   // Shared by the main chart and Compare tab so both timeframes format
@@ -3808,25 +3854,78 @@ const vtx = {
     else if (s.tab === 'compare') {
       const compareSet = s.compareSet || [];
       const palette = ['#2F7BFF','#1fd397','#f5a524','#9b6bff','#34d3ff','#ec4899','#64748b'];
+      const watchlistSyms = new Set(T.map(t=>t.sym));
+      const tfList = ['1D','5D','1M','6M','1Y','MAX'];
+      const tfButtonsHtml = tfList.map(l => `
+        <button onclick="vtx.setCompareTf('${l}')" style="font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border:none;border-radius:6px;cursor:pointer;background:${l===s.compareTf?'rgba(var(--glow),.2)':'transparent'};color:${l===s.compareTf?'var(--acc2)':'var(--mut)'};">${l}</button>`).join('');
       const chipsHtml = T.map(t => `
         <button onclick="vtx.toggleCompareSymbol('${t.sym}')" style="font-family:var(--mono);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:99px;border:1px solid ${compareSet.includes(t.sym)?'rgba(var(--glow),.5)':'var(--line)'};background:${compareSet.includes(t.sym)?'rgba(var(--glow),.16)':'rgba(255,255,255,.03)'};color:${compareSet.includes(t.sym)?'var(--acc2)':'var(--mut)'};margin:3px 3px 0 0;cursor:pointer;">${t.sym}</button>`).join('');
+      // Symbols added via the free-text box aren't on the watchlist, so
+      // they have no chip to toggle off above — give them their own,
+      // always-active chip with a close affordance instead.
+      const adHocChipsHtml = compareSet.filter(sym => !watchlistSyms.has(sym)).map(sym => `
+        <button onclick="vtx.toggleCompareSymbol('${sym}')" title="Remove from comparison" style="font-family:var(--mono);font-size:10.5px;font-weight:700;padding:5px 8px 5px 10px;border-radius:99px;border:1px solid rgba(var(--glow),.5);background:rgba(var(--glow),.16);color:var(--acc2);margin:3px 3px 0 0;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">${sym}<span style="opacity:.6;">×</span></button>`).join('');
       const header = `<div style="padding:12px 14px 0;">
-        <div style="font-size:9px;color:var(--mut);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">Compare (${s.tf}) — select 2+ tickers</div>
-        <div>${chipsHtml}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div style="font-size:9px;color:var(--mut);letter-spacing:.1em;text-transform:uppercase;">Compare — select 2+</div>
+          <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;margin-left:auto;">${tfButtonsHtml}</div>
+        </div>
+        <div>${chipsHtml}${adHocChipsHtml}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <input id="compareAddInput" placeholder="Add any symbol (not just your watchlist)…" onkeydown="if(event.key==='Enter'){vtx.addCompareSymbol(this.value);}" style="flex:1;min-width:0;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-family:var(--mono);font-size:10.5px;color:var(--txt);outline:none;">
+          <button onclick="vtx.addCompareSymbol(document.getElementById('compareAddInput').value)" style="font-size:10px;font-weight:700;color:var(--acc2);background:rgba(52,211,255,.08);border:1px solid rgba(52,211,255,.25);border-radius:7px;padding:0 12px;cursor:pointer;flex-shrink:0;">+ Add</button>
+        </div>
       </div>`;
 
       if (compareSet.length < 2) {
-        el.innerHTML = header + `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Pick at least 2 tickers from your watchlist above to overlay their performance, normalized to % change.</div>`;
+        el.innerHTML = header + `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Pick at least 2 tickers — from your watchlist above, or typed in directly — to compare their key stats and overlay their performance, normalized to % change.</div>`;
       } else {
-        const seriesData = compareSet.map(sym => ({ sym, entry: this._chartData && this._chartData[sym] && this._chartData[sym][s.tf] }));
+        // --- Key Stats table — independent of the chart's load state,
+        // since financials (fin, cached per-symbol) and chart candles
+        // are two separate fetches that resolve on their own schedules.
+        const statFin = sym => {
+          const wl = T.find(t => t.sym === sym);
+          if (wl) return wl.fin || null;
+          const f = this._compareFin && this._compareFin[sym];
+          return (f && !f.__failed) ? f : null;
+        };
+        const statRows = [
+          { label: 'Mkt Cap', get: fin => fin.marketCapitalization ? this.mktCapFromFin(fin.marketCapitalization) : '—' },
+          { label: 'P/E (TTM)', get: fin => fin.peTTM != null ? fin.peTTM.toFixed(1)+'x' : '—' },
+          { label: 'Fwd P/E', get: fin => fin.forwardPE != null ? fin.forwardPE.toFixed(1)+'x' : '—' },
+          { label: 'Rev Growth YoY', get: fin => fin.revenueGrowthYoy != null ? (fin.revenueGrowthYoy>=0?'+':'')+fin.revenueGrowthYoy.toFixed(1)+'%' : '—' },
+          { label: 'Net Margin', get: fin => fin.netMargin != null ? fin.netMargin.toFixed(1)+'%' : '—' },
+          { label: 'Beta', get: fin => fin.beta != null ? fin.beta.toFixed(2) : '—' },
+          { label: 'Div Yield', get: fin => fin.dividendYield != null ? fin.dividendYield.toFixed(2)+'%' : '—' },
+        ];
+        const statsTableHtml = `
+          <div style="padding:2px 14px 10px;overflow-x:auto;">
+            <table style="border-collapse:collapse;font-size:10.5px;width:100%;">
+              <thead><tr>
+                <th style="text-align:left;padding:5px 8px;"></th>
+                ${compareSet.map((sym,i) => `<th style="text-align:right;padding:5px 8px;font-family:var(--mono);font-weight:700;color:${palette[i%palette.length]};white-space:nowrap;">${sym}</th>`).join('')}
+              </tr></thead>
+              <tbody>
+                ${statRows.map(row => `<tr style="border-top:1px solid var(--line);">
+                  <td style="padding:5px 8px;color:var(--mut);white-space:nowrap;">${row.label}</td>
+                  ${compareSet.map(sym => { const fin = statFin(sym); return `<td style="text-align:right;padding:5px 8px;font-family:var(--mono);color:var(--txt);">${fin ? row.get(fin) : '—'}</td>`; }).join('')}
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+
+        // --- Normalized overlay chart — its own loading/failed gating,
+        // now keyed to compareTf (independent of the main ticker's tf).
+        const seriesData = compareSet.map(sym => ({ sym, entry: this._chartData && this._chartData[sym] && this._chartData[sym][s.compareTf] }));
         const missing = seriesData.filter(d => !d.entry).map(d => d.sym);
+        let chartSectionHtml;
         if (missing.length) {
-          const failed = missing.filter(sym => this._chartLoadFailed && this._chartLoadFailed[sym] && this._chartLoadFailed[sym][s.tf]);
+          const failed = missing.filter(sym => this._chartLoadFailed && this._chartLoadFailed[sym] && this._chartLoadFailed[sym][s.compareTf]);
           const stillLoading = missing.filter(sym => !failed.includes(sym));
           const lines = [];
           if (stillLoading.length) lines.push(`Loading ${stillLoading.join(', ')}…`);
-          if (failed.length) lines.push(`Couldn't load ${failed.join(', ')}. <button onclick="${failed.map(sym=>`vtx.loadChartData('${sym}','${s.tf}')`).join(';')}" style="background:none;border:none;color:var(--acc2);font-size:11.5px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button>`);
-          el.innerHTML = header + `<div style="padding:40px 14px;text-align:center;color:var(--mut);font-size:11.5px;line-height:1.8;">${lines.join('<br>')}</div>`;
+          if (failed.length) lines.push(`Couldn't load ${failed.join(', ')}. <button onclick="${failed.map(sym=>`vtx.loadChartData('${sym}','${s.compareTf}')`).join(';')}" style="background:none;border:none;color:var(--acc2);font-size:11.5px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button>`);
+          chartSectionHtml = `<div style="padding:40px 14px;text-align:center;color:var(--mut);font-size:11.5px;line-height:1.8;">${lines.join('<br>')}</div>`;
         } else {
           const normSeries = seriesData.map((d,i) => {
             const base = d.entry.prices[0];
@@ -3845,14 +3944,19 @@ const vtx = {
           // MAX), points line up by index, not by calendar date, so the
           // axis is a close approximation, not an exact date-per-tick match.
           const refTimes = normSeries.reduce((a,b) => b.times.length > a.times.length ? b : a).times;
-          const dateLabels = this.dateLabelsFrom(refTimes, s.tf);
-          el.innerHTML = header + `
+          const dateLabels = this.dateLabelsFrom(refTimes, s.compareTf);
+          chartSectionHtml = `
             <div style="padding:12px 14px;">
               <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;">${legendHtml}</div>
               ${this.compareChartSvg(normSeries, 700, 220)}
               <div style="display:flex;justify-content:space-between;margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--mut);">${dateLabels.map(l=>`<span>${l}</span>`).join('')}</div>
             </div>`;
         }
+
+        el.innerHTML = header
+          + `<div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);padding:12px 14px 6px;">Key Stats</div>`
+          + statsTableHtml
+          + `<div style="border-top:1px solid var(--line);"><div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);padding:12px 14px 0;">Performance</div>${chartSectionHtml}</div>`;
       }
     }
     else if (s.tab === 'ai') {
