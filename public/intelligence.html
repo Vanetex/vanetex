@@ -49,6 +49,48 @@ input{font-family:var(--ui)}
 .logolink{transition:opacity .15s ease}
 .logolink:hover{opacity:.78}
 .gearbtn:hover{color:var(--acc2) !important;border-color:rgba(var(--glow),.3) !important}
+.mobileNavBtn.active{color:var(--acc2) !important}
+
+/* Mobile — below this width the three-column desktop layout (watchlist /
+   chart / tabs, all visible at once) just gets squeezed together instead
+   of reflowing, since it's a fixed grid-template-columns. Below this
+   breakpoint, only one column shows at a time (picked via #mobileNav,
+   the bottom tab bar) instead of trying to fit all three. */
+@media (max-width: 860px){
+  header{gap:8px !important;padding:0 10px !important;}
+  #logoText, #variantToggle, #clockWrap{display:none !important;}
+  #searchWrap{width:auto !important;flex:1;min-width:0;margin-left:0 !important;}
+  #searchKbd{display:none !important;}
+  /* The dropdown normally spans its search-bar parent's own width — on
+     mobile that parent is too narrow (other header items eat the room)
+     for a ticker/name/sector row to read well, so break it out to a
+     fixed overlay spanning the viewport instead. */
+  #searchDropdown{position:fixed !important;top:60px !important;left:10px !important;right:10px !important;max-height:70vh;overflow-y:auto;}
+  #mktStatus{padding:6px 9px !important;}
+  #mktStatus span:last-child{display:none !important;} /* dot alone is enough at this width; the label wraps badly */
+  #authPill{padding:6px 8px !important;font-size:9px !important;letter-spacing:.02em;}
+
+  #mainGrid{display:block !important;padding:8px !important;}
+  .mainCol-left, .mainCol-center, .mainCol-right{display:none !important;height:100%;}
+  #mainGrid.mp-watchlist .mainCol-left{display:flex !important;}
+  #mainGrid.mp-chart .mainCol-center{display:flex !important;}
+  #mainGrid.mp-tabs .mainCol-right{display:flex !important;}
+
+  footer{display:none !important;}
+  #mobileNav{display:flex !important;}
+
+  /* Remove-from-watchlist relies on :hover to appear, which touch has no
+     equivalent for — leave it faintly visible instead of invisible. */
+  .wlremove{opacity:.5 !important;}
+
+  #settingsPanel{width:calc(100vw - 32px);}
+
+  /* Both were sized for the ~588px center column at desktop widths — at
+     ~355px (full mobile width minus padding) six/two-per-row overflows
+     rather than wrapping, since grid columns don't reflow on their own. */
+  #headStats{grid-template-columns:repeat(3,1fr) !important;}
+  #statsDepthRow{grid-template-columns:1fr !important;}
+}
 </style>
 </head>
 <body>
@@ -68,18 +110,18 @@ input{font-family:var(--ui)}
         <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),#0d3ba8);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(var(--glow),.5),inset 0 1px 0 rgba(255,255,255,.3);">
           <svg width="17" height="17" viewBox="0 0 22 22" fill="none"><path d="M 2 2 L 10 20 L 13 20 L 13 14 L 16 14 L 16 8 L 19 8 L 19 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-        <div style="line-height:1;">
+        <div id="logoText" style="line-height:1;">
           <div style="font-size:15px;font-weight:700;letter-spacing:.02em;">VANETEX</div>
           <div style="font-size:8.5px;font-weight:600;letter-spacing:.34em;color:var(--acc2);margin-top:3px;">INTELLIGENCE</div>
         </div>
       </a>
 
       <!-- Search -->
-      <div style="position:relative;width:340px;margin-left:6px;">
+      <div id="searchWrap" style="position:relative;width:340px;margin-left:6px;">
         <div style="display:flex;align-items:center;gap:9px;height:36px;padding:0 13px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.04);">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="var(--mut)" stroke-width="1.5"></circle><path d="M11 11l3 3" stroke="var(--mut)" stroke-width="1.5" stroke-linecap="round"></path></svg>
-          <input id="searchInput" placeholder="Search ticker or company…" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font-family:var(--ui);font-size:13px;">
-          <kbd style="font-family:var(--mono);font-size:9.5px;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:2px 5px;">⌘K</kbd>
+          <input id="searchInput" placeholder="Search ticker or company…" style="flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--txt);font-family:var(--ui);font-size:13px;">
+          <kbd id="searchKbd" style="font-family:var(--mono);font-size:9.5px;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:2px 5px;">⌘K</kbd>
         </div>
         <div id="searchDropdown" style="display:none;position:absolute;top:44px;left:0;right:0;z-index:40;background:rgba(12,15,26,.97);border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.6);backdrop-filter:blur(20px);overflow:hidden;padding:6px;"></div>
       </div>
@@ -87,7 +129,7 @@ input{font-family:var(--ui)}
       <div style="flex:1;"></div>
 
       <!-- Variant toggle -->
-      <div style="display:flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.03);">
+      <div id="variantToggle" style="display:flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.03);">
         <button id="btnCinematic" onclick="vtx.setVariant('A')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:5px 11px;border-radius:6px;border:none;cursor:pointer;">CINEMATIC</button>
         <button id="btnAurora" onclick="vtx.setVariant('B')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:5px 11px;border-radius:6px;border:none;cursor:pointer;">AURORA</button>
       </div>
@@ -102,7 +144,7 @@ input{font-family:var(--ui)}
       <a id="authPill" href="/auth/sign-in" style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--mut);text-decoration:none;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Sign In</a>
 
       <!-- Clock -->
-      <div style="text-align:right;line-height:1.15;">
+      <div id="clockWrap" style="text-align:right;line-height:1.15;">
         <div id="clockEl" style="font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.02em;">00:00:00</div>
         <div style="font-size:8.5px;letter-spacing:.16em;color:var(--mut);">ET · NYSE</div>
       </div>
@@ -115,7 +157,7 @@ input{font-family:var(--ui)}
 
     <!-- Settings panel -->
     <div id="settingsOverlay" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(2,3,8,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center;" onclick="if(event.target===this) vtx.closeSettings()">
-      <div style="width:380px;background:linear-gradient(180deg,rgba(20,24,40,.97),rgba(9,12,21,.99));border:1px solid var(--line);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.6);padding:20px;">
+      <div id="settingsPanel" style="width:380px;background:linear-gradient(180deg,rgba(20,24,40,.97),rgba(9,12,21,.99));border:1px solid var(--line);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.6);padding:20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
           <span style="font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt);">Settings</span>
           <button onclick="vtx.closeSettings()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:18px;line-height:1;">×</button>
@@ -149,10 +191,10 @@ input{font-family:var(--ui)}
     </div>
 
     <!-- MAIN GRID -->
-    <div style="flex:1;min-height:0;display:grid;grid-template-columns:268px 1fr 384px;gap:10px;padding:10px;">
+    <div id="mainGrid" class="mp-chart" style="flex:1;min-height:0;display:grid;grid-template-columns:268px 1fr 384px;gap:10px;padding:10px;">
 
       <!-- LEFT COLUMN -->
-      <div style="display:flex;flex-direction:column;gap:10px;min-height:0;">
+      <div class="mainCol-left" style="display:flex;flex-direction:column;gap:10px;min-height:0;">
 
         <!-- Watchlist -->
         <div style="display:flex;flex-direction:column;min-height:0;flex:1.25;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
@@ -185,7 +227,7 @@ input{font-family:var(--ui)}
       </div>
 
       <!-- CENTER COLUMN -->
-      <div style="display:flex;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;padding-right:2px;">
+      <div class="mainCol-center" style="display:flex;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;padding-right:2px;">
 
         <div id="tickerView" style="display:contents;">
         <!-- Focus header -->
@@ -227,7 +269,7 @@ input{font-family:var(--ui)}
         </div>
 
         <!-- stats + depth -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0;">
+        <div id="statsDepthRow" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0;">
           <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
             <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Key Statistics</div>
             <div id="keyStats" style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);"></div>
@@ -326,7 +368,7 @@ input{font-family:var(--ui)}
       </div>
 
       <!-- RIGHT COLUMN -->
-      <div style="display:flex;flex-direction:column;min-height:0;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
+      <div class="mainCol-right" style="display:flex;flex-direction:column;min-height:0;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
         <div id="tabsBar" style="display:flex;flex-wrap:wrap;gap:5px;padding:8px;border-bottom:1px solid var(--line);flex-shrink:0;"></div>
         <div id="tabContent" style="flex:1;min-height:0;overflow-y:auto;"></div>
       </div>
@@ -348,6 +390,28 @@ input{font-family:var(--ui)}
       <span style="opacity:.25;">·</span>
       <span style="color:var(--acc2);">VANETEX INTELLIGENCE v1.0</span>
     </footer>
+
+    <!-- MOBILE BOTTOM NAV — only shown under the mobile breakpoint (see
+         <style>); switches which of the three main columns is visible,
+         since they can't all fit side by side on a phone. -->
+    <nav id="mobileNav" style="flex-shrink:0;display:none;align-items:stretch;height:56px;border-top:1px solid var(--line);background:rgba(7,9,16,.85);backdrop-filter:blur(18px);">
+      <button class="mobileNavBtn" data-panel="watchlist" onclick="vtx.setMobilePanel('watchlist')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--mut);cursor:pointer;font-family:var(--ui);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+        <span style="font-size:9px;font-weight:700;letter-spacing:.04em;">Watchlist</span>
+      </button>
+      <button class="mobileNavBtn" data-panel="chart" onclick="vtx.setMobilePanel('chart')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--mut);cursor:pointer;font-family:var(--ui);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 19V9M11 19V4M18 19v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+        <span style="font-size:9px;font-weight:700;letter-spacing:.04em;">Chart</span>
+      </button>
+      <button class="mobileNavBtn" data-panel="tabs" onclick="vtx.setMobilePanel('tabs')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--mut);cursor:pointer;font-family:var(--ui);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4" width="17" height="16" rx="2.5" stroke="currentColor" stroke-width="2"></rect><path d="M3.5 9.5h17" stroke="currentColor" stroke-width="2"></path></svg>
+        <span style="font-size:9px;font-weight:700;letter-spacing:.04em;">Tabs</span>
+      </button>
+      <button class="mobileNavBtn" data-panel="tabs" onclick="vtx.setMobilePanel('tabs');vtx.setTab('ai')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;color:var(--mut);cursor:pointer;font-family:var(--ui);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="2"></circle><path d="M9 10.5h.01M15 10.5h.01M8.5 14.5c1 1 2.2 1.5 3.5 1.5s2.5-.5 3.5-1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+        <span style="font-size:9px;font-weight:700;letter-spacing:.04em;">Assistant</span>
+      </button>
+    </nav>
   </div>
 </div>
 
@@ -367,7 +431,11 @@ const vtx = {
     // watchlist — never persisted (saveWatchlist() never touches it),
     // holds at most one symbol, and is silently replaced/discarded the
     // moment the user views something else without adding it.
-    previewTicker: null
+    previewTicker: null,
+    // Which of the three main columns is visible on mobile (see the
+    // max-width:860px block in <style> and #mobileNav) — meaningless on
+    // desktop, where all three always show; harmless to set unconditionally.
+    mobilePanel: 'chart'
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -841,6 +909,18 @@ const vtx = {
     if (this.state.customAccent) this.applyAccent(this.state.customAccent);
   },
   setVariant(v) { this.state.variant = v; this.state.customAccent = null; try { localStorage.removeItem(this.ACCENT_KEY); } catch(e) {} this.applyVariant(); },
+  // Mobile-only column switcher — see the max-width:860px block in
+  // <style> and #mobileNav. A no-op in spirit on desktop (all three
+  // columns show regardless of this class), so every call site below
+  // can set it unconditionally without checking viewport width.
+  setMobilePanel(panel) {
+    this.state.mobilePanel = panel;
+    const grid = document.getElementById('mainGrid');
+    if (grid) grid.className = 'mp-' + panel;
+    document.querySelectorAll('.mobileNavBtn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.panel === panel);
+    });
+  },
   applyAccent(hex) {
     const r = document.documentElement;
     const m = hex.replace('#','').match(/.{2}/g);
@@ -863,8 +943,8 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
-  backToOverview() { this.state.view = 'overview'; this.render(); this.loadNews(); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.setMobilePanel('chart'); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
+  backToOverview() { this.state.view = 'overview'; this.setMobilePanel('chart'); this.render(); this.loadNews(); },
   selectInstrument(code) {
     const inst = this.INSTRUMENTS[code];
     if (!inst) return;
@@ -873,6 +953,7 @@ const vtx = {
     this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
     const input = document.getElementById('searchInput'); if (input) input.value = '';
     this.closeSearch();
+    this.setMobilePanel('chart');
     this.render();
     this.loadInstrumentData(code);
     this.loadNews();
@@ -1088,6 +1169,7 @@ const vtx = {
     this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.remoteInstruments = []; this.state.remoteIndicators = [];
     const input = document.getElementById('searchInput'); if (input) input.value = '';
     this.closeSearch();
+    this.setMobilePanel('chart');
     this.render();
     this.loadIndicatorData(meta.id);
     this.loadNews();
@@ -1389,6 +1471,7 @@ const vtx = {
     document.getElementById('searchInput').value=''; this.closeSearch();
     this.state.focus = sym;
     this.state.view = 'ticker';
+    this.setMobilePanel('chart');
     this.render();
     this.loadChartData(sym, this.state.tf);
     this.loadDepth(sym);
@@ -1439,6 +1522,7 @@ const vtx = {
     document.getElementById('searchInput').value=''; this.closeSearch();
     this.state.focus = sym;
     this.state.view = 'ticker';
+    this.setMobilePanel('chart');
     this.render();
     this.loadChartData(sym, this.state.tf);
     this.loadDepth(sym);
