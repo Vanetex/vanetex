@@ -755,9 +755,10 @@ const vtx = {
       const open = this.isMarketOpen();
       if (open !== this.state.marketOpen) {
         this.state.marketOpen = open;
-        if (!open) { this.state.tape = []; }
+        if (!open) { this.state.tape = []; } else { this.clearAfterHoursData(); }
         this.renderMarketStatus();
         this.renderTimeSales();
+        this.render();
       }
     }, 15000);
 
@@ -1450,6 +1451,18 @@ const vtx = {
       wrap.style.borderColor = 'rgba(31,209,151,.28)'; wrap.style.background = 'rgba(31,209,151,.08)';
       dot.style.background = 'var(--pos)'; dot.style.boxShadow = '0 0 8px var(--pos)'; dot.style.animation = 'pulse 1.8s ease infinite';
       label.style.color = 'var(--pos)'; label.textContent = 'MKT OPEN';
+      return;
+    }
+    // Purely clock-based (not conditioned on whether any ahPrice has
+    // actually been captured) — this is just "what session is it right
+    // now," same as a broker's status pill, independent of whether any
+    // of the user's own tickers have printed a real extended-hours trade
+    // yet.
+    const extLabel = this.extSessionLabel();
+    if (extLabel) {
+      wrap.style.borderColor = 'rgba(245,165,36,.28)'; wrap.style.background = 'rgba(245,165,36,.08)';
+      dot.style.background = 'var(--warn)'; dot.style.boxShadow = '0 0 8px var(--warn)'; dot.style.animation = 'pulse 1.8s ease infinite';
+      label.style.color = 'var(--warn)'; label.textContent = extLabel.toUpperCase();
     } else {
       wrap.style.borderColor = 'rgba(124,132,153,.28)'; wrap.style.background = 'rgba(124,132,153,.08)';
       dot.style.background = 'var(--mut)'; dot.style.boxShadow = 'none'; dot.style.animation = 'none';
@@ -2490,6 +2503,7 @@ const vtx = {
       const open = this.isMarketOpen();
       if (open !== this.state.marketOpen) {
         this.state.marketOpen = open;
+        if (open) this.clearAfterHoursData();
         this.renderMarketStatus();
       }
       if (!open) {
@@ -2549,24 +2563,43 @@ const vtx = {
     const side = price >= prev ? 'B' : 'S';
     this._lastTradePrice[sym] = price;
 
-    this.state.tickers = this.state.tickers.map(x => {
-      if (x.sym !== sym) return x;
-      const hist = x.hist.concat(price); if (hist.length > 46) hist.shift();
-      return { ...x, price, hist };
-    });
-
-    // Finnhub's WS trade feed keeps streaming real pre/post-market prints,
-    // unlike quote polling (which the isMarketOpen() guard already covers
-    // in startPollFeed()) — without this check the "LIVE TAPE" panel kept
-    // filling with real after-hours executions while the status badge said
-    // MKT CLOSED. Checked fresh per-trade rather than the 15s-refreshed
-    // state.marketOpen, since trades can arrive faster than that refresh.
+    // Finnhub's WS trade feed keeps streaming real pre/post-market prints
+    // (checked fresh per-trade rather than the 15s-refreshed
+    // state.marketOpen, since trades can arrive faster than that refresh).
+    // Those are real data, not noise — but they must not silently become
+    // "the price" with no label, or overwrite the sparkline history that's
+    // meant to track the regular session. Track them separately as
+    // ahPrice/ahTime instead, so `price` reliably stays "last regular
+    // close" for as long as the market is shut, which is also what makes
+    // the extended-hours % change (ahPrice vs price) correct.
     if (this.isMarketOpen()) {
+      this.state.tickers = this.state.tickers.map(x => {
+        if (x.sym !== sym) return x;
+        const hist = x.hist.concat(price); if (hist.length > 46) hist.shift();
+        return { ...x, price, hist, ahPrice: null, ahTime: null };
+      });
       const time = ts ? this.fmtET(new Date(ts)) : this.hhmmss();
       this.state.tape = [{ id: Math.random(), time, sym, price: price.toFixed(2), size: Math.max(1, Math.round(vol || 0)).toLocaleString(), side }, ...this.state.tape].slice(0, 26);
       this.renderTimeSales();
+    } else {
+      this.state.tickers = this.state.tickers.map(x => x.sym === sym ? { ...x, ahPrice: price, ahTime: ts || Date.now() } : x);
     }
     this._renderPending = true;
+  },
+  // Stale extended-hours prints from the session that just ended shouldn't
+  // linger once regular trading resumes and supersedes them.
+  clearAfterHoursData() {
+    this.state.tickers = this.state.tickers.map(t => (t.ahPrice != null) ? { ...t, ahPrice: null, ahTime: null } : t);
+  },
+  // Real extended-hours trading windows only — 4:00-9:30am and 4:00-8:00pm
+  // ET. Outside those (overnight, weekends) there's no session to name,
+  // so this returns null rather than mislabeling a truly dead market as
+  // "After Hours."
+  extSessionLabel() {
+    const { mins } = this.etParts();
+    if (mins >= 4*60 && mins < 9*60+30) return 'Pre-Market';
+    if (mins >= 16*60 && mins < 20*60) return 'After Hours';
+    return null;
   },
   renderFeedLabels() {
     const live = this.state.feedLive;
@@ -2593,6 +2626,8 @@ const vtx = {
     document.getElementById('watchlistBody').innerHTML = T.map(t => {
       const p=this.pctOf(t), up=p>=0;
       const isFocus = t.sym===s.focus;
+      const hasAhRow = !this.isMarketOpen() && t.ahPrice != null;
+      const ahPctRow = hasAhRow ? (t.ahPrice - t.price) / t.price * 100 : null;
       return `<div class="wlrow" onclick="vtx.selectTicker('${t.sym}')" style="position:relative;display:grid;grid-template-columns:1fr 58px auto 16px;align-items:center;gap:7px;padding:7px 9px 7px 11px;border-radius:9px;cursor:pointer;background:${isFocus?'rgba(var(--glow),.12)':'transparent'};">
         <span style="position:absolute;left:0;top:18%;bottom:18%;width:2.5px;border-radius:3px;background:${isFocus?'var(--acc)':'transparent'};"></span>
         <div style="min-width:0;">
@@ -2603,6 +2638,7 @@ const vtx = {
         <div style="text-align:right;">
           <div style="font-family:var(--mono);font-weight:600;font-size:11.5px;">${this.fmt(t.price)}</div>
           <div style="font-family:var(--mono);font-size:10px;font-weight:600;color:${up?cPos:cNeg};">${(up?'+':'')+p.toFixed(2)}%</div>
+          ${hasAhRow ? `<div style="font-family:var(--mono);font-size:8.5px;font-weight:600;color:var(--warn);margin-top:1px;" title="${this.extSessionLabel() || 'After Hours'}: ${this.fmt(t.ahPrice)}">${(ahPctRow>=0?'+':'')+ahPctRow.toFixed(2)}% AH</div>` : ''}
         </div>
         <button class="wlremove" onclick="event.stopPropagation();vtx.removeTicker('${t.sym}')" title="Remove from watchlist" style="opacity:0;transition:opacity .15s ease;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--mut);cursor:pointer;font-size:13px;line-height:1;">×</button>
       </div>`;
@@ -2628,6 +2664,13 @@ const vtx = {
     // fup for both was prepending a stray "+" onto an already-negative
     // number (e.g. "+-5.38") whenever the two disagreed.
     const dollarChange = f.price - f.open, dollarUp = dollarChange >= 0;
+    // f.price is guaranteed to still be "last regular close" whenever the
+    // market's shut (handleTrade() stops writing to it outside regular
+    // hours), so it's a valid baseline for the extended-hours % change
+    // even hours after the close.
+    const hasAh = !this.isMarketOpen() && f.ahPrice != null;
+    const ahPct = hasAh ? (f.ahPrice - f.price) / f.price * 100 : null;
+    const ahUp = ahPct >= 0;
     const lo=Math.min(...f.hist), hi=Math.max(...f.hist);
     document.getElementById('focusHeader').innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;">
@@ -2651,6 +2694,12 @@ const vtx = {
             <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${dollarUp?cPos:cNeg};">${(dollarUp?'+':'')+dollarChange.toFixed(2)}</span>
             <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${fup?cPos:cNeg};background:${fup?'rgba(31,209,151,.1)':'rgba(255,77,94,.1)'};border:1px solid ${fup?'rgba(31,209,151,.3)':'rgba(255,77,94,.3)'};border-radius:99px;padding:3px 9px;">${(fup?'+':'')+fp.toFixed(2)}% ${fup?'▲':'▼'}</span>
           </div>
+          ${hasAh ? `
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:6px;">
+            <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);">${this.extSessionLabel() || 'After Hours'}</span>
+            <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--txt);">${this.fmt(f.ahPrice)}</span>
+            <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${ahUp?cPos:cNeg};">${(ahUp?'+':'')+ahPct.toFixed(2)}%</span>
+          </div>` : ''}
           ${!T.some(x=>x.sym===f.sym) ? `
           <button onclick="vtx.addPreviewToWatchlist()" style="margin-top:9px;font-family:var(--ui);font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--bg0);background:var(--acc2);border:none;border-radius:8px;padding:6px 12px;cursor:pointer;">+ Add to Watchlist</button>` : ''}
         </div>
