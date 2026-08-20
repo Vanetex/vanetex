@@ -23,6 +23,13 @@ type QuoteBody = {
   dayLow: number;
   open: number;
   prevClose: number;
+  // Finnhub's stock/profile2 only covers companies — it comes back as an
+  // empty object for every ETF/fund we've checked (SPDR, Vanguard,
+  // iShares alike), regardless of issuer. That makes "no profile name"
+  // a reliable, already-fetched signal for "this symbol is a fund," used
+  // to explain (rather than silently hide) why holdings aren't shown for
+  // non-SPDR funds.
+  isFund: boolean;
 };
 
 type QuoteResult =
@@ -61,6 +68,7 @@ async function fetchOneQuote(sym: string, apiKey: string): Promise<QuoteResult> 
       logo: profile.logo || null,
       ipo: profile.ipo || null,
       website: profile.weburl || null,
+      isFund: !profile.name,
       price: quote.c,
       change: quote.d,
       changePct: quote.dp,
