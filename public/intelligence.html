@@ -4272,10 +4272,15 @@ const vtx = {
           </div>`;
       }
 
+      // Relevance dots (●●● core, ●●○ important, ●○○ supplementary) — same
+      // 1-3 scale as the Macro Dashboard below, shared by both so the two
+      // "relevance" concepts on this tab stay visually consistent.
+      const tierDots = n => `<span title="Relevance: ${n===3?'core':n===2?'important':'supplementary'}" style="font-size:6px;letter-spacing:1px;color:var(--acc2);opacity:${n===3?1:.55};flex-shrink:0;">${'●'.repeat(n)}${'○'.repeat(3-n)}</span>`;
+
       const econHtml = !this.ECON.length
         ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading economic calendar…</div>`
         : `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
-            <div style="font-size:9px;color:var(--mut);line-height:1.5;padding:0 3px 4px;">CPI, Jobs Report, and PCE release dates from FRED · FOMC dates from the Federal Reserve.</div>` +
+            <div style="font-size:9px;color:var(--mut);line-height:1.5;padding:0 3px 4px;">GDP, CPI, PCE, Jobs, PPI, Retail Sales, Consumer Sentiment, Industrial Production, JOLTS, Housing Starts, Existing Home Sales, Durable Goods &amp; Jobless Claims from FRED · FOMC dates from the Federal Reserve. Sorted by relevance, then date.</div>` +
             this.ECON.map(c => {
               const [day, mon] = c.date.split(' ');
               return `
@@ -4286,7 +4291,10 @@ const vtx = {
                   <div style="font-size:8px;color:var(--mut);text-transform:uppercase;">${mon}</div>
                 </div>
                 <div>
-                  <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
+                    ${tierDots(c.relevance || 1)}
+                  </div>
                   <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${c.time} EST</div>
                 </div>
                 <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
@@ -4298,10 +4306,9 @@ const vtx = {
       // full history), so this is a new front-door into infrastructure the
       // app already has, not a second chart system.
       const fmtMacroVal = (v, type) => v == null ? '—' : (type === 'pct' ? v.toFixed(2)+'%' : v.toLocaleString('en-US',{maximumFractionDigits:2}));
-      // Relevance dots (●●● core, ●●○ important, ●○○ supplementary) —
-      // shown in every tile state, loading/failed included, since the
-      // tier is a property of the indicator itself, not its data.
-      const tierDots = n => `<span title="Relevance: ${n===3?'core':n===2?'important':'supplementary'}" style="font-size:6px;letter-spacing:1px;color:var(--acc2);opacity:${n===3?1:.55};flex-shrink:0;">${'●'.repeat(n)}${'○'.repeat(3-n)}</span>`;
+      // tierDots is defined above, alongside the calendar — shown in every
+      // tile state, loading/failed included, since the tier is a property
+      // of the indicator itself, not its data.
       const macroTile = (item) => {
         const d = this.MACRO_DASH[item.id];
         const meta = { id:item.id, title:item.title, units:item.units, frequency:item.frequency, seasonalAdjustment:item.seasonalAdjustment };

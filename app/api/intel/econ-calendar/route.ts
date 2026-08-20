@@ -6,9 +6,15 @@ export const runtime = "nodejs";
 
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 const FOMC_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm";
-const CACHE_KEY = "intel:econ-calendar:v3"; // v3: added Housing Starts release
+const CACHE_KEY = "intel:econ-calendar:v4"; // v4: expanded release set + relevance tiers
 const CACHE_TTL_S = 24 * 60 * 60; // these dates are scheduled far in advance
 const WINDOW_DAYS = 90;
+const MAX_EVENTS = 40;
+// Initial jobless claims report weekly — left uncapped it'd fill the list
+// with ~13 dates in a 90-day window and crowd out everything else, so
+// only the soonest few are kept.
+const JOBLESS_CLAIMS_RELEASE_ID = 180;
+const MAX_JOBLESS_CLAIMS_DATES = 4;
 
 type EconEvent = {
   day: string;
@@ -19,6 +25,7 @@ type EconEvent = {
   imp: "HIGH";
   tone: string;
   toneBorder: string;
+  relevance: 1 | 2 | 3; // 3 = core market-mover, 1 = supplementary — same scale as the Macro Dashboard's series tiers
 };
 
 // Internal-only shape carrying the full ISO date, so events can be
@@ -30,21 +37,32 @@ type DatedEvent = EconEvent & { isoDate: string };
 const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// FRED release IDs: 10 = Consumer Price Index, 50 = Employment Situation
-// (contains Nonfarm Payrolls), 54 = Personal Income and Outlays (PCE),
-// 27 = New Residential Construction (contains Housing Starts, the series
-// this app tracks as HOUST). ISM Manufacturing PMI has no free release
-// here — FRED stopped redistributing it in 2016 over ISM's licensing
-// terms, and no free keyless replacement carries the actual headline
-// number, so it's deliberately not included.
-const FRED_RELEASES: { id: number; name: string; time: string }[] = [
-  { id: 10, name: "CPI Report", time: "08:30" },
-  { id: 50, name: "Jobs Report (NFP)", time: "08:30" },
-  { id: 54, name: "PCE Report", time: "08:30" },
-  { id: 27, name: "Housing Starts", time: "08:30" },
+// FRED release IDs — every one confirmed live against fred.stlouisfed.org's
+// own releases catalog (not guessed from memory) before adding here.
+// Relevance mirrors the Macro Dashboard's 1-3 scale: 3 = core market-mover,
+// 2 = regularly market-moving but a notch below, 1 = supplementary.
+// ISM Manufacturing/Services PMI and Conference Board Consumer Confidence
+// have no free release on FRED — confirmed absent from FRED's full
+// 331-release catalog (ISM: FRED stopped redistributing it in 2016 over
+// licensing terms) — so neither is included; no free keyless replacement
+// carries the actual headline number for either.
+const FRED_RELEASES: { id: number; name: string; time: string; relevance: 1 | 2 | 3 }[] = [
+  { id: 10, name: "CPI Report", time: "08:30", relevance: 3 },
+  { id: 50, name: "Jobs Report (NFP)", time: "08:30", relevance: 3 },
+  { id: 54, name: "PCE Report", time: "08:30", relevance: 3 },
+  { id: 53, name: "GDP", time: "08:30", relevance: 3 },
+  { id: 46, name: "PPI Report", time: "08:30", relevance: 2 },
+  { id: 9, name: "Retail Sales", time: "08:30", relevance: 2 },
+  { id: 91, name: "Consumer Sentiment (UMich)", time: "10:00", relevance: 2 },
+  { id: 13, name: "Industrial Production", time: "09:15", relevance: 2 },
+  { id: 192, name: "JOLTS (Job Openings)", time: "10:00", relevance: 2 },
+  { id: 27, name: "Housing Starts", time: "08:30", relevance: 1 },
+  { id: 291, name: "Existing Home Sales", time: "10:00", relevance: 1 },
+  { id: 95, name: "Durable Goods Orders", time: "08:30", relevance: 1 },
+  { id: JOBLESS_CLAIMS_RELEASE_ID, name: "Jobless Claims", time: "08:30", relevance: 1 },
 ];
 
-function toEconEvent(dateStr: string, name: string, time: string): DatedEvent {
+function toEconEvent(dateStr: string, name: string, time: string, relevance: 1 | 2 | 3): DatedEvent {
   const d = new Date(`${dateStr}T00:00:00Z`);
   return {
     day: DAY_NAMES[d.getUTCDay()],
@@ -56,6 +74,7 @@ function toEconEvent(dateStr: string, name: string, time: string): DatedEvent {
     tone: "var(--warn)",
     toneBorder: "rgba(245,165,36,.4)",
     isoDate: dateStr,
+    relevance,
   };
 }
 
@@ -116,16 +135,25 @@ async function buildCalendar(fredApiKey: string): Promise<EconEvent[]> {
 
   const events: DatedEvent[] = [];
   FRED_RELEASES.forEach((r, i) => {
-    for (const date of fredResults[i]) events.push(toEconEvent(date, r.name, r.time));
+    // Jobless Claims is weekly — capped to the soonest few dates so it
+    // doesn't dominate a 90-day window the way a monthly/quarterly
+    // release wouldn't.
+    const dates = r.id === JOBLESS_CLAIMS_RELEASE_ID
+      ? fredResults[i].slice(0, MAX_JOBLESS_CLAIMS_DATES)
+      : fredResults[i];
+    for (const date of dates) events.push(toEconEvent(date, r.name, r.time, r.relevance));
   });
   for (const date of fomcDates) {
     if (date >= fmt(from) && date <= fmt(to)) {
-      events.push(toEconEvent(date, "FOMC Rate Decision", "14:00"));
+      events.push(toEconEvent(date, "FOMC Rate Decision", "14:00", 3));
     }
   }
 
-  events.sort((a, b) => a.isoDate.localeCompare(b.isoDate));
-  return events.slice(0, 14).map(({ isoDate, ...rest }) => rest);
+  // Relevance first (3 = core down to 1 = supplementary), date as the
+  // tie-breaker within a tier — the calendar still reads chronologically
+  // inside each relevance band, but leads with what actually moves markets.
+  events.sort((a, b) => (b.relevance - a.relevance) || a.isoDate.localeCompare(b.isoDate));
+  return events.slice(0, MAX_EVENTS).map(({ isoDate, ...rest }) => rest);
 }
 
 export async function GET(request: NextRequest) {
