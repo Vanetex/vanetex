@@ -6,7 +6,11 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.jsdelivr.net https://unpkg.com`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https://static2.finnhub.io",
+  // Finnhub shards logo images across numbered subdomains (static2,
+  // static9, ... — confirmed two different ones live for the same AAPL
+  // logo across two page loads), not one fixed host, hence the wildcard
+  // rather than a single static2.finnhub.io allowlist entry.
+  "img-src 'self' data: blob: https://*.finnhub.io",
   "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io https://finnhub.io wss://ws.finnhub.io https://cdn.jsdelivr.net https://api.coingecko.com https://api.fiscaldata.treasury.gov",
   "object-src 'none'",
