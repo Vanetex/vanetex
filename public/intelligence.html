@@ -3562,7 +3562,20 @@ const vtx = {
     } else if (!eh.length) {
       ehEl.innerHTML = `<div style="padding:14px;font-size:11px;color:var(--mut);">No earnings history available.</div>`;
     } else {
-      const qtrLabel = q => 'Q' + q.quarter + ' ' + q.year;
+      // Finnhub's own year/quarter fields are the company's FISCAL
+      // quarter, not calendar — for a company like Marvell (fiscal year
+      // ends ~Jan/Feb), a quarter that genuinely ended June 30, 2026
+      // (already reported, real actual EPS) comes back tagged
+      // {year:2027, quarter:1}, which renders as "Q1 2027" and looks
+      // like it's from the future even though it already happened.
+      // period (the real quarter-end date) is always a genuine past
+      // date for reported earnings, so derive the label from that
+      // instead of trusting the fiscal year/quarter Finnhub sends.
+      const qtrLabel = q => {
+        const d = new Date(q.period + 'T00:00:00Z');
+        if (isNaN(d.getTime())) return 'Q' + q.quarter + ' ' + q.year;
+        return 'Q' + (Math.floor(d.getUTCMonth() / 3) + 1) + ' ' + d.getUTCFullYear();
+      };
       ehEl.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;padding:8px 14px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--line);">
           <span>Quarter</span><span style="text-align:right;">Est.</span><span style="text-align:right;">Actual</span><span style="text-align:right;">Surprise</span>
