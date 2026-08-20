@@ -1208,7 +1208,7 @@ const vtx = {
       this.state.tickers = this.state.tickers.map(x => {
         if (x.sym!==sym) return x;
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow}; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -1257,7 +1257,7 @@ const vtx = {
       ]);
       const merge = (x) => {
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow}; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -1654,6 +1654,8 @@ const vtx = {
           ipo: q.ipo || t.ipo || null,
           website: q.website || t.website || null,
           isFund: q.isFund,
+          dayHigh: q.dayHigh,
+          dayLow: q.dayLow,
         };
       });
       this.render();
@@ -2919,7 +2921,6 @@ const vtx = {
     const hasAh = !this.isMarketOpen() && f.ahPrice != null;
     const ahPct = hasAh ? (f.ahPrice - f.price) / f.price * 100 : null;
     const ahUp = ahPct >= 0;
-    const lo=Math.min(...f.hist), hi=Math.max(...f.hist);
     document.getElementById('focusHeader').innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;">
         <div>
@@ -2953,10 +2954,20 @@ const vtx = {
         </div>
       </div>`;
 
+    // f.dayLow/f.dayHigh come straight from Finnhub's quote (h/l fields),
+    // refreshed every poll — real intraday extremes, not derived from
+    // anything client-side. Previously this used Math.min/max(...f.hist),
+    // the rolling ~46-point sparkline window — for an actively-traded
+    // stock, real-time WS trades (handleTrade) and the 60s quote poll
+    // both push new points into that same window, so the bars from
+    // market open age out within the first hour and the "day" range
+    // silently narrowed to whatever the last ~46 ticks happened to be —
+    // confirmed live: NVDA showed 215.94–217.80 while the real Finnhub
+    // range was 215.66–219.86, missing a real $2 move entirely.
     const headStats = [
       {label:'Open',value:this.fmt(f.open),color:'var(--txt)'},
-      {label:'Day Low',value:this.fmt(lo),color:'var(--txt)'},
-      {label:'Day High',value:this.fmt(hi),color:'var(--txt)'},
+      {label:'Day Low',value:f.dayLow!=null?this.fmt(f.dayLow):'—',color:'var(--txt)'},
+      {label:'Day High',value:f.dayHigh!=null?this.fmt(f.dayHigh):'—',color:'var(--txt)'},
       {label:'Volume',value:f.volume != null ? (f.volume/1e6).toFixed(1)+'M' : '—',color:'var(--txt)'},
       {label:'Avg Vol',value:(f.fin && f.fin.avgVolume3M) ? f.fin.avgVolume3M.toFixed(1)+'M' : '—',color:'var(--mut)'},
       {label:'Mkt Cap',value:(f.fin && f.fin.marketCapitalization) ? this.mktCapFromFin(f.fin.marketCapitalization) : '—',color:'var(--acc2)'}
@@ -4256,7 +4267,10 @@ const vtx = {
     const p = this.pctOf(f);
     const dir = p>=0 ? 'up' : 'down';
     const fin = f.fin || {};
-    const lo = Math.min(...f.hist), hi = Math.max(...f.hist);
+    // Real Finnhub day-range, same fix as the ticker header's headStats —
+    // not derived from the rolling sparkline window, which understates
+    // the real range once enough polls/trades have aged early bars out.
+    const rangeStr = (f.dayLow!=null && f.dayHigh!=null) ? `$${this.fmt(f.dayLow)} – $${this.fmt(f.dayHigh)}` : 'not loaded yet';
 
     const dark = (this.DARK||[]).filter(d=>d.sym===f.sym);
     const filings = (this.FIL||[]).filter(x=>x.sym===f.sym);
@@ -4313,7 +4327,7 @@ const vtx = {
       const peStr = fin.peTTM ? fin.peTTM.toFixed(1)+'x' : 'n/a';
       const darkLine = dark.length ? `• Last dark-pool print: ${dark[0].size} sh via ${dark[0].venue} (${dark[0].time})` : '• No recent dark-pool print on file';
       const filLine = filings.length ? `• Recent insider activity: ${filings[0].who} ${filings[0].act} ${filings[0].shares} sh` : '• No recent insider filings on file';
-      return `${f.sym} — ${f.name}\n\nTrading ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session. Sector: ${f.sector}. P/E ${peStr}.\n\n${darkLine}\n${filLine}\n\nSession range: $${this.fmt(lo)} – $${this.fmt(hi)}.`;
+      return `${f.sym} — ${f.name}\n\nTrading ${this.fmt(f.price)}, ${dir} ${Math.abs(p).toFixed(2)}% on the session. Sector: ${f.sector}. P/E ${peStr}.\n\n${darkLine}\n${filLine}\n\nSession range: ${rangeStr}.`;
     }
 
     if (/analyst|rating|consensus|price target|upgrade|downgrade/.test(q)) {
