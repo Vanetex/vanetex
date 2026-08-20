@@ -708,6 +708,7 @@ const vtx = {
       sym:a[0], name:a[1], sector:a[2], price:a[3] || 100,
       open: (a[3]||100)*(1-(this.hashN(a[0],3)*0.032-0.013)),
       hist: [a[3]||100, a[3]||100], // flat placeholder until loadSparklines() fetches the real intraday path
+      ...(a[4] ? { kind:a[4], instrumentCode:a[5] } : {}),
     }));
     if (!this.state.tickers.some(t=>t.sym===this.state.focus)) this.state.focus = this.state.tickers[0].sym;
 
@@ -1156,7 +1157,11 @@ const vtx = {
   toggleIndicator(key) { this.state.indicators[key] = !this.state.indicators[key]; this.render(); },
 
   saveWatchlist() {
-    const data = this.state.tickers.map(t => [t.sym, t.name, t.sector, t.price]);
+    // kind/instrumentCode (5th/6th elements) are undefined for ordinary
+    // stock/ETF entries — JSON.stringify drops trailing undefined array
+    // elements, so this stays wire-compatible with watchlists saved
+    // before instruments existed.
+    const data = this.state.tickers.map(t => [t.sym, t.name, t.sector, t.price, t.kind, t.instrumentCode]);
     try { localStorage.setItem(this.WATCHLIST_KEY, JSON.stringify(data)); }
     catch(e) { console.error('[vtx] Failed to persist watchlist — changes will be lost on reload.', e); }
   },
@@ -1602,7 +1607,11 @@ const vtx = {
   async loadQuotes() {
     try {
       const t0 = performance.now();
-      const symbols = this.state.tickers.map(t => t.sym).join(',');
+      // Instrument entries (crypto/commodities) aren't stock symbols
+      // Finnhub knows — they're kept in sync separately, piggybacking on
+      // loadMarketSnapshot()/loadCryptoSnapshot() (see syncInstrumentQuotes()).
+      const symbols = this.state.tickers.filter(t => t.kind !== 'instrument').map(t => t.sym).join(',');
+      if (!symbols) return;
       const res = await fetch(`/api/stock/quote?symbols=${encodeURIComponent(symbols)}`);
       // Real measured round-trip time for this refresh, replacing the old
       // Math.random()-based latency figure that was never tied to an
@@ -1647,8 +1656,12 @@ const vtx = {
   async loadSparklines(symbols) {
     const targets = symbols || this.state.tickers.map(t => t.sym);
     try {
+      // An instrument's watchlist sym is its INSTRUMENTS key (e.g. GOLD),
+      // not a real Yahoo ticker — the candles route needs the real one
+      // (GC=F) to return anything.
+      const fetchSym = sym => (this.INSTRUMENTS[sym] ? this.INSTRUMENTS[sym].yahooSymbol : sym);
       const results = await Promise.all(targets.map(sym =>
-        fetch(`/api/stock/candles?symbol=${encodeURIComponent(sym)}&range=1D`)
+        fetch(`/api/stock/candles?symbol=${encodeURIComponent(fetchSym(sym))}&range=1D`)
           .then(r => r.ok ? r.json() : null)
           .catch(() => null)
       ));
@@ -1896,6 +1909,53 @@ const vtx = {
     XRP: { label:'XRP', category:'Crypto', yahooSymbol:'XRP-USD' },
     DOGE: { label:'Dogecoin', category:'Crypto', yahooSymbol:'DOGE-USD' },
   },
+  // Which INSTRUMENTS categories can actually be added to the watchlist —
+  // crypto and commodities only (what was asked for). Indices/futures/
+  // forex/treasuries stay view-only via the Instrument View; they're
+  // already front-and-center in the Global Markets panel, so pinning
+  // them to the equity watchlist too would mostly just be clutter.
+  ADDABLE_INSTRUMENT_CATEGORIES: ['Crypto', 'Metals', 'Energy', 'Agriculture'],
+  // Lightweight sibling to addTicker() — an instrument has no financials,
+  // analyst ratings, or earnings, so it skips straight to a real price
+  // (reused from whichever snapshot already covers it, no extra fetch)
+  // and a real 1D sparkline, and never navigates away from wherever the
+  // user clicked "Add" from (the Instrument View itself).
+  async addInstrumentToWatchlist(code) {
+    const inst = this.INSTRUMENTS[code];
+    if (!inst || !this.ADDABLE_INSTRUMENT_CATEGORIES.includes(inst.category)) return;
+    if (this.state.tickers.some(t => t.sym === code)) return;
+    const snap = inst.category === 'Crypto'
+      ? (this.CRYPTO_SNAPSHOT || []).find(c => c.symbol === code)
+      : (this.MARKET_SNAPSHOT && this.MARKET_SNAPSHOT[code]);
+    const price = (snap && snap.price != null) ? snap.price : 100;
+    const t = {
+      sym: code, name: inst.label, sector: inst.category,
+      price, open: price, prevClose: price, changePct: snap ? snap.changePct : null,
+      hist: [price, price], // flat placeholder until loadSparklines() below resolves
+      kind: 'instrument', instrumentCode: code,
+    };
+    this.state.tickers.push(t);
+    this.saveWatchlist();
+    this.render();
+    this.loadSparklines([code]);
+  },
+  // Keeps any crypto/commodity entries already in the watchlist in sync
+  // with the same MARKET_SNAPSHOT/CRYPTO_SNAPSHOT data already being
+  // polled every 60s for the Global Markets panel — no separate fetch
+  // or poll timer needed just for the watchlist copy.
+  syncInstrumentQuotes() {
+    this.state.tickers = this.state.tickers.map(t => {
+      if (t.kind !== 'instrument') return t;
+      const inst = this.INSTRUMENTS[t.instrumentCode];
+      const snap = inst && inst.category === 'Crypto'
+        ? (this.CRYPTO_SNAPSHOT || []).find(c => c.symbol === t.instrumentCode)
+        : (this.MARKET_SNAPSHOT && this.MARKET_SNAPSHOT[t.instrumentCode]);
+      if (!snap || snap.price == null) return t;
+      const hist = (t.hist || []).concat(snap.price);
+      if (hist.length > 46) hist.shift();
+      return { ...t, price: snap.price, changePct: snap.changePct, hist };
+    });
+  },
   async loadMarketSnapshot() {
     try {
       const syms = this.MARKET_SNAPSHOT_SYMS;
@@ -1905,6 +1965,7 @@ const vtx = {
       if (!data.quotes) return;
       this.MARKET_SNAPSHOT = this.MARKET_SNAPSHOT || {};
       Object.assign(this.MARKET_SNAPSHOT, data.quotes);
+      this.syncInstrumentQuotes();
       this.render();
     } catch (e) { /* keep previous data on failure */ }
   },
@@ -1916,7 +1977,8 @@ const vtx = {
       const data = await res.json();
       if (!data.coins) return;
       this.CRYPTO_SNAPSHOT = data.coins;
-      if (this.state.view === 'overview') this.renderOverview();
+      this.syncInstrumentQuotes();
+      this.render();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -2451,6 +2513,11 @@ const vtx = {
     const s = this.state, code = s.instrument;
     const inst = this.INSTRUMENTS[code];
     if (!inst) { el.innerHTML = ''; return; }
+    const canAddToWatchlist = this.ADDABLE_INSTRUMENT_CATEGORIES.includes(inst.category);
+    const isWatchlisted = s.tickers.some(t => t.sym === code);
+    const watchlistBtnHtml = !canAddToWatchlist ? '' : isWatchlisted
+      ? `<button onclick="vtx.removeTicker('${code}')" style="margin-top:9px;font-family:var(--ui);font-size:10.5px;font-weight:700;color:var(--mut);background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;">− Remove from Watchlist</button>`
+      : `<button onclick="vtx.addInstrumentToWatchlist('${code}')" style="margin-top:9px;font-family:var(--ui);font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--bg0);background:var(--acc2);border:none;border-radius:8px;padding:6px 12px;cursor:pointer;">+ Add to Watchlist</button>`;
     const data = this._instrumentData && this._instrumentData[code];
     const quote = data && data.quote;
     const chart = data && data.chart;
@@ -2546,7 +2613,7 @@ const vtx = {
             </div>
             <div style="font-size:11.5px;color:var(--mut);font-family:var(--mono);">${code}</div>
           </div>
-          <div style="text-align:right;">${priceHtml}</div>
+          <div style="text-align:right;">${priceHtml}${watchlistBtnHtml}</div>
         </div>
       </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
@@ -2602,7 +2669,11 @@ const vtx = {
             wsConnected = true;
             this.state.feedLive = true;
             this.state.feedMode = 'ws';
-            this.state.tickers.forEach(t => this.subscribeSymbol(t.sym));
+            // Instrument entries (crypto/commodities) use INSTRUMENTS
+            // keys like GOLD/BTC as their sym — not a real Finnhub trade
+            // symbol, so subscribing would just fail silently. They stay
+            // on the 60s snapshot sync instead (syncInstrumentQuotes()).
+            this.state.tickers.filter(t => t.kind !== 'instrument').forEach(t => this.subscribeSymbol(t.sym));
             this.renderMarketStatus();
             this.renderFeedLabels();
           };
@@ -2769,10 +2840,14 @@ const vtx = {
     document.getElementById('watchCount').textContent = T.length+' SYM';
     document.getElementById('watchlistBody').innerHTML = T.map(t => {
       const p=this.pctOf(t), up=p>=0;
-      const isFocus = t.sym===s.focus;
+      // selectInstrument() doesn't set state.focus (that's still whatever
+      // stock was last focused) — an instrument row is "active" when its
+      // own Instrument View is what's actually on screen.
+      const isFocus = t.kind === 'instrument' ? (s.view==='instrument' && s.instrument===t.sym) : t.sym===s.focus;
       const hasAhRow = !this.isMarketOpen() && t.ahPrice != null;
       const ahPctRow = hasAhRow ? (t.ahPrice - t.price) / t.price * 100 : null;
-      return `<div class="wlrow" onclick="vtx.selectTicker('${t.sym}')" style="position:relative;display:grid;grid-template-columns:1fr 58px auto 16px;align-items:center;gap:7px;padding:7px 9px 7px 11px;border-radius:9px;cursor:pointer;background:${isFocus?'rgba(var(--glow),.12)':'transparent'};">
+      const openRow = t.kind === 'instrument' ? `vtx.selectInstrument('${t.sym}')` : `vtx.selectTicker('${t.sym}')`;
+      return `<div class="wlrow" onclick="${openRow}" style="position:relative;display:grid;grid-template-columns:1fr 58px auto 16px;align-items:center;gap:7px;padding:7px 9px 7px 11px;border-radius:9px;cursor:pointer;background:${isFocus?'rgba(var(--glow),.12)':'transparent'};">
         <span style="position:absolute;left:0;top:18%;bottom:18%;width:2.5px;border-radius:3px;background:${isFocus?'var(--acc)':'transparent'};"></span>
         <div style="min-width:0;">
           <div style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:${isFocus?'var(--acc2)':'var(--txt)'};">${t.sym}</div>
