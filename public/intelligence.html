@@ -874,6 +874,24 @@ const vtx = {
     this.loadInstrumentData(code);
     this.loadNews();
     if (inst.category === 'Crypto') this.loadCryptoDetail(code);
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) this.loadCftcCot(code);
+  },
+  COMMODITY_CATEGORIES: ['Metals', 'Energy', 'Agriculture'],
+  // Real CFTC Commitment of Traders positioning — who's actually long/
+  // short a given commodity's futures, broken out by trader type. Only
+  // fetched for Metals/Energy/Agriculture instruments; not every
+  // INSTRUMENTS code has a CFTC mapping (index/currency futures aren't
+  // commodities in the CFTC sense), so a 400/unavailable response here
+  // is expected and handled, not a bug.
+  async loadCftcCot(code) {
+    this._cftcCot = this._cftcCot || {};
+    try {
+      const res = await fetch(`/api/market/cftc-cot?code=${encodeURIComponent(code)}`);
+      this._cftcCot[code] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._cftcCot[code] = { __failed: true };
+    }
+    if (this.state.view === 'instrument' && this.state.instrument === code) this.renderInstrumentView();
   },
   setInstrumentTf(tf) { this.state.tf = tf; this.render(); this.loadInstrumentData(this.state.instrument); },
   // Richer per-coin detail (market cap, supply, ATH/ATL, multi-period
@@ -2710,6 +2728,67 @@ const vtx = {
       }
     }
 
+    // Commodity-only detail — CFTC Commitment of Traders positioning:
+    // who's actually long/short the futures, split by trader type.
+    // Non-commercials are the speculative/managed-money crowd; commercials
+    // are the producers/hedgers on the other side of that trade.
+    let cftcCotHtml = '';
+    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+      const cot = this._cftcCot && this._cftcCot[code];
+      const bar = (long, short) => {
+        const tot = long + short;
+        const longPct = tot > 0 ? (long / tot * 100) : 50;
+        return `<div style="display:flex;height:7px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.06);">
+          <div style="width:${longPct.toFixed(1)}%;background:${cPos};"></div>
+          <div style="width:${(100-longPct).toFixed(1)}%;background:${cNeg};"></div>
+        </div>`;
+      };
+      if (!cot) {
+        cftcCotHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading CFTC positioning data…</div>`;
+      } else if (cot.__failed) {
+        cftcCotHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load CFTC positioning data. <button onclick="vtx.loadCftcCot('${code}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else if (!cot.available) {
+        cftcCotHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">No CFTC futures positioning report exists for this market.</div>`;
+      } else {
+        const fmtCt = v => v == null ? '—' : v.toLocaleString();
+        const net = (long, short) => long - short;
+        const netStr = n => (n>=0?'+':'')+n.toLocaleString();
+        const netColor = n => n >= 0 ? cPos : cNeg;
+        const noncommNet = net(cot.noncommLong, cot.noncommShort);
+        const commNet = net(cot.commLong, cot.commShort);
+        cftcCotHtml = `
+          <div style="padding:14px;">
+            <div style="background:rgba(255,255,255,.03);border-radius:9px;padding:9px 11px;margin-bottom:10px;">
+              <div style="font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);">Open Interest</div>
+              <div style="font-family:var(--mono);font-size:15px;font-weight:800;margin-top:2px;">${fmtCt(cot.openInterest)} contracts</div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--txt);">Non-Commercial <span style="color:var(--mut);font-weight:500;text-transform:none;letter-spacing:0;">(speculators)</span></span>
+                <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${netColor(noncommNet)};">net ${netStr(noncommNet)}</span>
+              </div>
+              ${bar(cot.noncommLong, cot.noncommShort)}
+              <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:4px;">
+                <span style="color:${cPos};">Long ${fmtCt(cot.noncommLong)}</span>
+                <span style="color:${cNeg};">Short ${fmtCt(cot.noncommShort)}</span>
+              </div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+                <span style="font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--txt);">Commercial <span style="color:var(--mut);font-weight:500;text-transform:none;letter-spacing:0;">(hedgers)</span></span>
+                <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${netColor(commNet)};">net ${netStr(commNet)}</span>
+              </div>
+              ${bar(cot.commLong, cot.commShort)}
+              <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:4px;">
+                <span style="color:${cPos};">Long ${fmtCt(cot.commLong)}</span>
+                <span style="color:${cNeg};">Short ${fmtCt(cot.commShort)}</span>
+              </div>
+            </div>
+            <div style="font-size:8px;color:var(--mut);opacity:.7;">CFTC Commitment of Traders, legacy futures-only report, as of ${cot.reportDate||'—'} · published weekly, Fridays.</div>
+          </div>`;
+      }
+    }
+
     el.innerHTML = `
       <div style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);">
         <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 10px;cursor:pointer;">← Overview</button>
@@ -2737,6 +2816,10 @@ const vtx = {
       ${cryptoDetailHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Market Data &amp; Sentiment</div>
         ${cryptoDetailHtml}
+      </div>` : ''}
+      ${cftcCotHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Futures Positioning (CFTC)</div>
+        ${cftcCotHtml}
       </div>` : ''}
       <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
