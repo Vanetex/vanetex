@@ -358,7 +358,8 @@ const vtx = {
     previewTicker: null
   },
 
-  NEWS: [], // populated by loadNews() — real Finnhub company-news data, no seed
+  NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
+  NEWS_SCOPE: null, // the symbol NEWS is currently scoped to, or null for general market news
   CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
   IPO_CAL: null, // populated by loadIpoCalendar() — real Finnhub /calendar/ipo data, no seed
   ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
@@ -834,8 +835,8 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); },
-  backToOverview() { this.state.view = 'overview'; this.render(); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); this.loadNews(); },
+  backToOverview() { this.state.view = 'overview'; this.render(); this.loadNews(); },
   selectInstrument(code) {
     if (!this.INSTRUMENTS[code]) return;
     this.state.view = 'instrument';
@@ -845,6 +846,7 @@ const vtx = {
     this.closeSearch();
     this.render();
     this.loadInstrumentData(code);
+    this.loadNews();
   },
   setInstrumentTf(tf) { this.state.tf = tf; this.render(); this.loadInstrumentData(this.state.instrument); },
 
@@ -862,6 +864,7 @@ const vtx = {
     this.closeSearch();
     this.render();
     this.loadIndicatorData(meta.id);
+    this.loadNews();
   },
   async loadIndicatorData(id) {
     this._indicatorData = this._indicatorData || {};
@@ -1158,6 +1161,7 @@ const vtx = {
     this.loadPeerPercentile(sym);
     this.loadShortInterest(sym);
     this.loadSparklines([sym]);
+    this.loadNews();
     try {
       const [q, fin, analyst, earn] = await Promise.all([
         fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
@@ -1178,7 +1182,6 @@ const vtx = {
       this.render();
       this.loadDarkPool();
       this.loadCalendar();
-      this.loadNews();
     } catch(e) {}
   },
   // Search results land here, not addTicker() — looking a symbol up
@@ -1207,6 +1210,7 @@ const vtx = {
     this.loadPeerPercentile(sym);
     this.loadShortInterest(sym);
     this.loadSparklines([sym]);
+    this.loadNews();
     try {
       const [q, fin, analyst, earn] = await Promise.all([
         fetch(`/api/stock/quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null).catch(()=>null),
@@ -1965,14 +1969,28 @@ const vtx = {
     if (this.state.focus === sym && this.state.view === 'ticker') this.render();
   },
 
+  // Scoped to whatever's actually on screen rather than always mixing
+  // the whole watchlist together: a focused ticker gets its own company
+  // news, anything else (Overview, an instrument/indicator view with no
+  // single company behind it) gets real general market news instead.
+  // Re-checks state.view/state.focus fresh on every call, so the same
+  // periodic refresh timer that already existed keeps this in sync
+  // without any extra wiring.
   async loadNews() {
+    const sym = (this.state.view === 'ticker' && this.state.focus) ? this.state.focus : null;
     try {
-      const symbols = this.state.tickers.map(t => t.sym).join(',');
-      const res = await fetch(`/api/intel/news?symbols=${encodeURIComponent(symbols)}`);
+      const url = sym ? `/api/intel/news?symbols=${encodeURIComponent(sym)}` : `/api/intel/news`;
+      const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
       if (!data.items) return;
+      // The view/focus may have changed again while this was in flight —
+      // a slow general-news response landing after the user already
+      // focused a ticker would otherwise stomp the ticker's own news.
+      const stillCurrent = ((this.state.view === 'ticker' && this.state.focus) ? this.state.focus : null) === (sym || null);
+      if (!stillCurrent) return;
       this.NEWS = data.items;
+      this.NEWS_SCOPE = sym;
       if (this.state.tab === 'news') this.renderRight();
     } catch (e) { /* keep previous data on failure */ }
   },
@@ -3246,8 +3264,15 @@ const vtx = {
     this.renderTabs();
 
     if (s.tab === 'news') {
+      // Scoped to whatever's on screen — see loadNews(). The header names
+      // that scope explicitly so it's never ambiguous whether this is
+      // "everything for my watchlist" (the old behavior) or one symbol.
+      const scopeHtml = this.NEWS_SCOPE
+        ? `<span class="symlink" onclick="vtx.jumpToTicker('${this.NEWS_SCOPE}')" style="font-family:var(--mono);">${this.NEWS_SCOPE}</span> News`
+        : 'Market News';
+      const scopeHeaderHtml = `<div style="padding:11px 14px 4px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">${scopeHtml}</div>`;
       if (!this.NEWS.length) {
-        el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading news…</div>`;
+        el.innerHTML = scopeHeaderHtml + `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading news…</div>`;
       } else {
         const relTime = iso => {
           const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -3257,11 +3282,13 @@ const vtx = {
           if (hrs < 24) return hrs + 'h';
           return Math.floor(hrs / 24) + 'd';
         };
-        el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:7px;">` +
+        el.innerHTML = scopeHeaderHtml + `<div style="padding:8px;display:flex;flex-direction:column;gap:7px;">` +
           this.NEWS.map(n => `
             <div class="newscard" onclick="window.open(${JSON.stringify(n.url).replace(/"/g,'&quot;')}, '_blank', 'noopener')" style="padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.02);cursor:pointer;">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                <span class="symlink" onclick="event.stopPropagation(); vtx.jumpToTicker('${n.sym}')" style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;">${n.sym}</span>
+                ${n.sym
+                  ? `<span class="symlink" onclick="event.stopPropagation(); vtx.jumpToTicker('${n.sym}')" style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;">${n.sym}</span>`
+                  : `<span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 5px;">MARKET</span>`}
                 <span style="font-size:10px;color:var(--mut);">${n.src}</span>
                 <span style="font-size:9.5px;color:var(--mut);margin-left:auto;">${relTime(n.time)}</span>
               </div>

@@ -9,6 +9,8 @@ const CACHE_TTL_S = 15 * 60; // news moves faster than earnings dates
 const PER_SYMBOL_LIMIT = 3;
 const MAX_RESULTS = 8;
 const MAX_SYMBOLS = 8;
+const GENERAL_CACHE_TTL_S = 10 * 60;
+const MAX_GENERAL_RESULTS = 12;
 
 type FinnhubNews = {
   category?: string;
@@ -21,10 +23,35 @@ type FinnhubNews = {
 type NewsItem = {
   time: string;
   src: string;
-  sym: string;
+  sym: string | null; // null for general market news — no single company it's "about"
   headline: string;
   url: string;
 };
+
+async function getGeneralNews(apiKey: string): Promise<NewsItem[]> {
+  const cacheKey = "news:general";
+  const cached = await kvGet<NewsItem[]>(cacheKey);
+  if (cached) return cached;
+
+  const res = await fetch(`${FINNHUB_BASE}/news?category=general&token=${apiKey}`);
+  if (!res.ok) return [];
+
+  const rows = (await res.json()) as FinnhubNews[];
+  const items: NewsItem[] = (rows ?? [])
+    .filter((r) => r.headline && r.datetime)
+    .sort((a, b) => b.datetime - a.datetime)
+    .slice(0, MAX_GENERAL_RESULTS)
+    .map((r) => ({
+      time: new Date(r.datetime * 1000).toISOString(),
+      src: r.source || "Unknown",
+      sym: null,
+      headline: r.headline,
+      url: r.url,
+    }));
+
+  await kvSet(cacheKey, items, GENERAL_CACHE_TTL_S);
+  return items;
+}
 
 async function getSymbolNews(symbol: string, apiKey: string): Promise<NewsItem[]> {
   const cacheKey = `news:${symbol}`;
@@ -71,8 +98,19 @@ export async function GET(request: NextRequest) {
 
   const symbolsParam = request.nextUrl.searchParams.get("symbols") ?? "";
   const symbols = [...new Set(symbolsParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, MAX_SYMBOLS);
+
+  // No symbols requested — e.g. the Market Overview screen, or an
+  // instrument/indicator view where there's no single company this news
+  // could be "about" — falls back to real general market/business news
+  // instead of an empty panel.
   if (symbols.length === 0) {
-    return NextResponse.json({ items: [] });
+    try {
+      const items = await getGeneralNews(apiKey);
+      return NextResponse.json({ items }, { headers: { "Cache-Control": "private, max-age=300" } });
+    } catch (err) {
+      console.error("[intel/news] general error:", err);
+      return NextResponse.json({ error: "Failed to fetch news" }, { status: 500 });
+    }
   }
 
   try {
