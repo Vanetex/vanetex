@@ -355,7 +355,7 @@ input{font-family:var(--ui)}
 const vtx = {
   state: {
     variant: 'A', focus: 'NVDA', view: 'overview', tab: 'news', tf: '1D',
-    query: '', searchOpen: false, remoteResults: [], instrumentMatches: [], remoteIndicators: [], tickers: [], tape: [], tickerBarData: [],
+    query: '', searchOpen: false, remoteResults: [], instrumentMatches: [], remoteIndicators: [], searchFailed: false, tickers: [], tape: [], tickerBarData: [],
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: null, // set by loadQuotes() from a real measured round-trip time
     indicators: { sma9: false, sma20: false },
@@ -1626,7 +1626,7 @@ const vtx = {
     else this.viewTicker(entry.key, entry.label);
   },
   onSearchInput(v) {
-    this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[];
+    this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
     // The 40-entry INSTRUMENTS map (indices, futures, metals, energy,
     // agriculture, treasuries, forex, crypto) is small and static, so this
     // filters instantly client-side — no round trip needed, unlike stock
@@ -1654,13 +1654,22 @@ const vtx = {
   async fetchRemoteSearch(q) {
     try {
       const res = await fetch(`/api/stock/search?q=${encodeURIComponent(q)}`);
-      if (!res.ok) return;
-      const data = await res.json();
       if (this.state.query.trim()!==q) return;
+      // A failed remote lookup (rate limit, Finnhub hiccup, network) used
+      // to fail silently here — remoteResults just stayed empty with zero
+      // signal that anything went wrong, so a real ticker that isn't
+      // already in the watchlist (no local match either) would make the
+      // dropdown look like it found nothing, indistinguishable from a
+      // genuine "no such ticker." Surface it instead.
+      if (!res.ok) { this.state.searchFailed = true; this.renderSearch(); return; }
+      const data = await res.json();
       const have = new Set(this.state.tickers.map(t=>t.sym));
       this.state.remoteResults = (data.results||[]).filter(r=>!have.has(r.symbol));
+      this.state.searchFailed = false;
       this.renderSearch();
-    } catch(e) {}
+    } catch(e) {
+      if (this.state.query.trim()===q) { this.state.searchFailed = true; this.renderSearch(); }
+    }
   },
   // Real FRED series search — GDP, CPI, unemployment, PMI, housing starts,
   // money supply, whatever the user types — not a fixed list.
@@ -1718,8 +1727,17 @@ const vtx = {
     const indicators = this.state.remoteIndicators || [];
     const hasQuery = !!this.state.query.trim();
     const recent = this.RECENT_SEARCHES || [];
-    if (!this.state.searchOpen || (!hasQuery && !recent.length) || (hasQuery && r.length===0 && remote.length===0 && instruments.length===0 && indicators.length===0)) { dd.style.display='none'; return; }
+    const isEmpty = r.length===0 && remote.length===0 && instruments.length===0 && indicators.length===0;
+    // A failed remote lookup keeps the dropdown open with an honest
+    // message + retry, rather than looking identical to "genuinely no
+    // matches" (or, worse, just vanishing) — see fetchRemoteSearch().
+    if (!this.state.searchOpen || (!hasQuery && !recent.length) || (hasQuery && isEmpty && !this.state.searchFailed)) { dd.style.display='none'; return; }
     dd.style.display='block';
+
+    if (hasQuery && isEmpty && this.state.searchFailed) {
+      dd.innerHTML = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:12px;">Couldn't complete the search. <button onmousedown="event.preventDefault();vtx.onSearchInput(vtx.state.query)" style="background:none;border:none;color:var(--acc2);font-size:12px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      return;
+    }
 
     if (!hasQuery) {
       // Nothing typed yet — recent searches instead of the old "first 6
