@@ -3724,19 +3724,23 @@ const vtx = {
       document.getElementById('analystBody').innerHTML = `<div style="font-size:11px;color:var(--mut);">${ar ? 'No analyst coverage available.' : 'Loading analyst ratings…'}</div>`;
     } else {
       const score = (ar.strongBuy*5 + ar.buy*4 + ar.hold*3 + ar.sell*2 + ar.strongSell*1) / arTotal;
-      const consensus = score>=4.5 ? {label:'Strong Buy',color:cPos}
-        : score>=3.5 ? {label:'Buy',color:cPos}
-        : score>=2.5 ? {label:'Hold',color:'var(--warn)'}
-        : score>=1.5 ? {label:'Sell',color:cNeg}
-        : {label:'Strong Sell',color:cNeg};
+      // Five distinct hues (not shared-color-at-different-opacity) so
+      // each tier reads at a glance: strong sell red -> sell orange ->
+      // hold yellow -> buy light green -> strong buy deep green.
+      const RATING_COLORS = { strongBuy:'#0fae6e', buy:'#6fe3a8', hold:'#f0c419', sell:'#f2994a', strongSell:'#ff4d5e' };
+      const consensus = score>=4.5 ? {label:'Strong Buy',color:RATING_COLORS.strongBuy}
+        : score>=3.5 ? {label:'Buy',color:RATING_COLORS.buy}
+        : score>=2.5 ? {label:'Hold',color:RATING_COLORS.hold}
+        : score>=1.5 ? {label:'Sell',color:RATING_COLORS.sell}
+        : {label:'Strong Sell',color:RATING_COLORS.strongSell};
       consensusEl.textContent = consensus.label.toUpperCase();
       consensusEl.style.color = consensus.color;
       const segs = [
-        {label:'Strong Buy', n:ar.strongBuy, color:'#1fd397'},
-        {label:'Buy', n:ar.buy, color:'rgba(31,209,151,.55)'},
-        {label:'Hold', n:ar.hold, color:'var(--mut)'},
-        {label:'Sell', n:ar.sell, color:'rgba(255,77,94,.55)'},
-        {label:'Strong Sell', n:ar.strongSell, color:'#ff4d5e'},
+        {label:'Strong Buy', n:ar.strongBuy, color:RATING_COLORS.strongBuy},
+        {label:'Buy', n:ar.buy, color:RATING_COLORS.buy},
+        {label:'Hold', n:ar.hold, color:RATING_COLORS.hold},
+        {label:'Sell', n:ar.sell, color:RATING_COLORS.sell},
+        {label:'Strong Sell', n:ar.strongSell, color:RATING_COLORS.strongSell},
       ];
       const barHtml = segs.map(sg => `<div style="width:${(sg.n/arTotal*100).toFixed(1)}%;background:${sg.color};height:100%;"></div>`).join('');
       const legendHtml = segs.filter(sg=>sg.n>0).map(sg => `
