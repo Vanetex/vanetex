@@ -58,7 +58,7 @@ input{font-family:var(--ui)}
    the bottom tab bar) instead of trying to fit all three. */
 @media (max-width: 860px){
   header{gap:8px !important;padding:0 10px !important;}
-  #logoText, #variantToggle, #clockWrap{display:none !important;}
+  #logoText, #headerPulse, #clockWrap{display:none !important;}
   #searchWrap{width:auto !important;flex:1;min-width:0;margin-left:0 !important;}
   #searchKbd{display:none !important;}
   /* The dropdown normally spans its search-bar parent's own width — on
@@ -128,11 +128,10 @@ input{font-family:var(--ui)}
 
       <div style="flex:1;"></div>
 
-      <!-- Variant toggle -->
-      <div id="variantToggle" style="display:flex;align-items:center;gap:3px;padding:3px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.03);">
-        <button id="btnCinematic" onclick="vtx.setVariant('A')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:5px 11px;border-radius:6px;border:none;cursor:pointer;">CINEMATIC</button>
-        <button id="btnAurora" onclick="vtx.setVariant('B')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:5px 11px;border-radius:6px;border:none;cursor:pointer;">AURORA</button>
-      </div>
+      <!-- Header pulse: Fear & Greed + market breadth, real data, always
+           visible — see vtx.renderHeaderPulse(). Replaces the old
+           CINEMATIC/AURORA accent toggle (still available in Settings). -->
+      <div id="headerPulse" style="display:flex;align-items:center;gap:8px;"></div>
 
       <!-- Market status -->
       <div id="mktStatus" style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid rgba(31,209,151,.28);border-radius:8px;background:rgba(31,209,151,.08);">
@@ -714,6 +713,67 @@ const vtx = {
   mktCapFromFin(millions) { const v = millions*1e6; if (v>=1e12) return '$'+(v/1e12).toFixed(2)+'T'; return '$'+(v/1e9).toFixed(1)+'B'; },
   pctOf(t) { if (t.changePct != null) return t.changePct; const base = t.prevClose || t.open; return base ? (t.price - base) / base * 100 : 0; },
   fmt(n) { return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); },
+  // Shared with the header pulse widget below — single source of truth
+  // for the composite so the two can never silently drift apart.
+  // Vanetex's own composite, not a reproduction of CNN's proprietary
+  // index. Three real, disclosed inputs, equally weighted: (1) today's
+  // live VIX ranked against its own real 1-year daily history, (2) % of
+  // the heatmap-tracked stock universe that's up today, (3) the real
+  // 10Y-2Y Treasury spread. A put/call ratio component was considered
+  // and deliberately left out — CBOE gates it behind a paid product even
+  // on the same free endpoint that serves real-time VIX/SPX.
+  computeFearGreed() {
+    const snap = this.MARKET_SNAPSHOT, yc = this.YIELD_CURVE, heat = this.state.heatmap;
+    const ready = snap && snap.VIX && this.VIX_HISTORY && this.VIX_HISTORY.length >= 10 && heat && yc && yc.spread10y2y != null;
+    if (!ready) return null;
+    const hist = this.VIX_HISTORY;
+    const vixPercentile = (hist.filter(v => v <= snap.VIX.price).length / hist.length) * 100;
+    const vixScore = 100 - vixPercentile; // low VIX vs its own history => more greed
+    const allStocks = Object.values(heat).flat();
+    const breadthScore = allStocks.length ? (allStocks.filter(c => c.changePct > 0).length / allStocks.length) * 100 : 50;
+    const spread = yc.spread10y2y;
+    const clamped = Math.max(-1.5, Math.min(2.5, spread));
+    const curveScore = ((clamped + 1.5) / 4) * 100; // -1.5%..+2.5% mapped to 0..100
+    const composite = (vixScore + breadthScore + curveScore) / 3;
+    const zone = composite < 25 ? { label: 'Extreme Fear', color: '#ef4444' }
+      : composite < 45 ? { label: 'Fear', color: '#f59e0b' }
+      : composite < 56 ? { label: 'Neutral', color: '#eab308' }
+      : composite < 76 ? { label: 'Greed', color: '#84cc16' }
+      : { label: 'Extreme Greed', color: '#22c55e' };
+    return { composite, zone, vixScore, breadthScore, curveScore };
+  },
+  computeBreadth() {
+    const heat = this.state.heatmap;
+    if (!heat) return null;
+    const allStocks = Object.values(heat).flat();
+    if (!allStocks.length) return null;
+    const up = allStocks.filter(c => c.changePct > 0).length;
+    return { upCount: up, downCount: allStocks.length - up, total: allStocks.length, pct: (up / allStocks.length) * 100 };
+  },
+  // Compact always-visible header widgets — Fear & Greed composite +
+  // market breadth — replacing what used to be the CINEMATIC/AURORA
+  // toggle (a plain accent-color switch, still available in Settings)
+  // and otherwise-dead space between search and the market-status pill.
+  renderHeaderPulse() {
+    const el = document.getElementById('headerPulse');
+    if (!el) return;
+    const fg = this.computeFearGreed();
+    const br = this.computeBreadth();
+    if (!fg && !br) { el.innerHTML = ''; return; }
+    const fgHtml = fg ? `
+      <div onclick="vtx.backToOverview()" title="Fear &amp; Greed: Vanetex's own composite (VIX percentile + market breadth + yield curve) — click for the full breakdown." style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer;">
+        <span style="width:7px;height:7px;border-radius:50%;background:${fg.zone.color};box-shadow:0 0 6px ${fg.zone.color};flex-shrink:0;"></span>
+        <span style="font-family:var(--mono);font-size:12px;font-weight:800;color:var(--txt);">${Math.round(fg.composite)}</span>
+        <span style="font-size:9.5px;font-weight:700;color:${fg.zone.color};white-space:nowrap;">${fg.zone.label}</span>
+      </div>` : '';
+    const brHtml = br ? `
+      <div onclick="vtx.setTab('movers');vtx.openSector(null)" title="${br.upCount} of ${br.total} heatmap-tracked stocks up today" style="display:flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer;">
+        <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--pos);">▲${Math.round(br.pct)}%</span>
+        <div style="width:44px;height:6px;border-radius:3px;background:var(--neg);overflow:hidden;flex-shrink:0;"><div style="height:100%;width:${br.pct.toFixed(1)}%;background:var(--pos);"></div></div>
+        <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--neg);">▼${Math.round(100-br.pct)}%</span>
+      </div>` : '';
+    el.innerHTML = fgHtml + brHtml;
+  },
   // Local device clocks drift or are just set wrong (phones with bad
   // auto-time, VMs, manually-set clocks) — that silently breaks every
   // open/closed check below even though the ET-timezone math itself is
@@ -908,14 +968,8 @@ const vtx = {
     const r = document.documentElement;
     if (this.state.variant === 'B') { r.style.setProperty('--acc','#9b6bff'); r.style.setProperty('--acc2','#22d3ee'); r.style.setProperty('--glow','155,107,255'); }
     else { r.style.setProperty('--acc','#2F7BFF'); r.style.setProperty('--acc2','#34d3ff'); r.style.setProperty('--glow','47,123,255'); }
-    const a = document.getElementById('btnCinematic'), b = document.getElementById('btnAurora');
-    a.style.background = this.state.variant==='A' ? 'rgba(var(--glow),.2)' : 'transparent';
-    a.style.color = this.state.variant==='A' ? 'var(--acc2)' : 'var(--mut)';
-    b.style.background = this.state.variant==='B' ? 'rgba(var(--glow),.2)' : 'transparent';
-    b.style.color = this.state.variant==='B' ? 'var(--acc2)' : 'var(--mut)';
     if (this.state.customAccent) this.applyAccent(this.state.customAccent);
   },
-  setVariant(v) { this.state.variant = v; this.state.customAccent = null; try { localStorage.removeItem(this.ACCENT_KEY); } catch(e) {} this.applyVariant(); },
   // Mobile-only column switcher — see the max-width:860px block in
   // <style> and #mobileNav. A no-op in spirit on desktop (all three
   // columns show regardless of this class), so every call site below
@@ -2347,6 +2401,7 @@ const vtx = {
       this.YIELD_CURVE = data;
       if (this.state.tab === 'econ') this.renderRight();
       if (this.state.view === 'overview') this.renderOverview();
+      this.renderHeaderPulse();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -2504,6 +2559,7 @@ const vtx = {
       Object.assign(this.MARKET_SNAPSHOT, data.quotes);
       this.syncInstrumentQuotes();
       this.render();
+      this.renderHeaderPulse();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -2531,6 +2587,7 @@ const vtx = {
       if (!data.prices || data.prices.length < 10) return;
       this.VIX_HISTORY = data.prices;
       if (this.state.view === 'overview') this.renderOverview();
+      this.renderHeaderPulse();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -2770,6 +2827,7 @@ const vtx = {
       this.state.heatmap = data;
       if (this.state.tab === 'movers') this.renderRight();
       if (this.state.view === 'overview') this.renderOverview();
+      this.renderHeaderPulse();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -2912,38 +2970,15 @@ const vtx = {
         <div style="font-size:8px;color:var(--mut);margin-top:11px;opacity:.7;">Real futures prices: Yahoo Finance · click any tile for its real chart.</div>
       </div>`;
 
-    // Fear & Greed — Vanetex's own composite, not a reproduction of CNN's
-    // proprietary index. Three real, disclosed inputs, equally weighted:
-    // (1) today's live VIX ranked against its own real 1-year daily
-    // history, (2) % of the same heatmap-tracked stock universe used in
-    // Sector Performance that's up today, (3) the real 10Y-2Y Treasury
-    // spread. A put/call ratio component was considered and deliberately
-    // left out — CBOE gates it behind a paid product even on the same
-    // free endpoint that serves real-time VIX/SPX, and no other free,
-    // reliable source could be found.
-    const fgReady = snap.VIX && this.VIX_HISTORY && this.VIX_HISTORY.length >= 10 && s.heatmap && yc && yc.spread10y2y != null;
+    // Fear & Greed — computeFearGreed() is the single source of truth
+    // (also feeds the header pulse widget); see its own comment for the
+    // three real, disclosed, equally-weighted inputs.
+    const fg = this.computeFearGreed();
     let fgHtml;
-    if (!fgReady) {
+    if (!fg) {
       fgHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading fear &amp; greed signals…</div>`;
     } else {
-      const hist = this.VIX_HISTORY;
-      const vixPercentile = (hist.filter(v => v <= snap.VIX.price).length / hist.length) * 100;
-      const vixScore = 100 - vixPercentile; // low VIX vs its own history => more greed
-
-      const allStocks = Object.values(s.heatmap).flat();
-      const breadthScore = allStocks.length ? (allStocks.filter(c => c.changePct > 0).length / allStocks.length) * 100 : 50;
-
-      const spread = yc.spread10y2y;
-      const clamped = Math.max(-1.5, Math.min(2.5, spread));
-      const curveScore = ((clamped + 1.5) / 4) * 100; // -1.5%..+2.5% mapped to 0..100
-
-      const composite = (vixScore + breadthScore + curveScore) / 3;
-      const zone = composite < 25 ? { label: 'Extreme Fear', color: '#ef4444' }
-        : composite < 45 ? { label: 'Fear', color: '#f59e0b' }
-        : composite < 56 ? { label: 'Neutral', color: '#eab308' }
-        : composite < 76 ? { label: 'Greed', color: '#84cc16' }
-        : { label: 'Extreme Greed', color: '#22c55e' };
-
+      const { composite, zone, vixScore, breadthScore, curveScore } = fg;
       const subChip = (label, score) => `
         <div style="flex:1;min-width:0;background:rgba(255,255,255,.03);border-radius:8px;padding:7px 9px;">
           <div style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
