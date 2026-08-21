@@ -140,7 +140,7 @@ input{font-family:var(--ui)}
       </div>
 
       <!-- Auth pill -->
-      <a id="authPill" href="/auth/sign-in" style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--mut);text-decoration:none;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Sign In</a>
+      <a id="authPill" href="/auth/sign-in" style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--mut);text-decoration:none;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;flex-shrink:0;">Sign In</a>
 
       <!-- Clock -->
       <div id="clockWrap" style="text-align:right;line-height:1.15;">
@@ -3585,7 +3585,12 @@ const vtx = {
         pill.href = '/me';
         pill.style.color = 'var(--txt)';
         pill.style.background = 'rgba(255,255,255,.06)';
-        pill.innerHTML = '<span style="width:16px;height:16px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;">' + (d.initial || '?') + '</span><span>' + (d.displayName || '') + '</span>';
+        // flex-shrink:0 on the avatar circle is load-bearing, not
+        // decorative — without it, a squeezed header (this pill sits
+        // in a flex row alongside several other pills) shrinks it into
+        // an oval instead of a circle. Same for the name label, which
+        // would otherwise wrap/truncate its own text under pressure.
+        pill.innerHTML = '<span style="width:16px;height:16px;min-width:16px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;flex-shrink:0;">' + (d.initial || '?') + '</span><span style="white-space:nowrap;flex-shrink:0;">' + (d.displayName || '') + '</span>';
       }
     } catch (e) { this.state.signedIn = false; }
     this.renderFeedLabels();
