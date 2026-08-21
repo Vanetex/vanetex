@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 const FOMC_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm";
-const CACHE_KEY = "intel:econ-calendar:v4"; // v4: expanded release set + relevance tiers
+const CACHE_KEY = "intel:econ-calendar:v5"; // v5: response now keeps isoDate (was stripped before)
 const CACHE_TTL_S = 24 * 60 * 60; // these dates are scheduled far in advance
 const WINDOW_DAYS = 90;
 const MAX_EVENTS = 40;
@@ -122,7 +122,7 @@ async function fetchFomcDates(from: Date, to: Date): Promise<string[]> {
   return dates;
 }
 
-async function buildCalendar(fredApiKey: string): Promise<EconEvent[]> {
+async function buildCalendar(fredApiKey: string): Promise<DatedEvent[]> {
   const from = new Date();
   const to = new Date();
   to.setDate(to.getDate() + WINDOW_DAYS);
@@ -153,7 +153,12 @@ async function buildCalendar(fredApiKey: string): Promise<EconEvent[]> {
   // tie-breaker within a tier — the calendar still reads chronologically
   // inside each relevance band, but leads with what actually moves markets.
   events.sort((a, b) => (b.relevance - a.relevance) || a.isoDate.localeCompare(b.isoDate));
-  return events.slice(0, MAX_EVENTS).map(({ isoDate, ...rest }) => rest);
+  // isoDate is kept in the response (not stripped) — the header's "next
+  // event" countdown needs a real date to compute days-until from,
+  // and reparsing the display-formatted "25 Aug" back into a date
+  // client-side would be needless fragility (year inference, etc.)
+  // for a field the backend already has correctly in hand.
+  return events.slice(0, MAX_EVENTS);
 }
 
 export async function GET(request: NextRequest) {
@@ -179,7 +184,7 @@ export async function GET(request: NextRequest) {
   // correct 40-event one under cache:'no-store'.
   const HTTP_CACHE_HEADER = { "Cache-Control": "public, max-age=300" };
 
-  const cached = await kvGet<{ events: EconEvent[] }>(CACHE_KEY);
+  const cached = await kvGet<{ events: DatedEvent[] }>(CACHE_KEY);
   if (cached) {
     return NextResponse.json(cached, { headers: HTTP_CACHE_HEADER });
   }

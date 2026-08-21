@@ -750,16 +750,45 @@ const vtx = {
     const up = allStocks.filter(c => c.changePct > 0).length;
     return { upCount: up, downCount: allStocks.length - up, total: allStocks.length, pct: (up / allStocks.length) * 100 };
   },
-  // Compact always-visible header widgets — Fear & Greed composite +
-  // market breadth — replacing what used to be the CINEMATIC/AURORA
-  // toggle (a plain accent-color switch, still available in Settings)
-  // and otherwise-dead space between search and the market-status pill.
+  compute10yYield() {
+    const yc = this.YIELD_CURVE;
+    if (!yc || !yc.points) return null;
+    const pt = yc.points.find(p => p.label === '10Y');
+    if (!pt) return null;
+    return { yield: pt.yield, change: pt.prevYield != null ? pt.yield - pt.prevYield : null, inverted: yc.inverted };
+  },
+  // ECON is sorted by relevance (see econ-calendar route), not date, so
+  // "next" means re-sorting by isoDate here rather than just taking [0].
+  computeNextEconEvent() {
+    if (!this.ECON || !this.ECON.length) return null;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const upcoming = this.ECON.filter(e => e.isoDate && e.isoDate >= todayStr).sort((a, b) => a.isoDate.localeCompare(b.isoDate));
+    if (!upcoming.length) return null;
+    const next = upcoming[0];
+    const days = Math.round((new Date(next.isoDate + 'T00:00:00Z') - new Date(todayStr + 'T00:00:00Z')) / 86400000);
+    return { event: next.event, days, isoDate: next.isoDate };
+  },
+  computeTopMover() {
+    const heat = this.state.heatmap;
+    if (!heat) return null;
+    const all = Object.values(heat).flat();
+    if (!all.length) return null;
+    return all.reduce((best, c) => Math.abs(c.changePct) > Math.abs(best.changePct) ? c : best, all[0]);
+  },
+  // Compact always-visible header widgets — replacing what used to be
+  // the CINEMATIC/AURORA toggle (a plain accent-color switch, still
+  // available in Settings) and otherwise-dead space between search and
+  // the market-status pill. All five read from data other loaders
+  // already fetch — no new requests of their own.
   renderHeaderPulse() {
     const el = document.getElementById('headerPulse');
     if (!el) return;
     const fg = this.computeFearGreed();
     const br = this.computeBreadth();
-    if (!fg && !br) { el.innerHTML = ''; return; }
+    const y10 = this.compute10yYield();
+    const nextEv = this.computeNextEconEvent();
+    const top = this.computeTopMover();
+    if (!fg && !br && !y10 && !nextEv && !top) { el.innerHTML = ''; return; }
     const fgHtml = fg ? `
       <div onclick="vtx.backToOverview()" title="Fear &amp; Greed: Vanetex's own composite (VIX percentile + market breadth + yield curve) — click for the full breakdown." style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer;">
         <span style="width:7px;height:7px;border-radius:50%;background:${fg.zone.color};box-shadow:0 0 6px ${fg.zone.color};flex-shrink:0;"></span>
@@ -772,7 +801,28 @@ const vtx = {
         <div style="width:44px;height:6px;border-radius:3px;background:var(--neg);overflow:hidden;flex-shrink:0;"><div style="height:100%;width:${br.pct.toFixed(1)}%;background:var(--pos);"></div></div>
         <span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--neg);">▼${Math.round(100-br.pct)}%</span>
       </div>` : '';
-    el.innerHTML = fgHtml + brHtml;
+    const y10Html = y10 ? `
+      <div title="10-Year Treasury yield${y10.inverted?' — 10Y−2Y curve currently inverted':''}${y10.change!=null?` (${y10.change>=0?'+':''}${y10.change.toFixed(2)} vs prior session)`:''}" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid ${y10.inverted?'rgba(245,165,36,.4)':'var(--line)'};border-radius:8px;background:rgba(255,255,255,.03);">
+        <span style="font-size:8.5px;letter-spacing:.04em;color:var(--mut);">10Y</span>
+        <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--txt);">${y10.yield.toFixed(2)}%</span>
+        ${y10.inverted ? `<span style="font-size:7.5px;font-weight:700;letter-spacing:.03em;color:var(--warn);">INV</span>` : ''}
+      </div>` : '';
+    const nextEvHtml = nextEv ? `
+      <div onclick="vtx.setTab('econ')" title="${nextEv.event} — ${nextEv.isoDate}" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer;max-width:160px;">
+        <span style="font-size:8.5px;letter-spacing:.04em;color:var(--mut);flex-shrink:0;">NEXT</span>
+        <span style="font-size:10.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nextEv.event}</span>
+        <span style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--acc2);flex-shrink:0;">${nextEv.days<=0?'today':nextEv.days===1?'1d':nextEv.days+'d'}</span>
+      </div>` : '';
+    const topHtml = top ? (() => {
+      const up = top.changePct >= 0;
+      return `
+      <div onclick="vtx.viewTicker('${top.sym}',${JSON.stringify(top.name).replace(/"/g,'&quot;')})" title="Biggest mover today across the heatmap universe" style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);cursor:pointer;">
+        <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:${up?'var(--pos)':'var(--neg)'};">${up?'▲':'▼'}</span>
+        <span style="font-family:var(--mono);font-size:10.5px;font-weight:800;color:var(--txt);">${top.sym}</span>
+        <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:${up?'var(--pos)':'var(--neg)'};">${up?'+':''}${top.changePct.toFixed(2)}%</span>
+      </div>`;
+    })() : '';
+    el.innerHTML = fgHtml + brHtml + topHtml + y10Html + nextEvHtml;
   },
   // Local device clocks drift or are just set wrong (phones with bad
   // auto-time, VMs, manually-set clocks) — that silently breaks every
@@ -2389,6 +2439,7 @@ const vtx = {
       if (!data.events) return;
       this.ECON = data.events;
       if (this.state.tab === 'econ') this.renderRight();
+      this.renderHeaderPulse();
     } catch (e) { /* keep previous data on failure */ }
   },
 
