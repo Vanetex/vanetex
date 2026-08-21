@@ -57,11 +57,16 @@ export async function GET(request: NextRequest) {
 
     const data = await res.json() as { result: FinnhubSearchResult[] };
 
-    // Filter to US common stocks and ETFs, limit to 8 results
+    // Filter to US common stocks, ETFs, and ADRs, limit to 8 results.
+    // ADR matters more than it looks — every large foreign company
+    // trading on a US exchange (TSM, BABA, JD, SONY, NVO, SHEL, ...) is
+    // typed "ADR" by Finnhub, not "Common Stock", and was silently
+    // excluded here — confirmed live: TSM's own search result comes
+    // back with type "ADR".
     const results: SearchResult[] = (data.result ?? [])
       .filter(
         (r) =>
-          (r.type === "Common Stock" || r.type === "ETP") &&
+          (r.type === "Common Stock" || r.type === "ETP" || r.type === "ADR") &&
           !r.symbol.includes(".") && // exclude non-US exchanges
           r.displaySymbol.length <= 5,
       )
