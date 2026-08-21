@@ -427,6 +427,10 @@ const vtx = {
     indicators: { sma9: false, sma20: false },
     moversSector: null, marketOpen: false, customAccent: null, feedLive: false, signedIn: null, heatmap: null,
     screenerSort: { key: 'chg', dir: -1 },
+    // Real threshold filtering over data already loaded per ticker
+    // (t.fin/t.analyst, batch-fetched once for the whole watchlist) —
+    // '' means "no filter" for every numeric field.
+    screenerFilters: { sector: 'All', mcapMin: '', peMax: '', revGrowthMin: '', changeMin: '', divYieldMin: '', betaMax: '', ratingMin: 'Any' },
     leaderboardTf: '1Y',
     compareSet: [], compareTf: '6M',
     // A ticker viewed from search but not yet added to the real
@@ -774,6 +778,25 @@ const vtx = {
     const all = Object.values(heat).flat();
     if (!all.length) return null;
     return all.reduce((best, c) => Math.abs(c.changePct) > Math.abs(best.changePct) ? c : best, all[0]);
+  },
+  // Shared with the screener's Analyst Rating column/filter — single
+  // source of truth for the score->label->color mapping (five distinct
+  // hues, not shared-color-at-different-opacity, so each tier reads at
+  // a glance: strong sell red -> sell orange -> hold yellow -> buy
+  // light green -> strong buy deep green).
+  RATING_COLORS: { strongBuy:'#0fae6e', buy:'#6fe3a8', hold:'#f0c419', sell:'#f2994a', strongSell:'#ff4d5e' },
+  computeAnalystConsensus(ar) {
+    if (!ar) return null;
+    const total = ar.strongBuy + ar.buy + ar.hold + ar.sell + ar.strongSell;
+    if (!total) return null;
+    const score = (ar.strongBuy*5 + ar.buy*4 + ar.hold*3 + ar.sell*2 + ar.strongSell*1) / total;
+    const C = this.RATING_COLORS;
+    const zone = score>=4.5 ? {label:'Strong Buy',color:C.strongBuy}
+      : score>=3.5 ? {label:'Buy',color:C.buy}
+      : score>=2.5 ? {label:'Hold',color:C.hold}
+      : score>=1.5 ? {label:'Sell',color:C.sell}
+      : {label:'Strong Sell',color:C.strongSell};
+    return { score, total, ...zone };
   },
   // Compact always-visible header widgets — replacing what used to be
   // the CINEMATIC/AURORA toggle (a plain accent-color switch, still
@@ -1609,6 +1632,14 @@ const vtx = {
   setScreenerSort(key) {
     const s = this.state.screenerSort;
     this.state.screenerSort = (s.key === key) ? { key, dir: -s.dir } : { key, dir: -1 };
+    this.renderRight();
+  },
+  setScreenerFilter(key, value) {
+    this.state.screenerFilters = { ...this.state.screenerFilters, [key]: value };
+    this.renderRight();
+  },
+  clearScreenerFilters() {
+    this.state.screenerFilters = { sector: 'All', mcapMin: '', peMax: '', revGrowthMin: '', changeMin: '', divYieldMin: '', betaMax: '', ratingMin: 'Any' };
     this.renderRight();
   },
   // Loads 1Y weekly history for the whole watchlist plus the S&P 500
@@ -4036,28 +4067,20 @@ const vtx = {
     const ar = f.analyst;
     const arTotal = ar ? ar.strongBuy+ar.buy+ar.hold+ar.sell+ar.strongSell : 0;
     const consensusEl = document.getElementById('analystConsensus');
-    if (!ar || arTotal === 0) {
+    const consensus = this.computeAnalystConsensus(ar);
+    if (!consensus) {
       consensusEl.textContent = '';
       document.getElementById('analystBody').innerHTML = `<div style="font-size:11px;color:var(--mut);">${ar ? 'No analyst coverage available.' : 'Loading analyst ratings…'}</div>`;
     } else {
-      const score = (ar.strongBuy*5 + ar.buy*4 + ar.hold*3 + ar.sell*2 + ar.strongSell*1) / arTotal;
-      // Five distinct hues (not shared-color-at-different-opacity) so
-      // each tier reads at a glance: strong sell red -> sell orange ->
-      // hold yellow -> buy light green -> strong buy deep green.
-      const RATING_COLORS = { strongBuy:'#0fae6e', buy:'#6fe3a8', hold:'#f0c419', sell:'#f2994a', strongSell:'#ff4d5e' };
-      const consensus = score>=4.5 ? {label:'Strong Buy',color:RATING_COLORS.strongBuy}
-        : score>=3.5 ? {label:'Buy',color:RATING_COLORS.buy}
-        : score>=2.5 ? {label:'Hold',color:RATING_COLORS.hold}
-        : score>=1.5 ? {label:'Sell',color:RATING_COLORS.sell}
-        : {label:'Strong Sell',color:RATING_COLORS.strongSell};
+      const C = this.RATING_COLORS;
       consensusEl.textContent = consensus.label.toUpperCase();
       consensusEl.style.color = consensus.color;
       const segs = [
-        {label:'Strong Buy', n:ar.strongBuy, color:RATING_COLORS.strongBuy},
-        {label:'Buy', n:ar.buy, color:RATING_COLORS.buy},
-        {label:'Hold', n:ar.hold, color:RATING_COLORS.hold},
-        {label:'Sell', n:ar.sell, color:RATING_COLORS.sell},
-        {label:'Strong Sell', n:ar.strongSell, color:RATING_COLORS.strongSell},
+        {label:'Strong Buy', n:ar.strongBuy, color:C.strongBuy},
+        {label:'Buy', n:ar.buy, color:C.buy},
+        {label:'Hold', n:ar.hold, color:C.hold},
+        {label:'Sell', n:ar.sell, color:C.sell},
+        {label:'Strong Sell', n:ar.strongSell, color:C.strongSell},
       ];
       const barHtml = segs.map(sg => `<div style="width:${(sg.n/arTotal*100).toFixed(1)}%;background:${sg.color};height:100%;"></div>`).join('');
       const legendHtml = segs.filter(sg=>sg.n>0).map(sg => `
@@ -4898,13 +4921,15 @@ const vtx = {
       }
     }
     else if (s.tab === 'analytics') {
-      // Screener — every column comes from data already loaded per ticker
-      // by the existing batched loaders (loadFinancials/loadSparklines),
-      // so this renders instantly with zero new fetches, unlike the
-      // heavier 1Y-history panels below it.
-      const sortDef = { chg:'Change %', price:'Price', pe:'P/E', revGrowth:'Rev Growth YoY', volRatio:'Vol vs Avg', w52pos:'52W Range Pos.' };
+      // Screener — every column/filter comes from data already loaded
+      // per ticker by the existing batched loaders (loadFinancials/
+      // loadAnalystRatings), so this renders and filters instantly with
+      // zero new fetches. Real threshold filtering (not just sort) —
+      // t.fin alone carries ~50 real fundamental fields already fetched
+      // for the whole watchlist; this surfaces 9 of them.
       const ss = s.screenerSort;
-      const screenerRows = s.tickers.map(t => {
+      const f = s.screenerFilters;
+      const allRows = s.tickers.map(t => {
         const chg = this.pctOf(t);
         const pe = t.fin ? t.fin.peTTM : null;
         const revGrowth = t.fin ? t.fin.revenueGrowthYoy : null;
@@ -4912,38 +4937,92 @@ const vtx = {
         const volRatio = (t.volume != null && avgVol) ? (t.volume/1e6) / avgVol : null;
         const w52pos = (t.week52Low != null && t.week52High != null && t.week52High > t.week52Low)
           ? (t.price - t.week52Low) / (t.week52High - t.week52Low) * 100 : null;
-        return { sym:t.sym, sector:t.sector, price:t.price, chg, pe, revGrowth, volRatio, w52pos };
+        const mcap = t.fin ? t.fin.marketCapitalization : null; // millions
+        const divYield = t.fin ? t.fin.dividendYield : null;
+        const beta = t.fin ? t.fin.beta : null;
+        const rating = this.computeAnalystConsensus(t.analyst);
+        return { sym:t.sym, sector:t.sector, price:t.price, chg, pe, revGrowth, volRatio, w52pos, mcap, divYield, beta, rating };
+      });
+      const sectors = [...new Set(allRows.map(r => r.sector).filter(Boolean))].sort();
+      const RATING_MIN_SCORE = { 'Hold or better': 2.5, 'Buy or better': 3.5, 'Strong Buy only': 4.5 };
+      let screenerRows = allRows.filter(r => {
+        if (f.sector !== 'All' && r.sector !== f.sector) return false;
+        if (f.mcapMin && (r.mcap == null || r.mcap / 1000 < parseFloat(f.mcapMin))) return false;
+        if (f.peMax && (r.pe == null || r.pe > parseFloat(f.peMax))) return false;
+        if (f.revGrowthMin && (r.revGrowth == null || r.revGrowth < parseFloat(f.revGrowthMin))) return false;
+        if (f.changeMin && r.chg < parseFloat(f.changeMin)) return false;
+        if (f.divYieldMin && (r.divYield == null || r.divYield < parseFloat(f.divYieldMin))) return false;
+        if (f.betaMax && (r.beta == null || r.beta > parseFloat(f.betaMax))) return false;
+        if (f.ratingMin !== 'Any' && (!r.rating || r.rating.score < RATING_MIN_SCORE[f.ratingMin])) return false;
+        return true;
       }).sort((a,b) => {
-        const av = a[ss.key], bv = b[ss.key];
+        const av = ss.key === 'rating' ? (a.rating ? a.rating.score : null) : a[ss.key];
+        const bv = ss.key === 'rating' ? (b.rating ? b.rating.score : null) : b[ss.key];
         if (av == null && bv == null) return 0;
         if (av == null) return 1; if (bv == null) return -1;
         return (av - bv) * ss.dir;
       });
       const sHeader = (key, label) => `<th onclick="vtx.setScreenerSort('${key}')" style="text-align:right;padding:6px 8px;cursor:pointer;user-select:none;white-space:nowrap;${ss.key===key?'color:var(--acc2);':''}">${label}${ss.key===key?(ss.dir===1?' ▲':' ▼'):''}</th>`;
       const dashOr = (v,fmt) => v==null?'—':fmt(v);
+      const numField = (label, key, placeholder) => `
+        <div>
+          <label style="display:block;font-size:7.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:3px;">${label}</label>
+          <input type="number" value="${f[key]}" onchange="vtx.setScreenerFilter('${key}', this.value)" placeholder="${placeholder}" style="width:64px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:5px 7px;color:var(--txt);font-family:var(--mono);font-size:10.5px;outline:none;">
+        </div>`;
+      const filtersActive = f.sector!=='All' || f.mcapMin || f.peMax || f.revGrowthMin || f.changeMin || f.divYieldMin || f.betaMax || f.ratingMin!=='Any';
+      const filterBarHtml = `
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:11px;">
+          <div>
+            <label style="display:block;font-size:7.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:3px;">Sector</label>
+            <select onchange="vtx.setScreenerFilter('sector', this.value)" style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:5px 7px;color:var(--txt);font-family:var(--ui);font-size:10.5px;outline:none;max-width:110px;">
+              <option value="All" ${f.sector==='All'?'selected':''}>All</option>
+              ${sectors.map(sec => `<option value="${sec.replace(/"/g,'&quot;')}" ${f.sector===sec?'selected':''}>${sec}</option>`).join('')}
+            </select>
+          </div>
+          ${numField('Mkt Cap ≥ ($B)', 'mcapMin', 'Any')}
+          ${numField('P/E ≤', 'peMax', 'Any')}
+          ${numField('Rev Gr. ≥ (%)', 'revGrowthMin', 'Any')}
+          ${numField('Chg ≥ (%)', 'changeMin', 'Any')}
+          ${numField('Div Yield ≥ (%)', 'divYieldMin', 'Any')}
+          ${numField('Beta ≤', 'betaMax', 'Any')}
+          <div>
+            <label style="display:block;font-size:7.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:3px;">Analyst Rating</label>
+            <select onchange="vtx.setScreenerFilter('ratingMin', this.value)" style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:5px 7px;color:var(--txt);font-family:var(--ui);font-size:10.5px;outline:none;">
+              ${['Any','Hold or better','Buy or better','Strong Buy only'].map(o => `<option value="${o}" ${f.ratingMin===o?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+          ${filtersActive ? `<button onclick="vtx.clearScreenerFilters()" style="font-family:var(--ui);font-size:10px;font-weight:700;color:var(--mut);background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;">Clear filters</button>` : ''}
+        </div>`;
       const screenerHtml = `
         <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Watchlist Screener</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px;">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Watchlist Screener</span>
+            <span style="font-size:9.5px;color:var(--mut);">${screenerRows.length} of ${allRows.length}</span>
+          </div>
+          ${filterBarHtml}
           <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:11px;">
               <thead><tr style="color:var(--mut);font-size:9px;letter-spacing:.05em;text-transform:uppercase;">
                 <th style="text-align:left;padding:6px 8px;">Ticker</th>
-                ${sHeader('price','Price')}${sHeader('chg','Change %')}${sHeader('pe','P/E')}${sHeader('revGrowth','Rev Growth YoY')}${sHeader('volRatio','Vol vs Avg')}${sHeader('w52pos','52W Range Pos.')}
+                ${sHeader('price','Price')}${sHeader('chg','Change %')}${sHeader('mcap','Mkt Cap')}${sHeader('pe','P/E')}${sHeader('revGrowth','Rev Growth YoY')}${sHeader('rating','Rating')}${sHeader('divYield','Div Yield')}${sHeader('volRatio','Vol vs Avg')}${sHeader('w52pos','52W Range Pos.')}
               </tr></thead>
               <tbody>
-                ${screenerRows.map(r => `<tr style="border-top:1px solid var(--line);">
+                ${screenerRows.length ? screenerRows.map(r => `<tr style="border-top:1px solid var(--line);">
                   <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.jumpToTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${r.sector}</span></td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${this.fmt(r.price)}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.chg>=0?'var(--pos)':'var(--neg)'};">${(r.chg>=0?'+':'')+r.chg.toFixed(2)}%</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${r.mcap!=null?this.mktCapFromFin(r.mcap):'—'}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.pe, v=>v.toFixed(1)+'x')}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.revGrowth==null?'var(--txt)':(r.revGrowth>=0?'var(--pos)':'var(--neg)')};">${dashOr(r.revGrowth, v=>(v>=0?'+':'')+v.toFixed(1)+'%')}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.rating?r.rating.color:'var(--mut)'};">${r.rating?r.rating.label:'—'}</td>
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.divYield, v=>v.toFixed(2)+'%')}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.volRatio!=null&&r.volRatio>=1.5?'var(--warn)':'var(--txt)'};">${dashOr(r.volRatio, v=>v.toFixed(2)+'x')}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.w52pos, v=>v.toFixed(0)+'%')}</td>
-                </tr>`).join('')}
+                </tr>`).join('') : `<tr><td colspan="10" style="padding:18px 8px;text-align:center;color:var(--mut);font-size:11px;">No watchlist tickers match these filters.</td></tr>`}
               </tbody>
             </table>
           </div>
-          <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Click a column to sort · Vol vs Avg above 1.5x is flagged as unusual · 52W Range Pos. is 0% at the 52-week low, 100% at the 52-week high.</div>
+          <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Click a column to sort · Vol vs Avg above 1.5x is flagged as unusual · 52W Range Pos. is 0% at the 52-week low, 100% at the 52-week high · Rating is the same 5-tier analyst consensus shown on each ticker's own page.</div>
         </div>`;
 
       const syms = s.tickers.map(t => t.sym);
