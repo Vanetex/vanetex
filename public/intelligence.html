@@ -1341,6 +1341,77 @@ const vtx = {
     });
     return { line, area, endX: end[0].toFixed(1), endY: end[1].toFixed(1), axisLabels, dateLabels, W };
   },
+  // Squarified treemap (Bruls/Huizing/van Wijk) — the same layout
+  // algorithm TradingView's heatmap uses: recursively lays out the
+  // next-best "row" of items along whichever side of the remaining
+  // rect is currently shorter, picking each row to keep tile aspect
+  // ratios as close to square as possible rather than degenerating
+  // into thin slivers (which a naive proportional-width layout would).
+  // items: [{value, ...}], value > 0, need not be pre-sorted or
+  // pre-scaled to area — this does both internally.
+  squarify(items, x, y, w, h) {
+    const positive = items.filter(i => i.value > 0);
+    if (!positive.length || w <= 0 || h <= 0) return [];
+    const totalValue = positive.reduce((s, i) => s + i.value, 0);
+    const scale = (w * h) / totalValue;
+    const queue = positive.map(i => ({ ...i, area: i.value * scale })).sort((a, b) => b.area - a.area);
+
+    const rects = [];
+    let rx = x, ry = y, rw = w, rh = h;
+    const sumArea = arr => arr.reduce((s, i) => s + i.area, 0);
+    const worstRatio = (row, length) => {
+      const sum = sumArea(row);
+      const maxA = Math.max(...row.map(i => i.area));
+      const minA = Math.min(...row.map(i => i.area));
+      const sum2 = sum * sum, len2 = length * length;
+      return Math.max((len2 * maxA) / sum2, sum2 / (len2 * minA));
+    };
+
+    let remaining = queue;
+    while (remaining.length) {
+      const length = Math.min(rw, rh);
+      let row = [remaining[0]];
+      let i = 1;
+      while (i < remaining.length) {
+        const testRow = row.concat([remaining[i]]);
+        if (worstRatio(testRow, length) <= worstRatio(row, length)) { row = testRow; i++; }
+        else break;
+      }
+      const rowArea = sumArea(row);
+      if (rw >= rh) {
+        const stripW = rowArea / rh;
+        let oy = ry;
+        for (const item of row) {
+          const itemH = (item.area / rowArea) * rh;
+          rects.push({ item, x: rx, y: oy, w: stripW, h: itemH });
+          oy += itemH;
+        }
+        rx += stripW; rw -= stripW;
+      } else {
+        const stripH = rowArea / rw;
+        let ox = rx;
+        for (const item of row) {
+          const itemW = (item.area / rowArea) * rw;
+          rects.push({ item, x: ox, y: ry, w: itemW, h: stripH });
+          ox += itemW;
+        }
+        ry += stripH; rh -= stripH;
+      }
+      remaining = remaining.slice(row.length);
+    }
+    return rects;
+  },
+  // Diverging red/gray/green scale matching TradingView's heatmap legend
+  // (±3% = full saturation) — gray at 0%, not white, to sit naturally on
+  // this app's dark theme rather than looking like a hole in the page.
+  heatmapColor(pct) {
+    const NEUTRAL = [52, 58, 74], GREEN = [31, 209, 151], RED = [255, 77, 94];
+    const t = Math.max(-1, Math.min(1, (pct || 0) / 3));
+    const target = t >= 0 ? GREEN : RED;
+    const f = Math.abs(t);
+    const mix = NEUTRAL.map((n, i) => Math.round(n + (target[i] - n) * f));
+    return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+  },
   renderIndicatorView() {
     const el = document.getElementById('indicatorView');
     if (!el) return;
@@ -4652,76 +4723,82 @@ const vtx = {
       el.innerHTML = `<div style="border-bottom:1px solid var(--line);">${ycHtml}</div>${macroDashHtml}${auctionsHtml}${econHtml}`;
     }
     else if (s.tab === 'movers') {
-      const cPos='var(--pos)', cNeg='var(--neg)';
       const heat = s.heatmap;
-
       if (!heat) {
         el.innerHTML = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading sector heatmap…</div>`;
-      } else if (!s.moversSector) {
-        const tileColor = (p) => {
-          const up = p>=0, inten=Math.min(1,Math.abs(p)/3);
-          return {
-            bg: up ? `rgba(31,209,151,${(0.10+inten*0.55).toFixed(3)})` : `rgba(255,77,94,${(0.10+inten*0.55).toFixed(3)})`,
-            border: up ? 'rgba(31,209,151,.3)' : 'rgba(255,77,94,.3)',
-            fg: up ? cPos : cNeg,
-          };
-        };
-        const sectors = Object.keys(heat).map(name => {
-          const items = heat[name];
-          const avg = items.reduce((sum,c)=>sum+c.changePct,0)/items.length;
-          const totalMcap = items.reduce((sum,c)=>sum+(c.marketCap||0),0);
-          const featured = items.filter(c=>c.tier===1).sort((a,b)=>b.changePct-a.changePct);
-          return {name, items, avg, totalMcap, featured};
-        }).sort((a,b)=>b.totalMcap-a.totalMcap);
-
-        el.innerHTML = `<div style="padding:10px;">
-          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:2px 2px 11px;">Sector Heatmap · Prominent Companies</div>` +
-          sectors.map(g => {
-            const up = g.avg>=0;
-            return `<div class="movercard" onclick="vtx.openSector('${g.name}')" style="border-radius:12px;padding:12px 12px 13px;cursor:pointer;margin-bottom:9px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid var(--line);transition:transform .15s ease;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
-                <span style="font-size:11.5px;font-weight:700;color:var(--txt);">${g.name}</span>
-                <span style="font-family:var(--mono);font-size:11px;font-weight:800;color:${up?cPos:cNeg};">${(up?'+':'')+g.avg.toFixed(2)}%</span>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">` +
-                g.featured.map(c => {
-                  const tc = tileColor(c.changePct);
-                  return `<div style="border-radius:8px;padding:9px 10px;background:${tc.bg};border:1px solid ${tc.border};">
-                    <div style="font-family:var(--mono);font-size:12px;font-weight:800;color:var(--txt);">${c.sym}</div>
-                    <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${tc.fg};margin-top:2px;">${(c.changePct>=0?'+':'')+c.changePct.toFixed(2)}%</div>
-                  </div>`;
-                }).join('') +
-              `</div>
-            </div>`;
-          }).join('') + `</div>`;
       } else {
-        const tileColor = (p) => {
-          const up = p>=0, inten=Math.min(1,Math.abs(p)/3);
-          return {
-            bg: up ? `rgba(31,209,151,${(0.10+inten*0.55).toFixed(3)})` : `rgba(255,77,94,${(0.10+inten*0.55).toFixed(3)})`,
-            border: up ? 'rgba(31,209,151,.3)' : 'rgba(255,77,94,.3)',
-            fg: up ? cPos : cNeg,
-          };
+        // A stock with no cached market cap yet (cold cron cache right
+        // after first deploy) would otherwise get filtered out of the
+        // treemap entirely (squarify skips value<=0) — fall back to a
+        // rank-based synthetic size so it still renders sensibly rather
+        // than vanishing until tomorrow's cron run.
+        const sizeOf = (c, idx, arr) => c.marketCap > 0 ? c.marketCap : (arr.length - idx);
+        const W = Math.max(260, el.clientWidth - 4);
+        const legendHtml = `
+          <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);">
+            <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Size = Market Cap · Color = Today's %</span>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:4px;">
+              <span style="font-size:8px;color:var(--mut);">-3%</span>
+              <div style="width:70px;height:7px;border-radius:4px;background:linear-gradient(90deg,${this.heatmapColor(-3)},${this.heatmapColor(0)},${this.heatmapColor(3)});"></div>
+              <span style="font-size:8px;color:var(--mut);">+3%</span>
+            </div>
+          </div>`;
+        const tileHtml = (rect, sectorName) => {
+          const c = rect.item;
+          const { x, y, w, h } = rect;
+          const bg = this.heatmapColor(c.changePct);
+          const showText = w >= 34 && h >= 22;
+          const symSz = Math.max(8, Math.min(15, Math.min(w / (c.sym.length * 0.75), h * 0.32)));
+          const pctSz = Math.max(7, symSz - 3);
+          return `<div class="movercard" title="${c.name} (${c.sym}) ${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%" onclick="vtx.addTicker('${c.sym}',${JSON.stringify(c.name).replace(/"/g,'&quot;')},'${sectorName}')" style="position:absolute;left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${w.toFixed(1)}px;height:${h.toFixed(1)}px;background:${bg};border:1px solid rgba(4,5,10,.5);cursor:pointer;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:filter .1s ease;">
+            ${showText ? `<div style="font-family:var(--mono);font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);line-height:1.15;font-size:${symSz.toFixed(1)}px;white-space:nowrap;">${c.sym}</div>
+            <div style="font-family:var(--mono);font-weight:700;color:rgba(255,255,255,.92);text-shadow:0 1px 2px rgba(0,0,0,.5);line-height:1.15;font-size:${pctSz.toFixed(1)}px;">${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%</div>` : ''}
+          </div>`;
         };
-        const items = (heat[s.moversSector] || []).slice().sort((a,b)=>{
-          if (a.tier !== b.tier) return a.tier - b.tier;
-          return b.changePct - a.changePct;
-        });
-        const span = (tier) => tier===1 ? 'grid-column:span 2;grid-row:span 2;' : tier===2 ? 'grid-column:span 2;' : 'grid-column:span 1;';
-        const fontSz = (tier) => tier===1 ? '15px' : tier===2 ? '12.5px' : '11px';
-        el.innerHTML = `<div style="padding:10px;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-            <button onclick="vtx.openSector(null)" style="font-family:var(--mono);font-size:10px;color:var(--acc2);background:rgba(var(--glow),.1);border:1px solid rgba(var(--glow),.3);border-radius:7px;padding:5px 10px;cursor:pointer;">← Sectors</button>
-            <span style="font-size:11.5px;font-weight:700;color:var(--txt);">${s.moversSector}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:46px;gap:6px;">` +
-            items.map(c => {
-              const tc = tileColor(c.changePct);
-              return `<div class="movercard" onclick="vtx.addTicker('${c.sym}',${JSON.stringify(c.name).replace(/"/g,'&quot;')},'${s.moversSector}')" style="${span(c.tier)}border-radius:9px;padding:8px 9px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;background:${tc.bg};border:1px solid ${tc.border};transition:transform .15s ease;overflow:hidden;">
-                <div style="font-family:var(--mono);font-size:${fontSz(c.tier)};font-weight:800;color:var(--txt);white-space:nowrap;">${c.sym}</div>
-                <div style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:${tc.fg};margin-top:2px;">${(c.changePct>=0?'+':'')+c.changePct.toFixed(2)}%</div>
-              </div>`;
-            }).join('') + `</div></div>`;
+
+        if (!s.moversSector) {
+          // Full TradingView-style view: every sector's own region
+          // (sized by total sector market cap), each containing its own
+          // nested treemap of individual stocks — a real two-level
+          // squarified treemap, not a fixed grid of tiers.
+          const H = Math.round(Math.min(900, Math.max(520, W * 1.35)));
+          const HEADER_H = 20;
+          const sectorItems = Object.entries(heat).map(([name, items]) => ({
+            name, items,
+            value: items.reduce((sum, c, i) => sum + sizeOf(c, i, items), 0),
+          }));
+          const sectorRects = this.squarify(sectorItems, 0, 0, W, H);
+          let body = '';
+          for (const sr of sectorRects) {
+            const name = sr.item.name;
+            const items = sr.item.items;
+            body += `<div style="position:absolute;left:${sr.x.toFixed(1)}px;top:${sr.y.toFixed(1)}px;width:${sr.w.toFixed(1)}px;height:${sr.h.toFixed(1)}px;border:1px solid var(--bg1);overflow:hidden;">`;
+            if (sr.h > HEADER_H + 10 && sr.w > 40) {
+              body += `<div class="sectorlink" onclick="event.stopPropagation();vtx.openSector('${name}')" style="position:absolute;left:0;top:0;right:0;height:${HEADER_H}px;display:flex;align-items:center;padding:0 6px;background:rgba(4,5,10,.55);font-size:9px;font-weight:700;letter-spacing:.03em;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:2;">${name}</div>`;
+              const stockRects = this.squarify(items.map((c,i)=>({...c, value: sizeOf(c,i,items)})), 0, HEADER_H, sr.w, sr.h - HEADER_H);
+              body += stockRects.map(r => tileHtml(r, name)).join('');
+            } else {
+              // Too small for a header + nested treemap — just show it
+              // as one solid tile colored by the sector's own average.
+              const avg = items.reduce((sum,c)=>sum+c.changePct,0)/items.length;
+              body += `<div title="${name}" style="position:absolute;inset:0;background:${this.heatmapColor(avg)};display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;color:#fff;text-align:center;padding:2px;">${name}</div>`;
+            }
+            body += `</div>`;
+          }
+          el.innerHTML = legendHtml + `<div style="position:relative;width:${W}px;height:${H}px;">${body}</div>`;
+        } else {
+          // Focused single-sector view — one flat treemap of that
+          // sector's own stocks, filling the whole panel.
+          const items = heat[s.moversSector] || [];
+          const H = Math.round(Math.min(900, Math.max(420, W * 1.1)));
+          const rects = this.squarify(items.map((c,i)=>({...c, value: sizeOf(c,i,items)})), 0, 0, W, H);
+          el.innerHTML = legendHtml + `
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;">
+              <button onclick="vtx.openSector(null)" style="font-family:var(--mono);font-size:10px;color:var(--acc2);background:rgba(var(--glow),.1);border:1px solid rgba(var(--glow),.3);border-radius:7px;padding:5px 10px;cursor:pointer;">← All Sectors</button>
+              <span style="font-size:11.5px;font-weight:700;color:var(--txt);">${s.moversSector}</span>
+            </div>
+            <div style="position:relative;width:${W}px;height:${H}px;">${rects.map(r => tileHtml(r, s.moversSector)).join('')}</div>`;
+        }
       }
     }
     else if (s.tab === 'analytics') {
