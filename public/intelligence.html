@@ -4750,7 +4750,12 @@ const vtx = {
           const showText = w >= 34 && h >= 22;
           const symSz = Math.max(8, Math.min(15, Math.min(w / (c.sym.length * 0.75), h * 0.32)));
           const pctSz = Math.max(7, symSz - 3);
-          return `<div class="movercard" title="${c.name} (${c.sym}) ${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%" onclick="vtx.addTicker('${c.sym}',${JSON.stringify(c.name).replace(/"/g,'&quot;')},'${sectorName}')" style="position:absolute;left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${w.toFixed(1)}px;height:${h.toFixed(1)}px;background:${bg};border:1px solid rgba(4,5,10,.5);cursor:pointer;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:filter .1s ease;">
+          // viewTicker, not addTicker — clicking a heatmap tile should
+          // preview the stock (same as clicking a search result), not
+          // silently commit it to the permanent watchlist. If it's
+          // already tracked, viewTicker redirects to selectTicker() on
+          // its own.
+          return `<div class="movercard" title="${c.name} (${c.sym}) ${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%" onclick="vtx.viewTicker('${c.sym}',${JSON.stringify(c.name).replace(/"/g,'&quot;')},'${sectorName}')" style="position:absolute;left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;width:${w.toFixed(1)}px;height:${h.toFixed(1)}px;background:${bg};border:1px solid rgba(4,5,10,.5);cursor:pointer;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:filter .1s ease;">
             ${showText ? `<div style="font-family:var(--mono);font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);line-height:1.15;font-size:${symSz.toFixed(1)}px;white-space:nowrap;">${c.sym}</div>
             <div style="font-family:var(--mono);font-weight:700;color:rgba(255,255,255,.92);text-shadow:0 1px 2px rgba(0,0,0,.5);line-height:1.15;font-size:${pctSz.toFixed(1)}px;">${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%</div>` : ''}
           </div>`;
