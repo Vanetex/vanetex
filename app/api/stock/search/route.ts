@@ -34,7 +34,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results: [] });
   }
 
-  const cacheKey = `stock-search:${q.trim().toLowerCase()}`;
+  // v2: the ADR fix below changed what a given query's results actually
+  // are — a query cached under v1 (e.g. "tsm", cached during the very
+  // investigation that found the ADR bug, before the fix landed) would
+  // otherwise keep serving its pre-fix result for up to 24h. Confirmed
+  // live: exactly that happened on the first deploy of the ADR fix.
+  const cacheKey = `stock-search:v2:${q.trim().toLowerCase()}`;
   const cached = await kvGet<SearchResult[]>(cacheKey);
   if (cached) {
     return NextResponse.json({ results: cached });
