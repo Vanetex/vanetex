@@ -152,6 +152,22 @@ async function getInstrumentNews(
   return { items: pool, matched: false, category };
 }
 
+// Private companies have no ticker, so there's no Finnhub company-news
+// endpoint to call — same keyword-filter-the-general-pool approach as
+// getInstrumentNews, just keyed by an arbitrary free-text name instead
+// of a fixed instrument code.
+async function getCompanyNameNews(
+  name: string,
+  apiKey: string,
+): Promise<{ items: NewsItem[]; matched: boolean }> {
+  const pool = await getCategoryNews("general", apiKey);
+  const filtered = pool.filter((item) => matchesKeywords(item.headline, [name]));
+  if (filtered.length >= MIN_INSTRUMENT_MATCHES) {
+    return { items: filtered.slice(0, MAX_GENERAL_RESULTS), matched: true };
+  }
+  return { items: pool, matched: false };
+}
+
 async function getSymbolNews(symbol: string, apiKey: string): Promise<NewsItem[]> {
   const cacheKey = `news:${symbol}`;
   const cached = await kvGet<NewsItem[]>(cacheKey);
@@ -202,6 +218,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ items, matched, category }, { headers: { "Cache-Control": "private, max-age=300" } });
     } catch (err) {
       console.error("[intel/news] instrument error:", err);
+      return NextResponse.json({ error: "Failed to fetch news" }, { status: 500 });
+    }
+  }
+
+  const companyName = request.nextUrl.searchParams.get("company")?.trim();
+  if (companyName) {
+    try {
+      const { items, matched } = await getCompanyNameNews(companyName, apiKey);
+      return NextResponse.json({ items, matched, category: "general" }, { headers: { "Cache-Control": "private, max-age=300" } });
+    } catch (err) {
+      console.error("[intel/news] company error:", err);
       return NextResponse.json({ error: "Failed to fetch news" }, { status: 500 });
     }
   }

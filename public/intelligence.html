@@ -365,6 +365,9 @@ input{font-family:var(--ui)}
 
         <!-- Indicator view (real FRED economic series — history chart, no price/equity fields) -->
         <div id="indicatorView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
+
+        <!-- Private company view (no ticker — SEC Form D + federal contracts + news) -->
+        <div id="privateCompanyView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -435,7 +438,11 @@ const vtx = {
     // Which of the three main columns is visible on mobile (see the
     // max-width:860px block in <style> and #mobileNav) — meaningless on
     // desktop, where all three always show; harmless to set unconditionally.
-    mobilePanel: 'chart'
+    mobilePanel: 'chart',
+    // The free-text company name behind view:'privateCompany' — there's
+    // no ticker for a private company, so this is what every private-
+    // company loader/render keys off instead of state.focus/instrument.
+    privateCompanyName: null
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -1162,6 +1169,128 @@ const vtx = {
   // INSTRUMENTS above. meta carries what the search result already gave
   // us (title/frequency/units) so opening the view doesn't need a second
   // round-trip just for labels.
+  // Private company lookup — no ticker exists, so this is keyed by the
+  // free-text name typed into search. Real signal, not fabricated:
+  // SEC Form D private-placement filings, USASpending federal contracts
+  // (both already free/keyless), and keyword-filtered news. Coverage is
+  // genuinely spotty by nature — most private companies have none of
+  // these — see loadPrivate* below for how each surfaces "nothing found"
+  // honestly rather than hiding the card.
+  selectPrivateCompany(name) {
+    name = (name || '').trim();
+    if (!name) return;
+    this.state.view = 'privateCompany';
+    this.state.privateCompanyName = name;
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+    this.loadPrivateFormD(name);
+    this.loadPrivateContracts(name);
+    this.loadNews();
+  },
+  async loadPrivateFormD(name) {
+    this._privateFormD = this._privateFormD || {};
+    try {
+      const res = await fetch(`/api/company/private?name=${encodeURIComponent(name)}`);
+      this._privateFormD[name] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._privateFormD[name] = { __failed: true };
+    }
+    if (this.state.view === 'privateCompany' && this.state.privateCompanyName === name) this.renderPrivateCompanyView();
+  },
+  async loadPrivateContracts(name) {
+    this._privateContracts = this._privateContracts || {};
+    try {
+      const res = await fetch(`/api/stock/federal-contracts?name=${encodeURIComponent(name)}`);
+      this._privateContracts[name] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._privateContracts[name] = { __failed: true };
+    }
+    if (this.state.view === 'privateCompany' && this.state.privateCompanyName === name) this.renderPrivateCompanyView();
+  },
+  renderPrivateCompanyView() {
+    const el = document.getElementById('privateCompanyView');
+    if (!el) return;
+    const name = this.state.privateCompanyName;
+    const fmtUsd = v => v == null ? null : v >= 1e9 ? '$'+(v/1e9).toFixed(2)+'B' : v >= 1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+v.toLocaleString();
+
+    // SEC Form D filings
+    const fd = this._privateFormD && this._privateFormD[name];
+    let formDHtml;
+    if (!fd) {
+      formDHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Searching SEC EDGAR…</div>`;
+    } else if (fd.__failed) {
+      formDHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Couldn't reach SEC EDGAR. <button onclick="vtx.loadPrivateFormD(${JSON.stringify(name)})" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else if (!fd.filings || !fd.filings.length) {
+      formDHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">No SEC Form D filings found for "${name}".</div>`;
+    } else {
+      formDHtml = `
+        <div style="display:flex;flex-direction:column;gap:8px;padding:14px;">
+          ${fd.filings.map(f => `
+            <div style="padding:9px 11px;border-radius:9px;background:rgba(255,255,255,.03);border:1px solid ${f.isLikelyPrimaryIssuer?'rgba(52,211,255,.25)':'var(--line)'};">
+              <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:11.5px;font-weight:700;color:var(--txt);">${f.filerName}</span>
+                ${f.isLikelyPrimaryIssuer ? `<span style="font-size:8px;font-weight:700;letter-spacing:.05em;color:var(--acc2);border:1px solid rgba(52,211,255,.35);border-radius:5px;padding:1px 5px;">LIKELY PRIMARY ISSUER</span>` : `<span style="font-size:8px;color:var(--mut);">related SPV/fund — not the company's own filing</span>`}
+                <span style="margin-left:auto;font-size:9.5px;color:var(--mut);">${f.fileDate}</span>
+              </div>
+              <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:5px;font-family:var(--mono);font-size:10.5px;">
+                ${f.totalAmountSold != null ? `<span style="color:var(--acc2);font-weight:700;">${fmtUsd(f.totalAmountSold)} sold</span>` : ''}
+                ${f.industryGroup ? `<span style="color:var(--mut);">${f.industryGroup}</span>` : ''}
+                ${f.location ? `<span style="color:var(--mut);">${f.location}</span>` : ''}
+              </div>
+              <a href="${f.secUrl}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:9.5px;color:var(--acc2);text-decoration:underline;">View on SEC EDGAR →</a>
+            </div>`).join('')}
+        </div>
+        <div style="padding:0 14px 12px;font-size:8px;color:var(--mut);opacity:.7;">SEC Form D private placement notices, matched by name — a company's own large private rounds often aren't filed this way, and results can include unrelated investor SPVs/feeder funds that merely reference the name (flagged above). Not a complete funding history.</div>`;
+    }
+
+    // Federal contracts (reuses the same USASpending-backed route the
+    // ticker view uses, keyed by name here instead of by sym)
+    const fc = this._privateContracts && this._privateContracts[name];
+    let contractsHtml;
+    if (!fc) {
+      contractsHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Searching USASpending.gov…</div>`;
+    } else if (fc.__failed) {
+      contractsHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load federal contract data. <button onclick="vtx.loadPrivateContracts(${JSON.stringify(name)})" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else if (!fc.contracts || !fc.contracts.length) {
+      contractsHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">No federal contracts on file for "${name}".</div>`;
+    } else {
+      contractsHtml = `
+        <div style="display:flex;flex-direction:column;gap:8px;padding:14px;">
+          ${fc.contracts.map(c => `
+            <div style="padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.03);">
+              <div style="display:flex;align-items:baseline;gap:8px;">
+                <span style="font-family:var(--mono);font-size:13px;font-weight:800;color:var(--acc2);">${fmtUsd(c.amount)||'—'}</span>
+                <span style="font-size:10px;color:var(--mut);margin-left:auto;">${c.startDate||'—'}${c.endDate?' – '+c.endDate:''}</span>
+              </div>
+              <div style="font-size:10.5px;color:var(--txt);margin-top:3px;">${c.agency||'—'}${c.subAgency&&c.subAgency!==c.agency?' · '+c.subAgency:''}</div>
+              ${c.description ? `<div style="font-size:10px;color:var(--mut);margin-top:4px;line-height:1.5;">${c.description.length>160?c.description.slice(0,160)+'…':c.description}</div>` : ''}
+            </div>`).join('')}
+        </div>
+        <div style="padding:0 14px 12px;font-size:8px;color:var(--mut);opacity:.7;">Top ${fc.contracts.length} contract${fc.contracts.length===1?'':'s'} by award value, matched by company name — USASpending.gov, official federal award data.</div>`;
+    }
+
+    el.innerHTML = `
+      <div style="flex-shrink:0;position:relative;overflow:hidden;background:radial-gradient(120% 130% at 88% -20%,rgba(var(--glow),.18),transparent 55%),linear-gradient(165deg,rgba(20,25,44,.92),rgba(9,12,21,.96));border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:0 22px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);">
+        <button onclick="vtx.backToOverview()" title="Back to Market Overview" style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);background:none;border:none;padding:0 0 10px;cursor:pointer;">← Overview</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+          <span style="font-family:var(--serif, var(--ui));font-size:22px;font-weight:800;letter-spacing:-.01em;">${name}</span>
+          <span style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:99px;padding:3px 10px;">Private Company</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--mut);">No ticker — this view aggregates real public-record signal instead of a market quote.</div>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Private Placements (SEC Form D)</div>
+        ${formDHtml}
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Federal Contracts</div>
+        ${contractsHtml}
+      </div>
+    `;
+  },
   selectIndicator(meta) {
     if (!meta || !meta.id) return;
     this.state.view = 'indicator';
@@ -1707,6 +1836,7 @@ const vtx = {
   openRecentSearch(entry) {
     if (entry.type === 'instrument') this.selectInstrument(entry.key);
     else if (entry.type === 'indicator') this.selectIndicator(entry.meta);
+    else if (entry.type === 'company') this.selectPrivateCompany(entry.key);
     else this.viewTicker(entry.key, entry.label);
   },
   onSearchInput(v) {
@@ -1812,15 +1942,20 @@ const vtx = {
     const hasQuery = !!this.state.query.trim();
     const recent = this.RECENT_SEARCHES || [];
     const isEmpty = r.length===0 && remote.length===0 && instruments.length===0 && indicators.length===0;
-    // A failed remote lookup keeps the dropdown open with an honest
-    // message + retry, rather than looking identical to "genuinely no
-    // matches" (or, worse, just vanishing) — see fetchRemoteSearch().
-    if (!this.state.searchOpen || (!hasQuery && !recent.length) || (hasQuery && isEmpty && !this.state.searchFailed)) { dd.style.display='none'; return; }
+    // Unlike before the private-company fallback existed, hasQuery alone
+    // is now enough to keep the dropdown open — there's always at least
+    // that one action to offer, even with zero ticker/instrument/
+    // indicator matches.
+    if (!this.state.searchOpen || (!hasQuery && !recent.length)) { dd.style.display='none'; return; }
     dd.style.display='block';
 
+    // A failed remote lookup gets an honest notice prepended, rather than
+    // looking identical to "genuinely no matches" (or, worse, just
+    // vanishing) — see fetchRemoteSearch(). Falls through rather than
+    // returning early so the private-company fallback below still shows.
+    let searchFailedHtml = '';
     if (hasQuery && isEmpty && this.state.searchFailed) {
-      dd.innerHTML = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:12px;">Couldn't complete the search. <button onmousedown="event.preventDefault();vtx.onSearchInput(vtx.state.query)" style="background:none;border:none;color:var(--acc2);font-size:12px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
-      return;
+      searchFailedHtml = `<div style="padding:12px 11px;text-align:center;color:var(--mut);font-size:11.5px;">Couldn't complete the search. <button onmousedown="event.preventDefault();vtx.onSearchInput(vtx.state.query)" style="background:none;border:none;color:var(--acc2);font-size:11.5px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
     }
 
     if (!hasQuery) {
@@ -1843,7 +1978,7 @@ const vtx = {
       return;
     }
 
-    let html = r.map(t => `
+    let html = searchFailedHtml + r.map(t => `
       <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'ticker',key:'${t.sym}',label:'${t.sym}',sub:${JSON.stringify(t.name).replace(/"/g,'&quot;')}});vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
         <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.sym}</span>
         <span style="flex:1;font-size:12.5px;color:var(--txt);">${t.name}</span>
@@ -1883,6 +2018,21 @@ const vtx = {
           <span style="font-size:10px;color:var(--mut);">${ind.frequency}</span>
         </div>`;
       }).join('');
+    }
+    // Always-available fallback — a company that never comes up as a
+    // ticker/instrument/indicator match might still be a real private
+    // company with SEC Form D filings, federal contracts, or news.
+    {
+      const q = this.state.query.trim();
+      const recentEntry = { type:'company', key:q, label:q, sub:'Private Company' };
+      const recentEntryJson = JSON.stringify(recentEntry).replace(/'/g,"&#39;");
+      const qJson = JSON.stringify(q).replace(/'/g,"&#39;");
+      html += `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;border-top:1px solid var(--line);margin-top:4px;">Not Public?</div>`;
+      html += `
+        <div class="srchrow" onmousedown='vtx.recordRecentSearch(${recentEntryJson});vtx.selectPrivateCompany(${qJson})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+          <span style="flex:1;font-size:12.5px;color:var(--txt);">Search "${q}" as a private company</span>
+          <span style="font-size:9px;color:var(--mut);">SEC · Contracts · News</span>
+        </div>`;
     }
     dd.innerHTML = html;
   },
@@ -2501,6 +2651,7 @@ const vtx = {
   currentNewsScope() {
     if (this.state.view === 'ticker' && this.state.focus) return { code: this.state.focus, type: 'ticker' };
     if (this.state.view === 'instrument' && this.state.instrument) return { code: this.state.instrument, type: 'instrument' };
+    if (this.state.view === 'privateCompany' && this.state.privateCompanyName) return { code: this.state.privateCompanyName, type: 'company' };
     return { code: null, type: null };
   },
   async loadNews() {
@@ -2508,6 +2659,7 @@ const vtx = {
     try {
       const url = scope.type === 'ticker' ? `/api/intel/news?symbols=${encodeURIComponent(scope.code)}`
         : scope.type === 'instrument' ? `/api/intel/news?instrument=${encodeURIComponent(scope.code)}`
+        : scope.type === 'company' ? `/api/intel/news?company=${encodeURIComponent(scope.code)}`
         : `/api/intel/news`;
       const res = await fetch(url);
       if (!res.ok) return;
@@ -3501,12 +3653,15 @@ const vtx = {
     document.getElementById('overviewView').style.display = s.view === 'overview' ? 'flex' : 'none';
     document.getElementById('instrumentView').style.display = s.view === 'instrument' ? 'flex' : 'none';
     document.getElementById('indicatorView').style.display = s.view === 'indicator' ? 'flex' : 'none';
+    document.getElementById('privateCompanyView').style.display = s.view === 'privateCompany' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
       this.renderInstrumentView();
     } else if (s.view === 'indicator') {
       this.renderIndicatorView();
+    } else if (s.view === 'privateCompany') {
+      this.renderPrivateCompanyView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
@@ -4184,10 +4339,15 @@ const vtx = {
         scopeHtml = this.NEWS_SCOPE_MATCHED
           ? `${inst ? inst.label : this.NEWS_SCOPE} News`
           : `${this.NEWS_SCOPE_CATEGORY === 'crypto' ? 'Crypto' : 'Market'} News`;
+      } else if (this.NEWS_SCOPE_TYPE === 'company') {
+        scopeHtml = this.NEWS_SCOPE_MATCHED ? `${this.NEWS_SCOPE} News` : 'Market News';
       } else {
         scopeHtml = 'Market News';
       }
-      const showInstrumentBadge = this.NEWS_SCOPE_TYPE === 'instrument' && this.NEWS_SCOPE_MATCHED;
+      const showInstrumentBadge = (this.NEWS_SCOPE_TYPE === 'instrument' || this.NEWS_SCOPE_TYPE === 'company') && this.NEWS_SCOPE_MATCHED;
+      const instrumentBadgeLabel = this.NEWS_SCOPE_TYPE === 'company'
+        ? (this.NEWS_SCOPE.length > 12 ? this.NEWS_SCOPE.slice(0, 11) + '…' : this.NEWS_SCOPE)
+        : this.NEWS_SCOPE;
       const scopeHeaderHtml = `<div style="padding:11px 14px 4px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">${scopeHtml}</div>`;
       if (!this.NEWS.length) {
         el.innerHTML = scopeHeaderHtml + `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading news…</div>`;
@@ -4207,7 +4367,7 @@ const vtx = {
                 ${n.sym
                   ? `<span class="symlink" onclick="event.stopPropagation(); vtx.jumpToTicker('${n.sym}')" style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;">${n.sym}</span>`
                   : showInstrumentBadge
-                  ? `<span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;">${this.NEWS_SCOPE}</span>`
+                  ? `<span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;" title="${this.NEWS_SCOPE.replace(/"/g,'&quot;')}">${instrumentBadgeLabel}</span>`
                   : `<span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 5px;">MARKET</span>`}
                 <span style="font-size:10px;color:var(--mut);">${n.src}</span>
                 <span style="font-size:9.5px;color:var(--mut);margin-left:auto;">${relTime(n.time)}</span>
