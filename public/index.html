@@ -818,6 +818,20 @@ function renderMktCell(id,fmt,d){
   if(v)v.textContent=fmtMktValue(d.price,fmt);
   if(c){const p=d.changePct||0;c.textContent=(p>=0?'+':'')+p.toFixed(2)+'%';c.className='mkt-chg '+(p>=0?'up':'dn');}
 }
+// Pauses a poll loop while the tab is backgrounded instead of hammering
+// the API (and its KV cache) every interval regardless of whether anyone
+// can see the result — a tab left open in the background was found to be
+// the largest driver behind the Upstash free-tier quota being exhausted
+// well before month-end.
+function pollWhileVisible(fn,intervalMs){
+  fn();
+  let timer=setInterval(fn,intervalMs);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){clearInterval(timer);timer=null;}
+    else{fn();timer=setInterval(fn,intervalMs);}
+  });
+}
+
 // SPX/GOLD are each also needed by Asset Classes below, and SPX by Major
 // Indices further down — all three share ONE batched /api/market/index-quote
 // fetch instead of each firing their own (was 4+2+4=10 individual requests
@@ -841,8 +855,7 @@ MKT.forEach(m=>{
   const v=document.getElementById('mv-'+m.id); if(v)v.textContent='—';
   const c=document.getElementById('mc-'+m.id); if(c){c.textContent='';c.className='mkt-chg';}
 });
-loadAllIndexQuotes();
-setInterval(loadAllIndexQuotes,30000);
+pollWhileVisible(loadAllIndexQuotes,60000);
 
 // ── Ticker / Intelligence preview / Demo NVDA price ───────────────────
 // TSYMS is a superset of PSYMS and includes NVDA, so all three widgets
@@ -898,7 +911,7 @@ async function loadAllStockQuotes(){
   renderPreview();
   renderDemoPrice();
 }
-loadAllStockQuotes();setInterval(loadAllStockQuotes,15000);
+pollWhileVisible(loadAllStockQuotes,60000);
 
 // ── Demo Data Loading ─────────────────────────
 // Real NVDA 5-day hourly candles (same /api/stock/candles route the
@@ -939,8 +952,7 @@ async function loadDemoData(){
     }
   }catch(e){console.error('Demo data error:',e);}
 }
-loadDemoData();
-setInterval(loadDemoData,60000);
+pollWhileVisible(loadDemoData,60000);
 
 // ── Clock ─────────────────────────────────────
 function tick(){const el=document.getElementById('clock');if(el)el.textContent='ET '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'America/New_York'})}
@@ -1079,7 +1091,9 @@ IDX_LIST.forEach(x=>{
   const v=document.getElementById('idx-'+x.id); if(v)v.textContent='—';
   const c=document.getElementById('idx-'+x.id+'-chg'); if(c){c.textContent='';c.className='index-change';}
 });
-loadAssetClasses();setInterval(loadAssetClasses,60000);
+// 10min, not 60s: the yield-curve leg of this hits a route with a 24h
+// server-side cache, so anything faster than that was pure wasted reads.
+pollWhileVisible(loadAssetClasses,600000);
 
 // ── FAQ ───────────────────────────────────────
 function toggleFaq(btn){

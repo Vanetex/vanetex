@@ -418,6 +418,19 @@ input{font-family:var(--ui)}
 </div>
 
 <script>
+// Pauses a poll loop while the tab is backgrounded instead of hammering
+// the API (and its KV cache) every interval regardless of whether anyone
+// can see the result — a tab left open in the background was found to be
+// the largest driver behind the Upstash free-tier quota being exhausted
+// well before month-end.
+function pollWhileVisible(fn,intervalMs){
+  let timer=setInterval(fn,intervalMs);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){clearInterval(timer);timer=null;}
+    else{fn();timer=setInterval(fn,intervalMs);}
+  });
+}
+
 const vtx = {
   state: {
     variant: 'A', focus: 'NVDA', view: 'overview', tab: 'news', tf: '1D',
@@ -977,15 +990,15 @@ const vtx = {
     this.loadFinancials();
     this.loadAnalystRatings();
     this.loadEarningsHistory();
-    setInterval(() => this.loadQuotes(), 60 * 1000);
-    setInterval(() => this.loadSparklines(), 5 * 60 * 1000);
-    setInterval(() => this.loadFinancials(), 30 * 60 * 1000);
-    setInterval(() => this.loadAnalystRatings(), 30 * 60 * 1000);
-    setInterval(() => this.loadEarningsHistory(), 30 * 60 * 1000);
+    pollWhileVisible(() => this.loadQuotes(), 60 * 1000);
+    pollWhileVisible(() => this.loadSparklines(), 5 * 60 * 1000);
+    pollWhileVisible(() => this.loadFinancials(), 30 * 60 * 1000);
+    pollWhileVisible(() => this.loadAnalystRatings(), 30 * 60 * 1000);
+    pollWhileVisible(() => this.loadEarningsHistory(), 30 * 60 * 1000);
 
     this.checkAuth();
     this.connectFeed();
-    setInterval(() => this.syncClock(), 15 * 60 * 1000);
+    pollWhileVisible(() => this.syncClock(), 15 * 60 * 1000);
 
     setInterval(() => { this.renderClock(); }, 1000);
     setInterval(() => {
@@ -1013,18 +1026,18 @@ const vtx = {
     this.loadVixHistory();
     this.initWorldMap();
     this.loadNews();
-    setInterval(() => this.loadFilings(), 5 * 60 * 1000);
-    setInterval(() => this.loadDarkPool(), 10 * 60 * 1000);
-    setInterval(() => this.loadHeatmap(), 5 * 60 * 1000);
-    setInterval(() => this.loadCalendar(), 30 * 60 * 1000);
-    setInterval(() => this.loadIpoCalendar(), 6 * 60 * 60 * 1000);
-    setInterval(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
-    setInterval(() => this.loadYieldCurve(), 6 * 60 * 60 * 1000);
-    setInterval(() => this.loadMacroDashboard(), 6 * 60 * 60 * 1000);
-    setInterval(() => this.loadMarketSnapshot(), 60 * 1000);
-    setInterval(() => this.loadCryptoSnapshot(), 60 * 1000);
-    setInterval(() => this.loadVixHistory(), 6 * 60 * 60 * 1000);
-    setInterval(() => this.loadNews(), 10 * 60 * 1000);
+    pollWhileVisible(() => this.loadFilings(), 5 * 60 * 1000);
+    pollWhileVisible(() => this.loadDarkPool(), 10 * 60 * 1000);
+    pollWhileVisible(() => this.loadHeatmap(), 5 * 60 * 1000);
+    pollWhileVisible(() => this.loadCalendar(), 30 * 60 * 1000);
+    pollWhileVisible(() => this.loadIpoCalendar(), 6 * 60 * 60 * 1000);
+    pollWhileVisible(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
+    pollWhileVisible(() => this.loadYieldCurve(), 6 * 60 * 60 * 1000);
+    pollWhileVisible(() => this.loadMacroDashboard(), 6 * 60 * 60 * 1000);
+    pollWhileVisible(() => this.loadMarketSnapshot(), 60 * 1000);
+    pollWhileVisible(() => this.loadCryptoSnapshot(), 60 * 1000);
+    pollWhileVisible(() => this.loadVixHistory(), 6 * 60 * 60 * 1000);
+    pollWhileVisible(() => this.loadNews(), 10 * 60 * 1000);
     this.renderClock();
     this.renderMarketStatus();
     this.loadChartData(this.state.focus, this.state.tf);
@@ -1033,8 +1046,8 @@ const vtx = {
     this.loadFinancialsReported(this.state.focus);
     this.loadPeerPercentile(this.state.focus);
     this.loadTickerBar();
-    setInterval(() => this.loadTickerBar(), 5 * 60 * 1000);
-    setInterval(() => this.loadDepth(this.state.focus), 5 * 60 * 1000);
+    pollWhileVisible(() => this.loadTickerBar(), 5 * 60 * 1000);
+    pollWhileVisible(() => this.loadDepth(this.state.focus), 5 * 60 * 1000);
   },
 
   applyVariant() {
@@ -3692,6 +3705,13 @@ const vtx = {
     this.state.feedMode = 'poll';
     this.renderFeedLabels();
     const poll = async () => {
+      // Backgrounded tab: skip the per-symbol fetch round entirely. This
+      // is the WebSocket-unavailable fallback (anonymous visitors never
+      // get a real-time WS — see /api/stock/ws-token), so it was found to
+      // be the single largest driver of Upstash's free-tier quota being
+      // exhausted before month-end: every open tab was polling every
+      // watchlist symbol individually, all day, even while backgrounded.
+      if (document.hidden) return;
       const open = this.isMarketOpen();
       if (open !== this.state.marketOpen) {
         this.state.marketOpen = open;
@@ -3731,7 +3751,16 @@ const vtx = {
       this.render();
     };
     await poll();
-    this._pollTimer = setInterval(poll, 5000);
+    // 20s, not 5s: the underlying /api/stock/quote cache only refreshes
+    // every 180s server-side, so 5s bought no real freshness — just 36x
+    // the KV reads for the same data.
+    this._pollTimer = setInterval(poll, 20000);
+    if (!this._pollVisibilityBound) {
+      this._pollVisibilityBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this._pollTimer) poll();
+      });
+    }
   },
   subscribeSymbol(sym) {
     if (!this._ws || this._ws.readyState !== 1 || !this._wsSymbols) return;
