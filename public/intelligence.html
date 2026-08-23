@@ -536,11 +536,7 @@ const vtx = {
     { id: 'IRLTLT01DKM156N', label: 'Denmark', region: 'Europe' },
     { id: 'IRLTLT01IEM156N', label: 'Ireland', region: 'Europe' },
     { id: 'IRLTLT01ATM156N', label: 'Austria', region: 'Europe' },
-    { id: 'IRLTLT01ISM156N', label: 'Iceland', region: 'Europe' },
-    { id: 'IRLTLT01CZM156N', label: 'Czech Republic', region: 'Europe' },
     { id: 'IRLTLT01HUM156N', label: 'Hungary', region: 'Europe' },
-    { id: 'IRLTLT01SKM156N', label: 'Slovakia', region: 'Europe' },
-    { id: 'IRLTLT01SIM156N', label: 'Slovenia', region: 'Europe' },
     { id: 'IRLTLT01FIM156N', label: 'Finland', region: 'Europe' },
     { id: 'IRLTLT01PLM156N', label: 'Poland', region: 'Europe' },
     { id: 'IRLTLT01RUM156N', label: 'Russia', region: 'Europe' },
@@ -1746,8 +1742,9 @@ const vtx = {
 
     // Global Yield Comparison — a compact multi-country trend chart for a
     // "majors" subset (any more than ~6 overlaid lines stops being
-    // readable), plus a full sortable table across every country FRED
-    // actually has real data for (34 total — see YC_GLOBAL_COUNTRIES).
+    // readable), plus a full sortable table across a curated 30-country
+    // list (trimmed from 34 to keep the total fan-out to this rate-limited
+    // route comfortably under budget — see YC_GLOBAL_COUNTRIES).
     const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
     const rangeDays = RANGE_DAYS[this.state.ycGlobalRange] || RANGE_DAYS['5Y'];
     const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
@@ -3060,11 +3057,14 @@ const vtx = {
   // pattern as loadYcOverlayData(), so switching the lookback range never
   // needs a new request.
   async loadYcGlobal() {
-    // 34 countries in one Promise.all blew straight through
+    // Firing every country in one Promise.all blew straight through
     // /api/intel/econ-series's 30-req/60s rate limit (confirmed live —
     // real 429s, not local-only noise, since loadYcMacro/loadYcOverlayData
-    // hit the same route around the same time). Same small-chunks-with-a-
-    // gap fan-out pattern already used everywhere else in this file.
+    // hit the same route around the same time). The country list is
+    // trimmed to 30, but loadYcMacro (5) + loadYcOverlayData (3) still add
+    // 8 more concurrent calls to the same shared budget, so this stays
+    // chunked rather than reverting to one batch — same small-chunks-with-
+    // a-gap fan-out pattern already used everywhere else in this file.
     const CHUNK = 6;
     for (let i = 0; i < this.YC_GLOBAL_COUNTRIES.length; i += CHUNK) {
       const batch = this.YC_GLOBAL_COUNTRIES.slice(i, i + CHUNK);
