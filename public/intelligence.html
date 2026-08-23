@@ -373,6 +373,15 @@ input{font-family:var(--ui)}
              econ events, macro indicators, and Atlanta Fed rate-hike/cut
              probabilities. Modeled on ustreasuryyieldcurve.com. -->
         <div id="yieldCurveView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- Global Yield Comparison view (search "GY") — real 10Y govt
+             bond yields for 30 countries worldwide, trend chart + sortable
+             table. Its own panel, not a sub-section of the Yield Curve view. -->
+        <div id="globalYieldsView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- Global Policy Rate Tracker view (search "GPR" / "policy rate")
+             — real Fed/ECB/BOE/BOJ policy rates over time. -->
+        <div id="policyRatesView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -1754,11 +1763,35 @@ const vtx = {
         </div>`;
     }
 
-    // Global Yield Comparison — a compact multi-country trend chart for a
-    // "majors" subset (any more than ~6 overlaid lines stops being
-    // readable), plus a full sortable table across a curated 30-country
-    // list (trimmed from 34 to keep the total fan-out to this rate-limited
-    // route comfortably under budget — see YC_GLOBAL_COUNTRIES).
+    el.innerHTML = `
+      ${headerHtml}
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 12px 10px;flex-shrink:0;">
+        ${chartHtml}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;flex-shrink:0;">
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Upcoming Events</div>
+          ${eventsHtml}
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Macro Indicators</div>
+          ${macroHtml}
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Rate Expectations</div>
+          ${probHtml}
+        </div>
+      </div>
+    `;
+  },
+  // A compact "majors" trend chart (any more than ~6 overlaid lines stops
+  // being readable) plus a full sortable table across a curated 30-country
+  // list — trimmed from an initial 34 to keep total fan-out to the shared
+  // rate-limited econ-series route comfortably under budget. Its own
+  // panel (search "GY"), not a sub-section of the Yield Curve view.
+  renderGlobalYieldsView() {
+    const el = document.getElementById('globalYieldsView');
+    if (!el) return;
     const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
     const rangeDays = RANGE_DAYS[this.state.ycGlobalRange] || RANGE_DAYS['5Y'];
     const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
@@ -1788,9 +1821,9 @@ const vtx = {
     }
     const rangeBtn = (r, label) => `<button onclick="vtx.ycSetGlobalRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.ycGlobalRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.ycGlobalRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.ycGlobalRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
 
-    // Table: full 34-country list. 1M change compares against ~1 trading
-    // month back for the US's daily series vs. 1 entry back for everyone
-    // else's monthly series — different units of "a month," same real intent.
+    // 1M change compares against ~1 trading month back for the US's daily
+    // series vs. 1 entry back for everyone else's monthly series —
+    // different units of "a month," same real intent.
     const usSeries = this.YC_GLOBAL['DGS10'];
     const usLatest = (usSeries && !usSeries.failed && usSeries.points && usSeries.points.length) ? usSeries.points[usSeries.points.length - 1].value : null;
     let tableRows = this.YC_GLOBAL_COUNTRIES.map(c => {
@@ -1835,10 +1868,30 @@ const vtx = {
         </table>
       </div>`;
 
-    // Global Policy Rate Tracker — reuses ycGlobalChart() (it's already a
-    // generic multi-series-over-time renderer), same range-toggle pattern
-    // as the yield comparison above but with its own independent range
-    // state so the two charts don't fight over one control.
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Global 10Y Yield Comparison</span>
+        <span style="font-size:9px;color:var(--mut);">${this.YC_GLOBAL_COUNTRIES.length} countries worldwide</span>
+        <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="padding:16px 12px 4px;">
+          ${globalChartHtml}
+          ${globalLegendHtml ? `<div style="padding:8px 4px 2px;">${globalLegendHtml}</div>` : ''}
+        </div>
+        ${globalTableHtml}
+      </div>
+    `;
+  },
+  // Fed (FEDFUNDS effective rate) and ECB (ECBDFR, the actual Deposit
+  // Facility Rate) are the literal policy instruments; BOE/BOJ use the
+  // closest verified proxy each has on FRED (short-term interbank rate —
+  // no clean single series exists for their literal policy rate), labeled
+  // honestly rather than presented as the official figure. Its own panel
+  // (search "GPR" / "policy rate"), not a sub-section of the Yield Curve view.
+  renderPolicyRateView() {
+    const el = document.getElementById('policyRatesView');
+    if (!el) return;
     const POLICY_RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
     const policyRangeDays = POLICY_RANGE_DAYS[this.state.ycPolicyRange] || POLICY_RANGE_DAYS['5Y'];
     const policyCutoff = policyRangeDays === Infinity ? -Infinity : Date.now() - policyRangeDays * 86400000;
@@ -1856,7 +1909,7 @@ const vtx = {
     } else if (!policySeries.length) {
       policyChartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
     } else {
-      policyChartHtml = this.ycGlobalChart(policySeries, 760, 220);
+      policyChartHtml = this.ycGlobalChart(policySeries, 760, 260);
       const fedLatest = (this.YC_POLICY['FEDFUNDS'] && !this.YC_POLICY['FEDFUNDS'].failed) ? this.YC_POLICY['FEDFUNDS'].points[this.YC_POLICY['FEDFUNDS'].points.length - 1].value : null;
       policyLegendHtml = policySeries.map(s => {
         const last = s.points[s.points.length - 1];
@@ -1872,43 +1925,13 @@ const vtx = {
     const policyRangeBtn = (r, label) => `<button onclick="vtx.ycSetPolicyRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.ycPolicyRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.ycPolicyRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.ycPolicyRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
 
     el.innerHTML = `
-      ${headerHtml}
-      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 12px 10px;flex-shrink:0;">
-        ${chartHtml}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;flex-shrink:0;">
-        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
-          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Upcoming Events</div>
-          ${eventsHtml}
-        </div>
-        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
-          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Macro Indicators</div>
-          ${macroHtml}
-        </div>
-        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
-          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Rate Expectations</div>
-          ${probHtml}
-        </div>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Global Policy Rate Tracker</span>
+        <span style="font-size:9px;color:var(--mut);">Fed · ECB · BOE* · BOJ*</span>
+        <div style="margin-left:auto;display:flex;gap:5px;">${policyRangeBtn('1Y', '1Y')}${policyRangeBtn('5Y', '5Y')}${policyRangeBtn('MAX', 'MAX')}</div>
       </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
-        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
-          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Global 10Y Yield Comparison</span>
-          <span style="font-size:9px;color:var(--mut);">${this.YC_GLOBAL_COUNTRIES.length} countries</span>
-          <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
-        </div>
-        <div style="padding:14px 12px 4px;">
-          ${globalChartHtml}
-          ${globalLegendHtml ? `<div style="padding:8px 4px 2px;">${globalLegendHtml}</div>` : ''}
-        </div>
-        ${globalTableHtml}
-      </div>
-      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
-        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
-          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Global Policy Rate Tracker</span>
-          <span style="font-size:9px;color:var(--mut);">Fed · ECB · BOE* · BOJ*</span>
-          <div style="margin-left:auto;display:flex;gap:5px;">${policyRangeBtn('1Y', '1Y')}${policyRangeBtn('5Y', '5Y')}${policyRangeBtn('MAX', 'MAX')}</div>
-        </div>
-        <div style="padding:14px 12px 10px;">
+        <div style="padding:16px 12px 10px;">
           ${policyChartHtml}
           ${policyLegendHtml ? `<div style="padding:8px 4px 2px;">${policyLegendHtml}</div>` : ''}
           <div style="font-size:8.5px;color:var(--mut);padding:8px 4px 0;">* BOE/BOJ show the closest verified proxy (short-term interbank rate) — FRED doesn't carry a clean single series for the literal official policy rate for these two.</div>
@@ -2542,6 +2565,8 @@ const vtx = {
     else if (entry.type === 'indicator') this.selectIndicator(entry.meta);
     else if (entry.type === 'company') this.selectPrivateCompany(entry.key);
     else if (entry.type === 'yieldCurve') this.selectYieldCurve();
+    else if (entry.type === 'globalYields') this.selectGlobalYields();
+    else if (entry.type === 'policyRates') this.selectPolicyRates();
     else this.viewTicker(entry.key, entry.label);
   },
   // "YC" as a search shortcut into the full Yield Curve view — matches the
@@ -2551,6 +2576,19 @@ const vtx = {
     const q = v.trim().toLowerCase();
     if (!q) return false;
     return q === 'yc' || 'yield curve'.includes(q);
+  },
+  // "GY" into the standalone Global Yield Comparison view — its own panel,
+  // not a sub-section of Yield Curve.
+  matchGlobalYieldsShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'gy' || 'global yields'.includes(q) || 'world yields'.includes(q);
+  },
+  // "GPR" into the standalone Global Policy Rate Tracker view.
+  matchPolicyRateShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'gpr' || 'policy rate'.includes(q) || 'policy rates'.includes(q) || 'central bank rates'.includes(q);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
@@ -2677,7 +2715,7 @@ const vtx = {
       // Each row's own × removes just that entry (stopPropagation so it
       // doesn't also re-open the search); "Clear all" wipes the list.
       const recentRowHtml = e => {
-        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : e.type==='yieldCurve' ? '▤' : '';
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates') ? '▤' : '';
         return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
@@ -2691,15 +2729,30 @@ const vtx = {
       return;
     }
 
-    let ycHtml = '';
-    if (this.matchYieldCurveShortcut(this.state.query)) {
-      ycHtml = `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>
-        <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'yieldCurve',key:'YC',label:'YC',sub:'US Treasury Yield Curve'});vtx.selectYieldCurve()" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
-          <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">YC</span>
-          <span style="flex:1;font-size:12.5px;color:var(--txt);">US Treasury Yield Curve</span>
-          <span style="font-size:9px;color:var(--mut);">Historical · Fed probabilities</span>
+    // Each "tool" shortcut is a standalone full-panel view (not a
+    // sub-section of another), so a query can match more than one at once
+    // (e.g. "yield" matches both YC and GY) — all listed under one shared
+    // heading rather than each printing its own.
+    const toolRow = (code, label, sub, onclick) => `
+        <div class="srchrow" onmousedown="${onclick}" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+          <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${code}</span>
+          <span style="flex:1;font-size:12.5px;color:var(--txt);">${label}</span>
+          <span style="font-size:9px;color:var(--mut);">${sub}</span>
         </div>`;
+    let toolRows = '';
+    if (this.matchYieldCurveShortcut(this.state.query)) {
+      toolRows += toolRow('YC', 'US Treasury Yield Curve', 'Historical · Fed probabilities',
+        "vtx.recordRecentSearch({type:'yieldCurve',key:'YC',label:'YC',sub:'US Treasury Yield Curve'});vtx.selectYieldCurve()");
     }
+    if (this.matchGlobalYieldsShortcut(this.state.query)) {
+      toolRows += toolRow('GY', 'Global Yield Comparison', '30 countries worldwide',
+        "vtx.recordRecentSearch({type:'globalYields',key:'GY',label:'GY',sub:'Global Yield Comparison'});vtx.selectGlobalYields()");
+    }
+    if (this.matchPolicyRateShortcut(this.state.query)) {
+      toolRows += toolRow('GPR', 'Global Policy Rate Tracker', 'Fed · ECB · BOE · BOJ',
+        "vtx.recordRecentSearch({type:'policyRates',key:'GPR',label:'GPR',sub:'Global Policy Rate Tracker'});vtx.selectPolicyRates()");
+    }
+    const ycHtml = toolRows ? `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>${toolRows}` : '';
     let html = searchFailedHtml + ycHtml + r.map(t => `
       <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'ticker',key:'${t.sym}',label:'${t.sym}',sub:${JSON.stringify(t.name).replace(/"/g,'&quot;')}});vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
         <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.sym}</span>
@@ -3182,7 +3235,23 @@ const vtx = {
     if (!Object.keys(this.YC_OVERLAY_DATA).length) this.loadYcOverlayData();
     if (!Object.keys(this.YC_MACRO).length) this.loadYcMacro();
     if (!this.YC_PROB) this.loadRateProbability();
+  },
+  selectGlobalYields() {
+    this.state.view = 'globalYields';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
     if (!Object.keys(this.YC_GLOBAL).length) this.loadYcGlobal();
+  },
+  selectPolicyRates() {
+    this.state.view = 'policyRates';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
     if (!Object.keys(this.YC_POLICY).length) this.loadYcPolicy();
   },
   ycCurrentDate() {
@@ -4543,6 +4612,8 @@ const vtx = {
     document.getElementById('indicatorView').style.display = s.view === 'indicator' ? 'flex' : 'none';
     document.getElementById('privateCompanyView').style.display = s.view === 'privateCompany' ? 'flex' : 'none';
     document.getElementById('yieldCurveView').style.display = s.view === 'yieldCurve' ? 'flex' : 'none';
+    document.getElementById('globalYieldsView').style.display = s.view === 'globalYields' ? 'flex' : 'none';
+    document.getElementById('policyRatesView').style.display = s.view === 'policyRates' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
@@ -4553,6 +4624,10 @@ const vtx = {
       this.renderPrivateCompanyView();
     } else if (s.view === 'yieldCurve') {
       this.renderYieldCurveView();
+    } else if (s.view === 'globalYields') {
+      this.renderGlobalYieldsView();
+    } else if (s.view === 'policyRates') {
+      this.renderPolicyRateView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
