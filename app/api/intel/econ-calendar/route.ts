@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 const FOMC_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm";
-const CACHE_KEY = "intel:econ-calendar:v5"; // v5: response now keeps isoDate (was stripped before)
+const CACHE_KEY = "intel:econ-calendar:v6"; // v6: GDP event renamed to "GDP (QoQ, SAAR)" to disambiguate from YoY
 const CACHE_TTL_S = 24 * 60 * 60; // these dates are scheduled far in advance
 const WINDOW_DAYS = 90;
 const MAX_EVENTS = 40;
@@ -50,7 +50,12 @@ const FRED_RELEASES: { id: number; name: string; time: string; relevance: 1 | 2 
   { id: 10, name: "CPI Report", time: "08:30", relevance: 3 },
   { id: 50, name: "Jobs Report (NFP)", time: "08:30", relevance: 3 },
   { id: 54, name: "PCE Report", time: "08:30", relevance: 3 },
-  { id: 53, name: "GDP", time: "08:30", relevance: 3 },
+  // BEA's GDP release publishes several series on the same date — the
+  // headline figure every outlet reports ("GDP grew at a 2.8% pace") is
+  // specifically the quarter-over-quarter change at a seasonally adjusted
+  // annual rate, confirmed against FRED's own release page (fred.stlouisfed.org/release?rid=53),
+  // not the quarter-over-year-ago change also published alongside it.
+  { id: 53, name: "GDP (QoQ, SAAR)", time: "08:30", relevance: 3 },
   { id: 46, name: "PPI Report", time: "08:30", relevance: 2 },
   { id: 9, name: "Retail Sales", time: "08:30", relevance: 2 },
   { id: 91, name: "Consumer Sentiment (UMich)", time: "10:00", relevance: 2 },

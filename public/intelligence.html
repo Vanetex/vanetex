@@ -516,7 +516,11 @@ const vtx = {
     equitySort: { key: 'chg1y', dir: -1 },
     creditRange: '5Y',
     gdpRange: '10Y',
-    gdpSort: { key: 'nominal', dir: -1 }
+    gdpSort: { key: 'nominal', dir: -1 },
+    // Macro tab's Economic Calendar — 'relevance' matches the order the
+    // server already returns (relevance tier, then date within tier);
+    // 'date' re-sorts client-side to pure chronological, no new request.
+    econSort: 'relevance'
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -2859,6 +2863,7 @@ const vtx = {
     }
   },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; if (id === 'analytics') this.loadAnalyticsData(); this.renderRight(); },
+  econSetSort(mode) { this.state.econSort = mode; this.renderRight(); },
   setScreenerSort(key) {
     const s = this.state.screenerSort;
     this.state.screenerSort = (s.key === key) ? { key, dir: -s.dir } : { key, dir: -1 };
@@ -6465,11 +6470,23 @@ const vtx = {
       // "relevance" concepts on this tab stay visually consistent.
       const tierDots = n => `<span title="Relevance: ${n===3?'core':n===2?'important':'supplementary'}" style="font-size:6px;letter-spacing:1px;color:var(--acc2);opacity:${n===3?1:.55};flex-shrink:0;">${'●'.repeat(n)}${'○'.repeat(3-n)}</span>`;
 
+      const econSortBtn = (mode, label) => `<button onclick="vtx.econSetSort('${mode}')" style="font-size:9px;padding:3px 8px;border-radius:5px;border:1px solid ${this.state.econSort === mode ? 'var(--acc2)' : 'var(--line)'};background:${this.state.econSort === mode ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.econSort === mode ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+      // 'relevance' is exactly the order the server already returns (tier,
+      // then date within tier) — sorted again here rather than trusted
+      // as-is so switching back from 'date' doesn't need a re-fetch.
+      const sortedEcon = [...this.ECON].sort((a, b) => this.state.econSort === 'date'
+        ? a.isoDate.localeCompare(b.isoDate)
+        : (b.relevance - a.relevance) || a.isoDate.localeCompare(b.isoDate));
+
       const econHtml = !this.ECON.length
         ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading economic calendar…</div>`
         : `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
-            <div style="font-size:9px;color:var(--mut);line-height:1.5;padding:0 3px 4px;">GDP, CPI, PCE, Jobs, PPI, Retail Sales, Consumer Sentiment, Industrial Production, JOLTS, Housing Starts, Existing Home Sales, Durable Goods &amp; Jobless Claims from FRED · FOMC dates from the Federal Reserve. Sorted by relevance, then date.</div>` +
-            this.ECON.map(c => {
+            <div style="display:flex;align-items:center;gap:8px;padding:3px 3px 0;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Economic Calendar</span>
+              <div style="margin-left:auto;display:flex;gap:5px;">${econSortBtn('relevance', 'Relevance')}${econSortBtn('date', 'Date')}</div>
+            </div>
+            <div style="font-size:9px;color:var(--mut);line-height:1.5;padding:0 3px 4px;">GDP, CPI, PCE, Jobs, PPI, Retail Sales, Consumer Sentiment, Industrial Production, JOLTS, Housing Starts, Existing Home Sales, Durable Goods &amp; Jobless Claims from FRED · FOMC dates from the Federal Reserve.</div>` +
+            sortedEcon.map(c => {
               const [day, mon] = c.date.split(' ');
               return `
               <div style="display:grid;grid-template-columns:46px 1fr auto;gap:11px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
