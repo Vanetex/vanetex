@@ -382,6 +382,10 @@ input{font-family:var(--ui)}
         <!-- Global Policy Rate Tracker view (search "GPR" / "policy rate")
              — real Fed/ECB/BOE/BOJ policy rates over time. -->
         <div id="policyRatesView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- World Inflation Comparison view (search "CPI" / "world inflation")
+             — real CPI y/y for 30 countries worldwide. -->
+        <div id="worldInflationView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -484,7 +488,9 @@ const vtx = {
     // switching ranges never needs a new request.
     ycGlobalRange: '5Y',
     ycGlobalSort: { key: 'yield', dir: -1 },
-    ycPolicyRange: '5Y'
+    ycPolicyRange: '5Y',
+    inflRange: '5Y',
+    inflSort: { key: 'cpi', dir: -1 }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -577,6 +583,49 @@ const vtx = {
     { id: 'IRSTCI01GBM156N', label: 'BOE (UK)', color: '#33d38f', proxy: true },
     { id: 'IRSTCI01JPM156N', label: 'BOJ (Japan)', color: '#ef5468', proxy: true },
   ],
+
+  YC_INFLATION: {}, // populated by loadYcInflation() — real FRED CPI y/y, keyed by series id
+  // Same 30-country roster as YC_GLOBAL_COUNTRIES (for a consistent set
+  // across every "worldwide" comparison feature), mapped to each
+  // country's FRED CPALTT01xxM659N series — already a computed y/y %
+  // rate, not a raw index, so no client-side transform is needed. Every
+  // id verified live before being hardcoded. Australia/New Zealand use
+  // the "Q659N" quarterly variant — their CPI is genuinely released
+  // quarterly, not a data gap.
+  YC_INFLATION_COUNTRIES: [
+    { id: 'CPALTT01USM659N', label: 'United States', region: 'Americas' },
+    { id: 'CPALTT01CAM659N', label: 'Canada', region: 'Americas' },
+    { id: 'CPALTT01MXM659N', label: 'Mexico', region: 'Americas' },
+    { id: 'CPALTT01CLM659N', label: 'Chile', region: 'Americas' },
+    { id: 'CPALTT01DEM659N', label: 'Germany', region: 'Europe' },
+    { id: 'CPALTT01GBM659N', label: 'United Kingdom', region: 'Europe' },
+    { id: 'CPALTT01FRM659N', label: 'France', region: 'Europe' },
+    { id: 'CPALTT01ITM659N', label: 'Italy', region: 'Europe' },
+    { id: 'CPALTT01ESM659N', label: 'Spain', region: 'Europe' },
+    { id: 'CPALTT01PTM659N', label: 'Portugal', region: 'Europe' },
+    { id: 'CPALTT01GRM659N', label: 'Greece', region: 'Europe' },
+    { id: 'CPALTT01NLM659N', label: 'Netherlands', region: 'Europe' },
+    { id: 'CPALTT01BEM659N', label: 'Belgium', region: 'Europe' },
+    { id: 'CPALTT01CHM659N', label: 'Switzerland', region: 'Europe' },
+    { id: 'CPALTT01SEM659N', label: 'Sweden', region: 'Europe' },
+    { id: 'CPALTT01NOM659N', label: 'Norway', region: 'Europe' },
+    { id: 'CPALTT01DKM659N', label: 'Denmark', region: 'Europe' },
+    { id: 'CPALTT01IEM659N', label: 'Ireland', region: 'Europe' },
+    { id: 'CPALTT01ATM659N', label: 'Austria', region: 'Europe' },
+    { id: 'CPALTT01HUM659N', label: 'Hungary', region: 'Europe' },
+    { id: 'CPALTT01FIM659N', label: 'Finland', region: 'Europe' },
+    { id: 'CPALTT01PLM659N', label: 'Poland', region: 'Europe' },
+    { id: 'CPALTT01RUM659N', label: 'Russia', region: 'Europe' },
+    { id: 'CPALTT01JPM659N', label: 'Japan', region: 'Asia-Pacific' },
+    { id: 'CPALTT01AUQ659N', label: 'Australia', region: 'Asia-Pacific' },
+    { id: 'CPALTT01NZQ659N', label: 'New Zealand', region: 'Asia-Pacific' },
+    { id: 'CPALTT01KRM659N', label: 'South Korea', region: 'Asia-Pacific' },
+    { id: 'CPALTT01INM659N', label: 'India', region: 'Asia-Pacific' },
+    { id: 'CPALTT01ILM659N', label: 'Israel', region: 'Middle East' },
+    { id: 'CPALTT01ZAM659N', label: 'South Africa', region: 'Africa' },
+  ],
+  YC_INFLATION_MAJORS: ['CPALTT01USM659N', 'CPALTT01DEM659N', 'CPALTT01GBM659N', 'CPALTT01JPM659N', 'CPALTT01FRM659N', 'CPALTT01CAM659N'],
+  YC_INFLATION_COLORS: { CPALTT01USM659N: '#3fc7e0', CPALTT01DEM659N: '#e8a33d', CPALTT01GBM659N: '#33d38f', CPALTT01JPM659N: '#ef5468', CPALTT01FRM659N: '#a78bfa', CPALTT01CAM659N: '#f472b6' },
 
   // Curated FRED series for the Macro tab's dashboard grid — every id/title/
   // units/frequency below was verified live against /api/intel/econ-search
@@ -1939,6 +1988,101 @@ const vtx = {
       </div>
     `;
   },
+  // Same 30-country roster and layout pattern as renderGlobalYieldsView()
+  // — a "majors" trend chart plus a full sortable table. Unlike the yield
+  // series, CPALTT01xxM659N is already a computed y/y % rate, so "Prior
+  // Chg" compares this release's rate against the previous one directly
+  // (is inflation accelerating or decelerating), not a fresh transform.
+  renderWorldInflationView() {
+    const el = document.getElementById('worldInflationView');
+    if (!el) return;
+    const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
+    const rangeDays = RANGE_DAYS[this.state.inflRange] || RANGE_DAYS['5Y'];
+    const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
+    const majorsSeries = this.YC_INFLATION_MAJORS.map(id => {
+      const s = this.YC_INFLATION[id];
+      const country = this.YC_INFLATION_COUNTRIES.find(c => c.id === id);
+      if (!s || s.failed || !s.points || !s.points.length) return null;
+      const filtered = s.points.filter(p => Date.parse(p.date) >= cutoffTime);
+      if (!filtered.length) return null;
+      return { id, label: country.label, color: this.YC_INFLATION_COLORS[id], points: filtered };
+    }).filter(Boolean);
+
+    let chartHtml, legendHtml = '';
+    if (!Object.keys(this.YC_INFLATION).length) {
+      chartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (!majorsSeries.length) {
+      chartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
+    } else {
+      chartHtml = this.ycGlobalChart(majorsSeries, 760, 240);
+      legendHtml = majorsSeries.map(s => {
+        const last = s.points[s.points.length - 1];
+        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:14px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+          ${s.label} <span style="font-family:var(--mono);color:var(--txt);font-weight:600;">${last.value.toFixed(1)}%</span>
+        </span>`;
+      }).join('');
+    }
+    const rangeBtn = (r, label) => `<button onclick="vtx.inflSetRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.inflRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.inflRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.inflRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+
+    const usSeries = this.YC_INFLATION['CPALTT01USM659N'];
+    const usLatest = (usSeries && !usSeries.failed && usSeries.points && usSeries.points.length) ? usSeries.points[usSeries.points.length - 1].value : null;
+    let tableRows = this.YC_INFLATION_COUNTRIES.map(c => {
+      const s = this.YC_INFLATION[c.id];
+      if (!s || s.failed || !s.points || !s.points.length) return { id: c.id, label: c.label, region: c.region, cpi: null, priorChg: null, spread: null };
+      const pts = s.points;
+      const last = pts[pts.length - 1];
+      const prior = pts.length > 1 ? pts[pts.length - 2] : null;
+      return {
+        id: c.id, label: c.label, region: c.region, cpi: last.value,
+        priorChg: prior ? last.value - prior.value : null,
+        spread: usLatest != null ? last.value - usLatest : null,
+      };
+    });
+    const sortKey = this.state.inflSort.key, sortDir = this.state.inflSort.dir;
+    tableRows.sort((a, b) => {
+      const av = sortKey === 'country' ? a.label : sortKey === 'region' ? a.region : a[sortKey];
+      const bv = sortKey === 'country' ? b.label : sortKey === 'region' ? b.region : b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; if (bv == null) return -1;
+      return typeof av === 'string' ? av.localeCompare(bv) * sortDir : (av - bv) * sortDir;
+    });
+    const loaded = Object.keys(this.YC_INFLATION).length > 0;
+    const sortArrow = key => this.state.inflSort.key === key ? (this.state.inflSort.dir === 1 ? ' ▲' : ' ▼') : '';
+    const th = (key, label, align) => `<th onclick="vtx.inflSort('${key}')" style="cursor:pointer;text-align:${align || 'right'};padding:8px 10px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--line);white-space:nowrap;user-select:none;">${label}${sortArrow(key)}</th>`;
+    const tableHtml = !loaded
+      ? `<div style="padding:24px;text-align:center;color:var(--mut);font-size:11px;">Loading ${this.YC_INFLATION_COUNTRIES.length} countries…</div>`
+      : `<div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;">
+          <thead><tr>${th('country', 'Country', 'left')}${th('region', 'Region', 'left')}${th('cpi', 'CPI y/y')}${th('priorChg', 'Prior Chg')}${th('spread', 'vs US')}</tr></thead>
+          <tbody>
+            ${tableRows.map(r => `
+              <tr>
+                <td style="padding:7px 10px;text-align:left;font-size:11.5px;color:var(--txt);">${r.label}</td>
+                <td style="padding:7px 10px;text-align:left;font-size:10px;color:var(--mut);">${r.region}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:700;color:${r.cpi == null ? 'var(--mut)' : 'var(--txt)'};">${r.cpi != null ? r.cpi.toFixed(1) + '%' : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.priorChg == null ? 'var(--mut)' : r.priorChg >= 0 ? 'var(--neg)' : 'var(--pos)'};">${r.priorChg != null ? (r.priorChg >= 0 ? '+' : '') + r.priorChg.toFixed(1) : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.spread == null ? 'var(--mut)' : r.spread >= 0 ? 'var(--neg)' : 'var(--pos)'};">${r.spread != null ? (r.spread >= 0 ? '+' : '') + r.spread.toFixed(1) : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">World Inflation Comparison</span>
+        <span style="font-size:9px;color:var(--mut);">${this.YC_INFLATION_COUNTRIES.length} countries worldwide · CPI y/y</span>
+        <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="padding:16px 12px 4px;">
+          ${chartHtml}
+          ${legendHtml ? `<div style="padding:8px 4px 2px;">${legendHtml}</div>` : ''}
+        </div>
+        ${tableHtml}
+      </div>
+    `;
+  },
   selectIndicator(meta) {
     if (!meta || !meta.id) return;
     this.state.view = 'indicator';
@@ -2567,6 +2711,7 @@ const vtx = {
     else if (entry.type === 'yieldCurve') this.selectYieldCurve();
     else if (entry.type === 'globalYields') this.selectGlobalYields();
     else if (entry.type === 'policyRates') this.selectPolicyRates();
+    else if (entry.type === 'worldInflation') this.selectWorldInflation();
     else this.viewTicker(entry.key, entry.label);
   },
   // "YC" as a search shortcut into the full Yield Curve view — matches the
@@ -2589,6 +2734,12 @@ const vtx = {
     const q = v.trim().toLowerCase();
     if (!q) return false;
     return q === 'gpr' || 'policy rate'.includes(q) || 'policy rates'.includes(q) || 'central bank rates'.includes(q);
+  },
+  // "CPI" into the standalone World Inflation Comparison view.
+  matchWorldInflationShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'cpi' || 'world inflation'.includes(q) || 'global inflation'.includes(q);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
@@ -2715,7 +2866,7 @@ const vtx = {
       // Each row's own × removes just that entry (stopPropagation so it
       // doesn't also re-open the search); "Clear all" wipes the list.
       const recentRowHtml = e => {
-        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates') ? '▤' : '';
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation') ? '▤' : '';
         return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
@@ -2751,6 +2902,10 @@ const vtx = {
     if (this.matchPolicyRateShortcut(this.state.query)) {
       toolRows += toolRow('GPR', 'Global Policy Rate Tracker', 'Fed · ECB · BOE · BOJ',
         "vtx.recordRecentSearch({type:'policyRates',key:'GPR',label:'GPR',sub:'Global Policy Rate Tracker'});vtx.selectPolicyRates()");
+    }
+    if (this.matchWorldInflationShortcut(this.state.query)) {
+      toolRows += toolRow('CPI', 'World Inflation Comparison', '30 countries worldwide',
+        "vtx.recordRecentSearch({type:'worldInflation',key:'CPI',label:'CPI',sub:'World Inflation Comparison'});vtx.selectWorldInflation()");
     }
     const ycHtml = toolRows ? `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>${toolRows}` : '';
     let html = searchFailedHtml + ycHtml + r.map(t => `
@@ -3223,6 +3378,43 @@ const vtx = {
   ycSetPolicyRange(range) {
     this.state.ycPolicyRange = range;
     this.renderPolicyRateView();
+  },
+  // Same 30-country fan-out as loadYcGlobal, same rate-limit reasoning —
+  // chunked rather than one Promise.all.
+  async loadYcInflation() {
+    const CHUNK = 6;
+    for (let i = 0; i < this.YC_INFLATION_COUNTRIES.length; i += CHUNK) {
+      const batch = this.YC_INFLATION_COUNTRIES.slice(i, i + CHUNK);
+      await Promise.all(batch.map(async c => {
+        try {
+          const res = await fetch(`/api/intel/econ-series?id=${c.id}`);
+          if (!res.ok) { this.YC_INFLATION[c.id] = { failed: true }; return; }
+          const data = await res.json();
+          if (!data.points || !data.points.length) { this.YC_INFLATION[c.id] = { failed: true }; return; }
+          this.YC_INFLATION[c.id] = { points: data.points };
+        } catch (e) { this.YC_INFLATION[c.id] = { failed: true }; }
+      }));
+      if (this.state.view === 'worldInflation') this.renderWorldInflationView();
+      if (i + CHUNK < this.YC_INFLATION_COUNTRIES.length) await new Promise(r => setTimeout(r, 400));
+    }
+  },
+  inflSetRange(range) {
+    this.state.inflRange = range;
+    this.renderWorldInflationView();
+  },
+  inflSort(key) {
+    const s = this.state.inflSort;
+    this.state.inflSort = { key, dir: s.key === key ? -s.dir : -1 };
+    this.renderWorldInflationView();
+  },
+  selectWorldInflation() {
+    this.state.view = 'worldInflation';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+    if (!Object.keys(this.YC_INFLATION).length) this.loadYcInflation();
   },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
@@ -4614,6 +4806,7 @@ const vtx = {
     document.getElementById('yieldCurveView').style.display = s.view === 'yieldCurve' ? 'flex' : 'none';
     document.getElementById('globalYieldsView').style.display = s.view === 'globalYields' ? 'flex' : 'none';
     document.getElementById('policyRatesView').style.display = s.view === 'policyRates' ? 'flex' : 'none';
+    document.getElementById('worldInflationView').style.display = s.view === 'worldInflation' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
@@ -4628,6 +4821,8 @@ const vtx = {
       this.renderGlobalYieldsView();
     } else if (s.view === 'policyRates') {
       this.renderPolicyRateView();
+    } else if (s.view === 'worldInflation') {
+      this.renderWorldInflationView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
