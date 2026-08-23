@@ -3057,7 +3057,7 @@ const vtx = {
       this.state.tickers = this.state.tickers.map(x => {
         if (x.sym!==sym) return x;
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow, currency:q.currency}; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -3107,7 +3107,7 @@ const vtx = {
       ]);
       const merge = (x) => {
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow}; }
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow, currency:q.currency}; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -3522,7 +3522,7 @@ const vtx = {
         <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'ticker',key:'${t.symbol}',label:'${t.symbol}',sub:${JSON.stringify(t.name).replace(/"/g,'&quot;')}});vtx.viewTicker('${t.symbol}',${JSON.stringify(t.name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.symbol}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
-          <span style="font-size:9px;color:var(--mut);">not tracked</span>
+          <span style="font-size:9px;color:var(--mut);">${t.exchange ? t.exchange : 'not tracked'}</span>
         </div>`).join('');
     }
     if (instruments.length) {
@@ -5622,14 +5622,14 @@ const vtx = {
             <span class="sectorlink" onclick="vtx.jumpToSector(${JSON.stringify(f.sector).replace(/"/g,'&quot;')})" title="View ${f.sector} in the sector heatmap" style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);border:1px solid rgba(52,211,255,.3);background:rgba(52,211,255,.08);border-radius:99px;padding:3px 10px;">${f.sector}</span>
             <span style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--pos);"><span style="width:5px;height:5px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.5s ease infinite;"></span>LIVE</span>
           </div>
-          <div style="font-size:13px;color:var(--mut);">${f.name}${f.exchange ? ' · '+f.exchange : ''}</div>
+          <div style="font-size:13px;color:var(--mut);">${f.name}${f.exchange ? ' · '+f.exchange : ''}${f.currency && f.currency !== 'USD' ? ' · '+f.currency : ''}</div>
           ${(f.ipo || f.website) ? `<div style="display:flex;gap:12px;margin-top:4px;font-size:10.5px;color:var(--mut);">
             ${f.ipo ? `<span>IPO ${f.ipo}</span>` : ''}
             ${f.website ? `<a href="${f.website}" target="_blank" rel="noopener" style="color:var(--acc2);text-decoration:none;">${f.website.replace(/^https?:\/\/(www\.)?/,'').replace(/\/$/,'')}</a>` : ''}
           </div>` : ''}
         </div>
         <div style="text-align:right;">
-          <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${this.fmt(f.price)}</div>
+          <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${f.currency && f.currency !== 'USD' ? `<span style="font-size:15px;color:var(--mut);">${f.currency}</span> ` : ''}${this.fmt(f.price)}</div>
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:7px;">
             <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${dollarUp?cPos:cNeg};">${(dollarUp?'+':'')+dollarChange.toFixed(2)}</span>
             <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${fup?cPos:cNeg};background:${fup?'rgba(31,209,151,.1)':'rgba(255,77,94,.1)'};border:1px solid ${fup?'rgba(31,209,151,.3)':'rgba(255,77,94,.3)'};border-radius:99px;padding:3px 9px;">${(fup?'+':'')+fp.toFixed(2)}% ${fup?'▲':'▼'}</span>
@@ -7062,7 +7062,8 @@ const vtx = {
     // Real Finnhub day-range, same fix as the ticker header's headStats —
     // not derived from the rolling sparkline window, which understates
     // the real range once enough polls/trades have aged early bars out.
-    const rangeStr = (f.dayLow!=null && f.dayHigh!=null) ? `$${this.fmt(f.dayLow)} – $${this.fmt(f.dayHigh)}` : 'not loaded yet';
+    const curPrefix = f.currency && f.currency !== 'USD' ? f.currency + ' ' : '$';
+    const rangeStr = (f.dayLow!=null && f.dayHigh!=null) ? `${curPrefix}${this.fmt(f.dayLow)} – ${curPrefix}${this.fmt(f.dayHigh)}` : 'not loaded yet';
 
     const dark = (this.DARK||[]).filter(d=>d.sym===f.sym);
     const filings = (this.FIL||[]).filter(x=>x.sym===f.sym);
