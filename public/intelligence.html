@@ -367,6 +367,12 @@ input{font-family:var(--ui)}
 
         <!-- Private company view (no ticker — SEC Form D + federal contracts + news) -->
         <div id="privateCompanyView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
+
+        <!-- Yield Curve view (search "YC") — real FRED Treasury curve with
+             historical date navigation, Fed Funds/CPI overlays, upcoming
+             econ events, macro indicators, and Atlanta Fed rate-hike/cut
+             probabilities. Modeled on ustreasuryyieldcurve.com. -->
+        <div id="yieldCurveView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -458,7 +464,12 @@ const vtx = {
     // The free-text company name behind view:'privateCompany' — there's
     // no ticker for a private company, so this is what every private-
     // company loader/render keys off instead of state.focus/instrument.
-    privateCompanyName: null
+    privateCompanyName: null,
+    // Which reference overlays show on the Yield Curve view's main chart —
+    // Fed Funds Target Range defaults on (matches ustreasuryyieldcurve.com);
+    // CPI YoY defaults off since it's a very different-shaped line to read
+    // against a curve until the viewer opts in.
+    ycOverlays: { fedFunds: true, cpi: false }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -472,6 +483,24 @@ const vtx = {
   YIELD_CURVE: null, // populated by loadYieldCurve() — real FRED Treasury data, no seed
   MACRO_DASH: {}, // populated by loadMacroDashboard() — real FRED data per series id, no seed
   TREASURY_AUCTIONS: null, // populated by loadTreasuryAuctions() — real api.fiscaldata.treasury.gov data, no seed
+
+  // Yield Curve view (search "YC") state — deliberately separate from
+  // YIELD_CURVE above, which every other widget (header pulse, overview,
+  // instrument sidebar) assumes is always "today's" curve. This one tracks
+  // whatever date is currently being viewed, which may be historical.
+  YC_VIEW: null, // { date, points, spread10y2y, inverted, loading, error }
+  YC_MACRO: {}, // populated by loadYcMacro() — real FRED CPI/PCE/PPI/GDP/Unemployment, keyed by series id
+  YC_PROB: null, // populated by loadRateProbability() — real Atlanta Fed hike/hold/cut probabilities
+  YC_OVERLAY_DATA: {}, // populated by loadYcOverlayData() — full DFEDTARU/DFEDTARL/CPIAUCSL histories, fetched once and reused across every date navigation click (cheaper than re-fetching per date)
+  YC_MACRO_SERIES: [
+    { id: 'CPIAUCSL', label: 'CPI y/y', transform: 'yoy' },
+    { id: 'CPIAUCSL', label: 'CPI m/m', transform: 'mom' },
+    { id: 'PCEPI', label: 'PCE y/y', transform: 'yoy' },
+    { id: 'PPIACO', label: 'PPI y/y', transform: 'yoy' },
+    { id: 'A191RL1Q225SBEA', label: 'GDP (latest qtr)', transform: 'level', offset: 0, suffix: '%' },
+    { id: 'A191RL1Q225SBEA', label: 'GDP (prior qtr)', transform: 'level', offset: 1, suffix: '%' },
+    { id: 'UNRATE', label: 'Unemployment', transform: 'level', offset: 0, suffix: '%' },
+  ],
 
   // Curated FRED series for the Macro tab's dashboard grid — every id/title/
   // units/frequency below was verified live against /api/intel/econ-search
@@ -1431,6 +1460,205 @@ const vtx = {
       </div>
     `;
   },
+  // Bigger, axis-labeled sibling of yieldCurveSvg (which stays as-is for
+  // the small widgets that already use it) — adds real gridlines/y-axis
+  // labels and optional Fed Funds Target Range / CPI y/y reference
+  // overlays, both flat horizontal marks since neither varies by maturity.
+  ycMainChart(points, ov, w, h) {
+    w = w || 760; h = h || 280;
+    const padL = 38, padB = 22, padT = 12, padR = 12;
+    const cw = w - padL - padR, ch = h - padT - padB;
+    const yields = points.map(p => p.yield);
+    let lo = Math.min(...yields), hi = Math.max(...yields);
+    if (ov.fedFunds && ov.fedFundsLower != null && ov.fedFundsUpper != null) { lo = Math.min(lo, ov.fedFundsLower); hi = Math.max(hi, ov.fedFundsUpper); }
+    if (ov.cpi && ov.cpiValue != null) { lo = Math.min(lo, ov.cpiValue); hi = Math.max(hi, ov.cpiValue); }
+    const pad = (hi - lo) * 0.18 || 0.5;
+    lo -= pad; hi += pad;
+    const span = (hi - lo) || 1;
+    const x = i => padL + (i / (points.length - 1)) * cw;
+    const y = v => padT + ch - ((v - lo) / span) * ch;
+
+    const GRID_N = 4;
+    const gridLines = Array.from({ length: GRID_N + 1 }, (_, i) => {
+      const v = lo + (span * i / GRID_N);
+      const yy = y(v);
+      return `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${w - padR}" y2="${yy.toFixed(1)}" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <text x="${(padL - 6).toFixed(1)}" y="${(yy + 3).toFixed(1)}" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--mut)">${v.toFixed(1)}%</text>`;
+    }).join('');
+    const xLabels = points.map((p, i) => `<text x="${x(i).toFixed(1)}" y="${h - 4}" text-anchor="middle" font-family="var(--mono)" font-size="9.5" fill="var(--mut)">${p.label}</text>`).join('');
+
+    const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.yield).toFixed(1)}`).join(' ');
+    const area = line + ` L${x(points.length - 1).toFixed(1)},${(padT + ch).toFixed(1)} L${x(0).toFixed(1)},${(padT + ch).toFixed(1)} Z`;
+    const dots = points.map((p, i) => {
+      const cx = x(i).toFixed(1), cy = y(p.yield).toFixed(1);
+      return `<circle cx="${cx}" cy="${cy}" r="3.2" fill="var(--acc2)"/>
+        <text x="${cx}" y="${(y(p.yield) - 9).toFixed(1)}" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--txt)">${p.yield.toFixed(2)}</text>`;
+    }).join('');
+
+    let fedFundsHtml = '';
+    if (ov.fedFunds && ov.fedFundsLower != null && ov.fedFundsUpper != null) {
+      const yTop = y(ov.fedFundsUpper), yBot = y(ov.fedFundsLower);
+      fedFundsHtml = `<rect x="${padL}" y="${yTop.toFixed(1)}" width="${cw}" height="${Math.max(1, yBot - yTop).toFixed(1)}" fill="rgba(240,196,25,.10)" stroke="rgba(240,196,25,.35)" stroke-dasharray="3,3"/>
+        <text x="${(w - padR - 4).toFixed(1)}" y="${(yTop - 4).toFixed(1)}" text-anchor="end" font-family="var(--mono)" font-size="9" fill="#f0c419">Fed Funds Target ${ov.fedFundsLower.toFixed(2)}–${ov.fedFundsUpper.toFixed(2)}%</text>`;
+    }
+    let cpiHtml = '';
+    if (ov.cpi && ov.cpiValue != null) {
+      const yy = y(ov.cpiValue);
+      cpiHtml = `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${w - padR}" y2="${yy.toFixed(1)}" stroke="#c084fc" stroke-width="1.6" stroke-dasharray="5,3"/>
+        <text x="${(padL + 4).toFixed(1)}" y="${(yy - 4).toFixed(1)}" text-anchor="start" font-family="var(--mono)" font-size="9" fill="#c084fc">CPI y/y ${ov.cpiValue.toFixed(1)}%</text>`;
+    }
+
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">
+      <defs><linearGradient id="ycMainArea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--acc2)" stop-opacity="0.20"/>
+        <stop offset="100%" stop-color="var(--acc2)" stop-opacity="0"/>
+      </linearGradient></defs>
+      ${gridLines}
+      ${fedFundsHtml}
+      ${cpiHtml}
+      <path d="${area}" fill="url(#ycMainArea)"/>
+      <path d="${line}" fill="none" stroke="var(--acc2)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      ${xLabels}
+    </svg>`;
+  },
+  renderYieldCurveView() {
+    const el = document.getElementById('yieldCurveView');
+    if (!el) return;
+    const yc = this.YC_VIEW;
+    const date = this.ycCurrentDate();
+    const today = new Date().toISOString().slice(0, 10);
+    const isToday = date === today;
+    const ov = this.state.ycOverlays;
+
+    const fedFundsLower = ov.fedFunds ? (this.ycValueAsOf('DFEDTARL', date) || {}).value ?? null : null;
+    const fedFundsUpper = ov.fedFunds ? (this.ycValueAsOf('DFEDTARU', date) || {}).value ?? null : null;
+    let cpiValue = null;
+    if (ov.cpi) {
+      const cpiSeries = this.YC_OVERLAY_DATA['CPIAUCSL'];
+      if (cpiSeries && !cpiSeries.failed && cpiSeries.points && cpiSeries.points.length) {
+        let idx = -1;
+        for (let j = 0; j < cpiSeries.points.length; j++) { if (cpiSeries.points[j].date <= date) idx = j; else break; }
+        if (idx >= 12) cpiValue = ((cpiSeries.points[idx].value / cpiSeries.points[idx - 12].value) - 1) * 100;
+      }
+    }
+
+    let chartHtml;
+    if (!yc || yc.loading) {
+      chartHtml = `<div style="padding:70px 0;text-align:center;color:var(--mut);font-size:12px;">Loading yield curve…</div>`;
+    } else if (yc.error || !yc.points) {
+      chartHtml = `<div style="padding:70px 0;text-align:center;color:var(--mut);font-size:12px;">No published Treasury data for ${date} — try a nearby business day.</div>`;
+    } else {
+      chartHtml = this.ycMainChart(yc.points, { fedFunds: ov.fedFunds, fedFundsLower, fedFundsUpper, cpi: ov.cpi, cpiValue }, 760, 280);
+    }
+
+    const spread = yc && yc.spread10y2y;
+    const spreadHtml = spread != null ? `<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${yc.inverted ? 'var(--neg)' : 'var(--pos)'};">10Y−2Y ${spread >= 0 ? '+' : ''}${spread.toFixed(2)}%${yc.inverted ? ' · INVERTED' : ''}</span>` : '';
+
+    const headerHtml = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">US Treasury Yield Curve</span>
+        ${spreadHtml}
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+          <button onclick="vtx.ycShiftDay(-1)" title="Previous business day" style="width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--txt);cursor:pointer;font-size:12px;">‹</button>
+          <input type="date" value="${date}" max="${today}" onchange="vtx.ycSetDate(this.value)" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:6px;color:var(--txt);font-family:var(--mono);font-size:11px;padding:3px 6px;"/>
+          <button onclick="vtx.ycShiftDay(1)" title="Next business day" ${isToday ? 'disabled' : ''} style="width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:${isToday ? 'var(--mut)' : 'var(--txt)'};cursor:${isToday ? 'default' : 'pointer'};font-size:12px;">›</button>
+          ${!isToday ? `<button onclick="vtx.ycToday()" style="border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--acc2);cursor:pointer;font-size:10px;padding:4px 8px;">Today</button>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;padding:7px 2px 0;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--mut);cursor:pointer;">
+          <input type="checkbox" ${ov.fedFunds ? 'checked' : ''} onchange="vtx.ycToggleOverlay('fedFunds')"/> Fed Funds Target Range
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--mut);cursor:pointer;">
+          <input type="checkbox" ${ov.cpi ? 'checked' : ''} onchange="vtx.ycToggleOverlay('cpi')"/> CPI y/y
+        </label>
+      </div>`;
+
+    // Upcoming Events — reuses this.ECON as-is (already loaded/refreshed
+    // by the app's own init, same real FRED+FOMC data the Macro tab uses).
+    const upcoming = (this.ECON || []).filter(e => e.isoDate && e.isoDate >= today).sort((a, b) => a.isoDate.localeCompare(b.isoDate)).slice(0, 6);
+    const eventsHtml = !this.ECON.length
+      ? `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading…</div>`
+      : !upcoming.length
+      ? `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">No upcoming events in range.</div>`
+      : upcoming.map(e => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 11px;border-bottom:1px solid var(--line);">
+          <span style="font-size:11px;color:var(--txt);">${e.event}</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--mut);">${e.day} ${e.date}</span>
+        </div>`).join('');
+
+    // Macro Indicators — real FRED CPI/PCE/PPI/GDP/Unemployment via
+    // loadYcMacro(); offset picks how many periods back from the latest
+    // (0 = latest, 1 = one period prior), used for the two GDP rows.
+    const macroHtml = this.YC_MACRO_SERIES.map(entry => {
+      const s = this.YC_MACRO[entry.id];
+      if (!s || s.failed || !s.points || !s.points.length) {
+        return `<div style="display:flex;justify-content:space-between;padding:7px 11px;border-bottom:1px solid var(--line);"><span style="font-size:11px;color:var(--mut);">${entry.label}</span><span style="font-size:11px;color:var(--mut);">—</span></div>`;
+      }
+      const pts = s.points;
+      let display = '—', dateLabel = '';
+      if (entry.transform === 'yoy') {
+        const lastI = pts.length - 1, priorI = lastI - 12;
+        if (priorI >= 0) { display = (((pts[lastI].value / pts[priorI].value) - 1) * 100).toFixed(1) + '%'; dateLabel = pts[lastI].date; }
+      } else if (entry.transform === 'mom') {
+        const lastI = pts.length - 1, priorI = lastI - 1;
+        if (priorI >= 0) { display = (((pts[lastI].value / pts[priorI].value) - 1) * 100).toFixed(1) + '%'; dateLabel = pts[lastI].date; }
+      } else {
+        const idx = pts.length - 1 - (entry.offset || 0);
+        if (idx >= 0) { display = pts[idx].value.toFixed(1) + (entry.suffix || ''); dateLabel = pts[idx].date; }
+      }
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 11px;border-bottom:1px solid var(--line);">
+        <span style="font-size:11px;color:var(--txt);">${entry.label}</span>
+        <span style="text-align:right;"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);">${display}</span><br/><span style="font-size:8px;color:var(--mut);">${dateLabel}</span></span>
+      </div>`;
+    }).join('');
+
+    // Rate Expectations — real Atlanta Fed Market Probability Tracker data.
+    let probHtml;
+    if (!this.YC_PROB) {
+      probHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading…</div>`;
+    } else if (this.YC_PROB.failed) {
+      probHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Unavailable right now. <button onclick="vtx.loadRateProbability()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else {
+      const w0 = this.YC_PROB.windows[0];
+      const bar = (label, val, color) => `
+        <div style="margin-bottom:7px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-bottom:2px;"><span>${label}</span><span style="font-family:var(--mono);color:${color};font-weight:700;">${val.toFixed(1)}%</span></div>
+          <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden;"><div style="height:100%;width:${Math.min(100, Math.max(0, val))}%;background:${color};"></div></div>
+        </div>`;
+      probHtml = `
+        <div style="padding:12px 14px;">
+          <div style="font-size:10.5px;color:var(--txt);margin-bottom:2px;">By ${w0.referenceStart}</div>
+          <div style="font-size:9px;color:var(--mut);margin-bottom:10px;">From current target range ${w0.targetRange}</div>
+          ${bar('Rate Hike', w0.probHike, 'var(--neg)')}
+          ${bar('Steady', w0.probSteady, 'var(--mut)')}
+          ${bar('Rate Cut', w0.probCut, 'var(--pos)')}
+          <div style="font-size:8.5px;color:var(--mut);margin-top:8px;">As of ${this.YC_PROB.asOf} · Source: Federal Reserve Bank of Atlanta (CME SOFR options)</div>
+        </div>`;
+    }
+
+    el.innerHTML = `
+      ${headerHtml}
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 12px 10px;">
+        ${chartHtml}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Upcoming Events</div>
+          ${eventsHtml}
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Macro Indicators</div>
+          ${macroHtml}
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Rate Expectations</div>
+          ${probHtml}
+        </div>
+      </div>
+    `;
+  },
   selectIndicator(meta) {
     if (!meta || !meta.id) return;
     this.state.view = 'indicator';
@@ -2056,7 +2284,16 @@ const vtx = {
     if (entry.type === 'instrument') this.selectInstrument(entry.key);
     else if (entry.type === 'indicator') this.selectIndicator(entry.meta);
     else if (entry.type === 'company') this.selectPrivateCompany(entry.key);
+    else if (entry.type === 'yieldCurve') this.selectYieldCurve();
     else this.viewTicker(entry.key, entry.label);
+  },
+  // "YC" as a search shortcut into the full Yield Curve view — matches the
+  // acronym exactly, or any substring of "yield curve" (so "yield" alone
+  // also works).
+  matchYieldCurveShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'yc' || 'yield curve'.includes(q);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
@@ -2183,7 +2420,7 @@ const vtx = {
       // Each row's own × removes just that entry (stopPropagation so it
       // doesn't also re-open the search); "Clear all" wipes the list.
       const recentRowHtml = e => {
-        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : '';
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : e.type==='yieldCurve' ? '▤' : '';
         return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
@@ -2197,7 +2434,16 @@ const vtx = {
       return;
     }
 
-    let html = searchFailedHtml + r.map(t => `
+    let ycHtml = '';
+    if (this.matchYieldCurveShortcut(this.state.query)) {
+      ycHtml = `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>
+        <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'yieldCurve',key:'YC',label:'YC',sub:'US Treasury Yield Curve'});vtx.selectYieldCurve()" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
+          <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">YC</span>
+          <span style="flex:1;font-size:12.5px;color:var(--txt);">US Treasury Yield Curve</span>
+          <span style="font-size:9px;color:var(--mut);">Historical · Fed probabilities</span>
+        </div>`;
+    }
+    let html = searchFailedHtml + ycHtml + r.map(t => `
       <div class="srchrow" onmousedown="vtx.recordRecentSearch({type:'ticker',key:'${t.sym}',label:'${t.sym}',sub:${JSON.stringify(t.name).replace(/"/g,'&quot;')}});vtx.selectTicker('${t.sym}')" style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
         <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${t.sym}</span>
         <span style="flex:1;font-size:12.5px;color:var(--txt);">${t.name}</span>
@@ -2535,6 +2781,110 @@ const vtx = {
       this.TREASURY_AUCTIONS = { failed: true };
     }
     if (this.state.tab === 'econ') this.renderRight();
+  },
+
+  // The curve for whichever date is currently selected in the Yield Curve
+  // view — omit date for "latest." Deliberately writes to YC_VIEW, not
+  // YIELD_CURVE (which every other widget on the page assumes is always
+  // today's curve, unrelated to what's being browsed here).
+  async loadYcCurve(date) {
+    this.YC_VIEW = { date: date || 'latest', points: (this.YC_VIEW && this.YC_VIEW.points) || null, loading: true, error: false };
+    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+    try {
+      const url = date ? `/api/intel/yield-curve?date=${encodeURIComponent(date)}` : `/api/intel/yield-curve`;
+      const res = await fetch(url);
+      if (!res.ok) { this.YC_VIEW = { date: date || 'latest', points: null, loading: false, error: true }; if (this.state.view === 'yieldCurve') this.renderYieldCurveView(); return; }
+      const data = await res.json();
+      if (!data.points || !data.points.length) { this.YC_VIEW = { date: date || 'latest', points: null, loading: false, error: true }; if (this.state.view === 'yieldCurve') this.renderYieldCurveView(); return; }
+      this.YC_VIEW = { date: date || 'latest', points: data.points, spread10y2y: data.spread10y2y, inverted: data.inverted, loading: false, error: false };
+    } catch (e) {
+      this.YC_VIEW = { date: date || 'latest', points: null, loading: false, error: true };
+    }
+    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+  },
+  // Full histories for the two overlay series, fetched once (they're
+  // small — daily data, a few thousand points at most) and reused for
+  // every date-navigation click rather than re-fetched per date.
+  async loadYcOverlayData() {
+    const ids = ['DFEDTARU', 'DFEDTARL', 'CPIAUCSL'];
+    await Promise.all(ids.map(async id => {
+      try {
+        const res = await fetch(`/api/intel/econ-series?id=${id}`);
+        if (!res.ok) { this.YC_OVERLAY_DATA[id] = { failed: true }; return; }
+        const data = await res.json();
+        this.YC_OVERLAY_DATA[id] = { points: data.points || [] };
+      } catch (e) { this.YC_OVERLAY_DATA[id] = { failed: true }; }
+    }));
+    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+  },
+  // Latest real value in a points array at or before a given date — used
+  // to look up "what was the Fed Funds Target Range / CPI on this date"
+  // from the full histories loadYcOverlayData() already fetched, so
+  // changing the selected date never needs a new network request.
+  ycValueAsOf(seriesId, dateStr) {
+    const s = this.YC_OVERLAY_DATA[seriesId];
+    if (!s || s.failed || !s.points || !s.points.length) return null;
+    const eligible = s.points.filter(p => p.date <= dateStr);
+    return eligible.length ? eligible[eligible.length - 1] : null;
+  },
+  // CPI/PCE/PPI/GDP/Unemployment for the Macro Indicators sidebar — real
+  // FRED series via the existing generic /api/intel/econ-series route,
+  // fetched once per unique series id (CPI backs two display rows, y/y
+  // and m/m, off the one fetch).
+  async loadYcMacro() {
+    const ids = [...new Set(this.YC_MACRO_SERIES.map(s => s.id))];
+    await Promise.all(ids.map(async id => {
+      try {
+        const res = await fetch(`/api/intel/econ-series?id=${id}`);
+        if (!res.ok) { this.YC_MACRO[id] = { failed: true }; return; }
+        const data = await res.json();
+        if (!data.points || !data.points.length) { this.YC_MACRO[id] = { failed: true }; return; }
+        this.YC_MACRO[id] = { points: data.points };
+      } catch (e) { this.YC_MACRO[id] = { failed: true }; }
+    }));
+    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+  },
+  // Real market-implied Fed rate-hike/hold/cut probabilities — Atlanta
+  // Fed's own public Market Probability Tracker data (see
+  // app/api/market/rate-probability/route.ts), the same source
+  // ustreasuryyieldcurve.com's "Expectation by [date]" panel cites.
+  async loadRateProbability() {
+    try {
+      const res = await fetch('/api/market/rate-probability');
+      if (!res.ok) { this.YC_PROB = { failed: true }; if (this.state.view === 'yieldCurve') this.renderYieldCurveView(); return; }
+      const data = await res.json();
+      this.YC_PROB = (data.windows && data.windows.length) ? data : { failed: true };
+    } catch (e) { this.YC_PROB = { failed: true }; }
+    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+  },
+  selectYieldCurve() {
+    this.state.view = 'yieldCurve';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+    if (!this.YC_VIEW || !this.YC_VIEW.points) this.loadYcCurve(null);
+    if (!Object.keys(this.YC_OVERLAY_DATA).length) this.loadYcOverlayData();
+    if (!Object.keys(this.YC_MACRO).length) this.loadYcMacro();
+    if (!this.YC_PROB) this.loadRateProbability();
+  },
+  ycCurrentDate() {
+    return (this.YC_VIEW && this.YC_VIEW.date && this.YC_VIEW.date !== 'latest') ? this.YC_VIEW.date : new Date().toISOString().slice(0, 10);
+  },
+  ycShiftDay(deltaDays) {
+    const d = new Date(this.ycCurrentDate() + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + deltaDays);
+    const next = d.toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    if (next > today) return; // no future curves
+    this.loadYcCurve(next);
+  },
+  ycSetDate(v) { if (v) this.loadYcCurve(v); },
+  ycToday() { this.loadYcCurve(null); },
+  ycToggleOverlay(key) {
+    this.state.ycOverlays[key] = !this.state.ycOverlays[key];
+    this.renderYieldCurveView();
   },
 
   MARKET_SNAPSHOT_SYMS: ['SPX','NDX','VIX','GOLD','OIL','SILVER','NATGAS','COPPER','EURUSD','USDJPY','GBPUSD','FTSE','NIKKEI','HSI',
@@ -3876,6 +4226,7 @@ const vtx = {
     document.getElementById('instrumentView').style.display = s.view === 'instrument' ? 'flex' : 'none';
     document.getElementById('indicatorView').style.display = s.view === 'indicator' ? 'flex' : 'none';
     document.getElementById('privateCompanyView').style.display = s.view === 'privateCompany' ? 'flex' : 'none';
+    document.getElementById('yieldCurveView').style.display = s.view === 'yieldCurve' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
@@ -3884,6 +4235,8 @@ const vtx = {
       this.renderIndicatorView();
     } else if (s.view === 'privateCompany') {
       this.renderPrivateCompanyView();
+    } else if (s.view === 'yieldCurve') {
+      this.renderYieldCurveView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;

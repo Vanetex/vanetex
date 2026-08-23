@@ -7,6 +7,10 @@ export const runtime = "nodejs";
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 const CACHE_KEY = "intel:yield-curve:v2"; // v2: points now also carry prevYield for day-over-day change
 const CACHE_TTL_S = 6 * 60 * 60; // Treasury yields post once per business day
+// A historical date's published rate never changes after the fact, unlike
+// "today" which updates once per business day — safe to cache far longer.
+const HISTORICAL_CACHE_TTL_S = 30 * 24 * 60 * 60;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // FRED's Treasury Constant Maturity series — the standard free real-yield
 // curve, same family as the risk-free-rate series used for backtesting.
@@ -33,8 +37,13 @@ type Point = { label: string; months: number; yield: number; date: string; prevY
 // observations, so a null here would almost always mean "FRED request
 // failed," and silently dropping that maturity from the curve (then
 // caching the gap for 6h below) would misrepresent it as real data.
-async function fetchLatestTwo(seriesId: string, apiKey: string): Promise<{ value: number; date: string; prevValue: number | null } | null> {
-  const url = `${FRED_BASE}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=5`;
+async function fetchLatestTwo(seriesId: string, apiKey: string, asOfDate?: string): Promise<{ value: number; date: string; prevValue: number | null } | null> {
+  // With asOfDate, this finds the yield in effect on (or most recently
+  // before) that date — a weekend/holiday has no observation of its own,
+  // so "the curve as of a given date" always means the latest real reading
+  // at or before it, same convention the reference sites use.
+  let url = `${FRED_BASE}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=5`;
+  if (asOfDate) url += `&observation_end=${asOfDate}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`FRED series ${seriesId} fetch failed: ${res.status}`);
   const data = (await res.json()) as { observations?: { date: string; value: string }[] };
@@ -53,7 +62,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } });
   }
 
-  const cached = await kvGet<{ points: Point[] }>(CACHE_KEY);
+  const dateParam = request.nextUrl.searchParams.get("date");
+  const today = new Date().toISOString().slice(0, 10);
+  // An invalid or future date silently falls back to "today" rather than
+  // erroring — a stray/garbage date param shouldn't break the whole curve.
+  const asOfDate = dateParam && DATE_RE.test(dateParam) && dateParam <= today ? dateParam : undefined;
+  const cacheKey = asOfDate ? `${CACHE_KEY}:${asOfDate}` : CACHE_KEY;
+  const cacheTtl = asOfDate ? HISTORICAL_CACHE_TTL_S : CACHE_TTL_S;
+
+  const cached = await kvGet<{ points: Point[] }>(cacheKey);
   if (cached) {
     return NextResponse.json(cached, { headers: { "Cache-Control": "public, max-age=21600" } });
   }
@@ -70,7 +87,7 @@ export async function GET(request: NextRequest) {
     const results: (Awaited<ReturnType<typeof fetchLatestTwo>>)[] = [];
     for (let i = 0; i < MATURITIES.length; i += CHUNK) {
       const chunk = MATURITIES.slice(i, i + CHUNK);
-      const chunkResults = await Promise.all(chunk.map((m) => fetchLatestTwo(m.id, apiKey)));
+      const chunkResults = await Promise.all(chunk.map((m) => fetchLatestTwo(m.id, apiKey, asOfDate)));
       results.push(...chunkResults);
       if (i + CHUNK < MATURITIES.length) await new Promise((r) => setTimeout(r, 300));
     }
@@ -81,8 +98,12 @@ export async function GET(request: NextRequest) {
       if (r) points.push({ label: m.label, months: m.months, yield: r.value, date: r.date, prevYield: r.prevValue });
     });
 
+    // A date far enough back that none of the 11 maturities had started
+    // trading yet (the shortest, 1M, only starts in 2001) legitimately has
+    // zero points — that's real, not a fetch failure, so it's a 404 rather
+    // than a 500.
     if (!points.length) {
-      return NextResponse.json({ error: "No yield curve data available" }, { status: 500 });
+      return NextResponse.json({ error: "No yield curve data available for this date" }, { status: 404 });
     }
 
     const y2 = points.find((p) => p.months === 24)?.yield ?? null;
@@ -90,7 +111,7 @@ export async function GET(request: NextRequest) {
     const spread10y2y = y2 != null && y10 != null ? y10 - y2 : null;
 
     const body = { points, spread10y2y, inverted: spread10y2y != null ? spread10y2y < 0 : null };
-    await kvSet(CACHE_KEY, body, CACHE_TTL_S);
+    await kvSet(cacheKey, body, cacheTtl);
     return NextResponse.json(body, { headers: { "Cache-Control": "public, max-age=21600" } });
   } catch (err) {
     console.error("[intel/yield-curve] error:", err);
