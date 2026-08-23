@@ -391,6 +391,11 @@ input{font-family:var(--ui)}
              real Yahoo Finance quotes + price history for 20 major stock
              indices worldwide. -->
         <div id="worldEquityView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- Credit Quality Ladder view (search "CQL" / "credit quality") —
+             real ICE BofA option-adjusted spreads by rating tier, AAA
+             through CCC & Below. -->
+        <div id="creditLadderView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -497,7 +502,8 @@ const vtx = {
     inflRange: '5Y',
     inflSort: { key: 'cpi', dir: -1 },
     equityRange: '1Y',
-    equitySort: { key: 'chg1y', dir: -1 }
+    equitySort: { key: 'chg1y', dir: -1 },
+    creditRange: '5Y'
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -664,6 +670,29 @@ const vtx = {
   ],
   YC_EQUITY_MAJORS: ['SPX', 'DAX', 'NIKKEI', 'FTSE', 'HSI', 'ASX200'],
   YC_EQUITY_COLORS: { SPX: '#3fc7e0', DAX: '#e8a33d', NIKKEI: '#33d38f', FTSE: '#ef5468', HSI: '#a78bfa', ASX200: '#f472b6' },
+
+  YC_CREDIT: {}, // populated by loadYcCredit() — real ICE BofA option-adjusted spreads by rating tier, keyed by series id
+  // Every id verified live before hardcoding, including a monotonicity
+  // check (AAA 0.42% < AA 0.61% < A 0.69% < BBB 1.00% < BB 1.63% <
+  // B 2.94% < CCC 10.35%, confirmed the same day this was built) — the
+  // real market price of credit risk, not who rates what (no free source
+  // exists for literal issuer ratings; this is the honest substitute).
+  // Colors run cool (investment grade) to warm (high yield), marking the
+  // real IG/HY boundary between BBB and BB.
+  YC_CREDIT_TIERS: [
+    { id: 'BAMLC0A1CAAA', label: 'AAA', color: '#1fd397' },
+    { id: 'BAMLC0A2CAA', label: 'AA', color: '#6dd35a' },
+    { id: 'BAMLC0A3CA', label: 'A', color: '#a8d33d' },
+    { id: 'BAMLC0A4CBBB', label: 'BBB', color: '#f0c419' },
+    { id: 'BAMLH0A1HYBB', label: 'BB', color: '#f2994a' },
+    { id: 'BAMLH0A2HYB', label: 'B', color: '#f2694a' },
+    { id: 'BAMLH0A3HYC', label: 'CCC & Below', color: '#ff4d5e' },
+  ],
+  // Composite reference lines — overall investment-grade and high-yield
+  // market spreads (not a tier, the whole IG/HY market each), verified
+  // live alongside the tiers.
+  YC_CREDIT_IG_ID: 'BAMLC0A0CM',
+  YC_CREDIT_HY_ID: 'BAMLH0A0HYM2',
 
   // Curated FRED series for the Macro tab's dashboard grid — every id/title/
   // units/frequency below was verified live against /api/intel/econ-search
@@ -1788,6 +1817,27 @@ const vtx = {
       ${xLabels}
     </svg>`;
   },
+  // The "ladder" itself — a horizontal bar per rating tier, length =
+  // current OAS spread, ordered best (AAA) to worst (CCC & Below).
+  // Genuinely different shape from every other chart in this view set
+  // (all line-over-time so far), because the headline point here is a
+  // single-moment ranked comparison, not a trend.
+  ycCreditLadderChart(tiers, w) {
+    w = w || 760;
+    const barH = 30, gap = 9, padL = 78, padR = 76, padT = 6;
+    const maxVal = Math.max(...tiers.map(t => t.value)) * 1.08 || 1;
+    const h = padT + tiers.length * (barH + gap) - gap + 4;
+    const scaleX = v => (v / maxVal) * (w - padL - padR);
+    const bars = tiers.map((t, i) => {
+      const yy = padT + i * (barH + gap);
+      const barW = Math.max(3, scaleX(t.value));
+      return `
+        <text x="${padL - 10}" y="${(yy + barH / 2 + 4).toFixed(1)}" text-anchor="end" font-family="var(--mono)" font-size="12" font-weight="700" fill="var(--txt)">${t.label}</text>
+        <rect x="${padL}" y="${yy}" width="${barW.toFixed(1)}" height="${barH}" rx="4" fill="${t.color}" opacity="0.88"/>
+        <text x="${(padL + barW + 8).toFixed(1)}" y="${(yy + barH / 2 + 4).toFixed(1)}" text-anchor="start" font-family="var(--mono)" font-size="11.5" font-weight="700" fill="var(--txt)">${t.value.toFixed(2)}%</text>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${bars}</svg>`;
+  },
   renderYieldCurveView() {
     const el = document.getElementById('yieldCurveView');
     if (!el) return;
@@ -2276,6 +2326,98 @@ const vtx = {
           ${legendHtml ? `<div style="padding:8px 4px 2px;">${legendHtml}</div>` : ''}
         </div>
         ${tableHtml}
+      </div>
+    `;
+  },
+  // The headline visual is a snapshot (the ladder itself, always "as of
+  // now" — a ranked comparison isn't something a date range applies to),
+  // with a historical trend chart underneath for context on how today's
+  // spreads compare to recent history. Real ICE BofA OAS data, not who
+  // rates what — see the note on YC_CREDIT_TIERS for why.
+  renderCreditLadderView() {
+    const el = document.getElementById('creditLadderView');
+    if (!el) return;
+    const loaded = Object.keys(this.YC_CREDIT).length > 0;
+
+    const tierLatest = this.YC_CREDIT_TIERS.map(t => {
+      const s = this.YC_CREDIT[t.id];
+      if (!s || s.failed || !s.points || !s.points.length) return null;
+      return { ...t, value: s.points[s.points.length - 1].value };
+    }).filter(Boolean);
+
+    let ladderHtml;
+    if (!loaded) {
+      ladderHtml = `<div style="padding:40px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (!tierLatest.length) {
+      ladderHtml = `<div style="padding:40px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
+    } else {
+      ladderHtml = this.ycCreditLadderChart(tierLatest, 720);
+    }
+
+    // IG/HY composite summary — real reference lines, not a tier.
+    let summaryHtml = '';
+    const igS = this.YC_CREDIT[this.YC_CREDIT_IG_ID], hyS = this.YC_CREDIT[this.YC_CREDIT_HY_ID];
+    if (igS && !igS.failed && hyS && !hyS.failed && igS.points.length && hyS.points.length) {
+      const igVal = igS.points[igS.points.length - 1].value;
+      const hyVal = hyS.points[hyS.points.length - 1].value;
+      summaryHtml = `
+        <div style="display:flex;gap:24px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--line);">
+          <div><div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">Investment Grade (composite)</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--pos);">${igVal.toFixed(2)}%</div></div>
+          <div><div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">High Yield (composite)</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--neg);">${hyVal.toFixed(2)}%</div></div>
+          <div><div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">IG–HY Gap</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--txt);">${(hyVal - igVal).toFixed(2)}%</div></div>
+        </div>`;
+    }
+
+    // Historical trend — all 7 tiers, real values directly comparable
+    // (all %), so this reuses ycGlobalChart() as-is like the yields/
+    // policy-rate views, not the ladder's normalized/bar treatment.
+    const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
+    const rangeDays = RANGE_DAYS[this.state.creditRange] || RANGE_DAYS['5Y'];
+    const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
+    const trendSeries = this.YC_CREDIT_TIERS.map(t => {
+      const s = this.YC_CREDIT[t.id];
+      if (!s || s.failed || !s.points || !s.points.length) return null;
+      const filtered = s.points.filter(p => Date.parse(p.date) >= cutoffTime);
+      if (!filtered.length) return null;
+      return { id: t.id, label: t.label, color: t.color, points: filtered };
+    }).filter(Boolean);
+    let trendHtml, trendLegendHtml = '';
+    if (!loaded) {
+      trendHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (!trendSeries.length) {
+      trendHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
+    } else {
+      trendHtml = this.ycGlobalChart(trendSeries, 760, 220);
+      trendLegendHtml = trendSeries.map(s => {
+        const last = s.points[s.points.length - 1];
+        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:12px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+          ${s.label} <span style="font-family:var(--mono);color:var(--txt);font-weight:600;">${last.value.toFixed(2)}%</span>
+        </span>`;
+      }).join('');
+    }
+    const rangeBtn = (r, label) => `<button onclick="vtx.creditSetRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.creditRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.creditRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.creditRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Credit Quality Ladder</span>
+        <span style="font-size:9px;color:var(--mut);">ICE BofA OAS · AAA → CCC &amp; Below</span>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="padding:18px 14px 10px;">
+          ${ladderHtml}
+        </div>
+        ${summaryHtml}
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Historical Trend</span>
+          <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
+        </div>
+        <div style="padding:16px 12px 10px;">
+          ${trendHtml}
+          ${trendLegendHtml ? `<div style="padding:8px 4px 2px;">${trendLegendHtml}</div>` : ''}
+        </div>
       </div>
     `;
   },
@@ -2909,6 +3051,7 @@ const vtx = {
     else if (entry.type === 'policyRates') this.selectPolicyRates();
     else if (entry.type === 'worldInflation') this.selectWorldInflation();
     else if (entry.type === 'worldEquity') this.selectWorldEquity();
+    else if (entry.type === 'creditLadder') this.selectCreditLadder();
     else this.viewTicker(entry.key, entry.label);
   },
   // "YC" as a search shortcut into the full Yield Curve view — matches the
@@ -2943,6 +3086,12 @@ const vtx = {
     const q = v.trim().toLowerCase();
     if (!q) return false;
     return q === 'wei' || 'world equity'.includes(q) || 'world indices'.includes(q) || 'global indices'.includes(q);
+  },
+  // "CQL" into the standalone Credit Quality Ladder view.
+  matchCreditLadderShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'cql' || 'credit ladder'.includes(q) || 'credit quality'.includes(q) || 'credit spreads'.includes(q);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
@@ -3069,7 +3218,7 @@ const vtx = {
       // Each row's own × removes just that entry (stopPropagation so it
       // doesn't also re-open the search); "Clear all" wipes the list.
       const recentRowHtml = e => {
-        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation'||e.type==='worldEquity') ? '▤' : '';
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation'||e.type==='worldEquity'||e.type==='creditLadder') ? '▤' : '';
         return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
@@ -3113,6 +3262,10 @@ const vtx = {
     if (this.matchWorldEquityShortcut(this.state.query)) {
       toolRows += toolRow('WEI', 'World Equity Indices', '20 indices worldwide',
         "vtx.recordRecentSearch({type:'worldEquity',key:'WEI',label:'WEI',sub:'World Equity Indices'});vtx.selectWorldEquity()");
+    }
+    if (this.matchCreditLadderShortcut(this.state.query)) {
+      toolRows += toolRow('CQL', 'Credit Quality Ladder', 'AAA → CCC spreads',
+        "vtx.recordRecentSearch({type:'creditLadder',key:'CQL',label:'CQL',sub:'Credit Quality Ladder'});vtx.selectCreditLadder()");
     }
     const ycHtml = toolRows ? `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>${toolRows}` : '';
     let html = searchFailedHtml + ycHtml + r.map(t => `
@@ -3681,6 +3834,33 @@ const vtx = {
     this.render();
     if (!this.YC_EQUITY_QUOTES) this.loadYcEquityQuotes();
     if (!Object.keys(this.YC_EQUITY_CANDLES).length) this.loadYcEquityCandles();
+  },
+  // 7 tiers + 2 composites — well under any rate limit in one batch.
+  async loadYcCredit() {
+    const ids = [...this.YC_CREDIT_TIERS.map(t => t.id), this.YC_CREDIT_IG_ID, this.YC_CREDIT_HY_ID];
+    await Promise.all(ids.map(async id => {
+      try {
+        const res = await fetch(`/api/intel/econ-series?id=${id}`);
+        if (!res.ok) { this.YC_CREDIT[id] = { failed: true }; return; }
+        const data = await res.json();
+        if (!data.points || !data.points.length) { this.YC_CREDIT[id] = { failed: true }; return; }
+        this.YC_CREDIT[id] = { points: data.points };
+      } catch (e) { this.YC_CREDIT[id] = { failed: true }; }
+    }));
+    if (this.state.view === 'creditLadder') this.renderCreditLadderView();
+  },
+  creditSetRange(range) {
+    this.state.creditRange = range;
+    this.renderCreditLadderView();
+  },
+  selectCreditLadder() {
+    this.state.view = 'creditLadder';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+    if (!Object.keys(this.YC_CREDIT).length) this.loadYcCredit();
   },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
@@ -5074,6 +5254,7 @@ const vtx = {
     document.getElementById('policyRatesView').style.display = s.view === 'policyRates' ? 'flex' : 'none';
     document.getElementById('worldInflationView').style.display = s.view === 'worldInflation' ? 'flex' : 'none';
     document.getElementById('worldEquityView').style.display = s.view === 'worldEquity' ? 'flex' : 'none';
+    document.getElementById('creditLadderView').style.display = s.view === 'creditLadder' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
@@ -5092,6 +5273,8 @@ const vtx = {
       this.renderWorldInflationView();
     } else if (s.view === 'worldEquity') {
       this.renderWorldEquityView();
+    } else if (s.view === 'creditLadder') {
+      this.renderCreditLadderView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
