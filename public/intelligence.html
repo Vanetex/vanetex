@@ -611,37 +611,50 @@ const vtx = {
   // id verified live before being hardcoded. Australia/New Zealand use
   // the "Q659N" quarterly variant — their CPI is genuinely released
   // quarterly, not a data gap.
+  //
+  // IMPORTANT, found during a later verification pass: this OECD-sourced
+  // FRED family stopped updating for nearly every country around
+  // March-April 2025 (some much earlier — Russia 2022, Japan mid-2021) —
+  // real data, but silently ~16+ months stale by the time this was
+  // caught. Still used for the historical monthly trend chart (real
+  // monthly granularity is worth keeping even where the last stretch is
+  // missing) and for CPI m/m (no fresher monthly alternative exists
+  // anywhere, verified). The table's headline "CPI y/y" column instead
+  // uses the World Bank's FP.CPI.TOTL.ZG (see loadYcInflationWB) — a real
+  // annual figure, genuinely current for every one of these 30 countries,
+  // confirmed live the same day this was fixed. `wb` is that lookup's ISO
+  // alpha-2 code.
   YC_INFLATION_COUNTRIES: [
-    { id: 'CPALTT01USM659N', label: 'United States', region: 'Americas' },
-    { id: 'CPALTT01CAM659N', label: 'Canada', region: 'Americas' },
-    { id: 'CPALTT01MXM659N', label: 'Mexico', region: 'Americas' },
-    { id: 'CPALTT01CLM659N', label: 'Chile', region: 'Americas' },
-    { id: 'CPALTT01DEM659N', label: 'Germany', region: 'Europe' },
-    { id: 'CPALTT01GBM659N', label: 'United Kingdom', region: 'Europe' },
-    { id: 'CPALTT01FRM659N', label: 'France', region: 'Europe' },
-    { id: 'CPALTT01ITM659N', label: 'Italy', region: 'Europe' },
-    { id: 'CPALTT01ESM659N', label: 'Spain', region: 'Europe' },
-    { id: 'CPALTT01PTM659N', label: 'Portugal', region: 'Europe' },
-    { id: 'CPALTT01GRM659N', label: 'Greece', region: 'Europe' },
-    { id: 'CPALTT01NLM659N', label: 'Netherlands', region: 'Europe' },
-    { id: 'CPALTT01BEM659N', label: 'Belgium', region: 'Europe' },
-    { id: 'CPALTT01CHM659N', label: 'Switzerland', region: 'Europe' },
-    { id: 'CPALTT01SEM659N', label: 'Sweden', region: 'Europe' },
-    { id: 'CPALTT01NOM659N', label: 'Norway', region: 'Europe' },
-    { id: 'CPALTT01DKM659N', label: 'Denmark', region: 'Europe' },
-    { id: 'CPALTT01IEM659N', label: 'Ireland', region: 'Europe' },
-    { id: 'CPALTT01ATM659N', label: 'Austria', region: 'Europe' },
-    { id: 'CPALTT01HUM659N', label: 'Hungary', region: 'Europe' },
-    { id: 'CPALTT01FIM659N', label: 'Finland', region: 'Europe' },
-    { id: 'CPALTT01PLM659N', label: 'Poland', region: 'Europe' },
-    { id: 'CPALTT01RUM659N', label: 'Russia', region: 'Europe' },
-    { id: 'CPALTT01JPM659N', label: 'Japan', region: 'Asia-Pacific' },
-    { id: 'CPALTT01AUQ659N', label: 'Australia', region: 'Asia-Pacific' },
-    { id: 'CPALTT01NZQ659N', label: 'New Zealand', region: 'Asia-Pacific' },
-    { id: 'CPALTT01KRM659N', label: 'South Korea', region: 'Asia-Pacific' },
-    { id: 'CPALTT01INM659N', label: 'India', region: 'Asia-Pacific' },
-    { id: 'CPALTT01ILM659N', label: 'Israel', region: 'Middle East' },
-    { id: 'CPALTT01ZAM659N', label: 'South Africa', region: 'Africa' },
+    { id: 'CPALTT01USM659N', wb: 'US', label: 'United States', region: 'Americas' },
+    { id: 'CPALTT01CAM659N', wb: 'CA', label: 'Canada', region: 'Americas' },
+    { id: 'CPALTT01MXM659N', wb: 'MX', label: 'Mexico', region: 'Americas' },
+    { id: 'CPALTT01CLM659N', wb: 'CL', label: 'Chile', region: 'Americas' },
+    { id: 'CPALTT01DEM659N', wb: 'DE', label: 'Germany', region: 'Europe' },
+    { id: 'CPALTT01GBM659N', wb: 'GB', label: 'United Kingdom', region: 'Europe' },
+    { id: 'CPALTT01FRM659N', wb: 'FR', label: 'France', region: 'Europe' },
+    { id: 'CPALTT01ITM659N', wb: 'IT', label: 'Italy', region: 'Europe' },
+    { id: 'CPALTT01ESM659N', wb: 'ES', label: 'Spain', region: 'Europe' },
+    { id: 'CPALTT01PTM659N', wb: 'PT', label: 'Portugal', region: 'Europe' },
+    { id: 'CPALTT01GRM659N', wb: 'GR', label: 'Greece', region: 'Europe' },
+    { id: 'CPALTT01NLM659N', wb: 'NL', label: 'Netherlands', region: 'Europe' },
+    { id: 'CPALTT01BEM659N', wb: 'BE', label: 'Belgium', region: 'Europe' },
+    { id: 'CPALTT01CHM659N', wb: 'CH', label: 'Switzerland', region: 'Europe' },
+    { id: 'CPALTT01SEM659N', wb: 'SE', label: 'Sweden', region: 'Europe' },
+    { id: 'CPALTT01NOM659N', wb: 'NO', label: 'Norway', region: 'Europe' },
+    { id: 'CPALTT01DKM659N', wb: 'DK', label: 'Denmark', region: 'Europe' },
+    { id: 'CPALTT01IEM659N', wb: 'IE', label: 'Ireland', region: 'Europe' },
+    { id: 'CPALTT01ATM659N', wb: 'AT', label: 'Austria', region: 'Europe' },
+    { id: 'CPALTT01HUM659N', wb: 'HU', label: 'Hungary', region: 'Europe' },
+    { id: 'CPALTT01FIM659N', wb: 'FI', label: 'Finland', region: 'Europe' },
+    { id: 'CPALTT01PLM659N', wb: 'PL', label: 'Poland', region: 'Europe' },
+    { id: 'CPALTT01RUM659N', wb: 'RU', label: 'Russia', region: 'Europe' },
+    { id: 'CPALTT01JPM659N', wb: 'JP', label: 'Japan', region: 'Asia-Pacific' },
+    { id: 'CPALTT01AUQ659N', wb: 'AU', label: 'Australia', region: 'Asia-Pacific' },
+    { id: 'CPALTT01NZQ659N', wb: 'NZ', label: 'New Zealand', region: 'Asia-Pacific' },
+    { id: 'CPALTT01KRM659N', wb: 'KR', label: 'South Korea', region: 'Asia-Pacific' },
+    { id: 'CPALTT01INM659N', wb: 'IN', label: 'India', region: 'Asia-Pacific' },
+    { id: 'CPALTT01ILM659N', wb: 'IL', label: 'Israel', region: 'Middle East' },
+    { id: 'CPALTT01ZAM659N', wb: 'ZA', label: 'South Africa', region: 'Africa' },
   ],
   YC_INFLATION_MAJORS: ['CPALTT01USM659N', 'CPALTT01DEM659N', 'CPALTT01GBM659N', 'CPALTT01JPM659N', 'CPALTT01FRM659N', 'CPALTT01CAM659N'],
   // 12-color cycle, assigned by each country's fixed position in
@@ -659,6 +672,12 @@ const vtx = {
   // quarterly, so they're excluded here rather than mislabeling a QoQ
   // figure as "MoM."
   YC_INFLATION_MOM: {},
+  // populated by loadYcInflationWB() — real World Bank FP.CPI.TOTL.ZG
+  // (annual inflation), keyed by the wb ISO alpha-2 code. This is what
+  // the table's headline "CPI y/y" column actually reads from — see the
+  // note on YC_INFLATION_COUNTRIES for why the OECD monthly series isn't
+  // used for this specific figure.
+  YC_INFLATION_WB: {},
 
   YC_EQUITY_QUOTES: null, // populated by loadYcEquityQuotes() — real Yahoo Finance quotes (price + day change), one batched fetch
   YC_EQUITY_CANDLES: {}, // populated by loadYcEquityCandles() — real MAX-range price history per index code, keyed by code
@@ -2195,23 +2214,26 @@ const vtx = {
     }
     const rangeBtn = (r, label) => `<button onclick="vtx.inflSetRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.inflRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.inflRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.inflRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
 
-    const usSeries = this.YC_INFLATION['CPALTT01USM659N'];
-    const usLatest = (usSeries && !usSeries.failed && usSeries.points && usSeries.points.length) ? usSeries.points[usSeries.points.length - 1].value : null;
+    // Headline "CPI y/y" figure now reads from World Bank annual data
+    // (YC_INFLATION_WB), not the OECD monthly series above — see the note
+    // on YC_INFLATION_COUNTRIES for why (the OECD series is frozen at
+    // 2025 or earlier for most countries). CPI m/m still reads OECD; it
+    // has no fresher alternative and the chart above is unaffected.
+    const usWB = this.YC_INFLATION_WB['US'];
+    const usLatestWB = (usWB && usWB.latest) ? usWB.latest.value : null;
     let tableRows = this.YC_INFLATION_COUNTRIES.map((c, idx) => {
-      const s = this.YC_INFLATION[c.id];
+      const wb = this.YC_INFLATION_WB[c.wb];
       const momId = c.id.replace('659N', '657N');
       const isQuarterly = c.id.includes('Q659N');
       const momS = isQuarterly ? null : this.YC_INFLATION_MOM[momId];
       const mom = (momS && !momS.failed && momS.points && momS.points.length) ? momS.points[momS.points.length - 1].value : null;
-      if (!s || s.failed || !s.points || !s.points.length) return { id: c.id, label: c.label, region: c.region, color: this.YC_INFLATION_PALETTE[idx % this.YC_INFLATION_PALETTE.length], cpi: null, mom, isQuarterly, priorChg: null, spread: null };
-      const pts = s.points;
-      const last = pts[pts.length - 1];
-      const prior = pts.length > 1 ? pts[pts.length - 2] : null;
+      const cpi = (wb && wb.latest) ? wb.latest.value : null;
+      const cpiYear = (wb && wb.latest) ? wb.latest.year : null;
+      const priorChg = (wb && wb.latest && wb.prior) ? wb.latest.value - wb.prior.value : null;
       return {
         id: c.id, label: c.label, region: c.region, color: this.YC_INFLATION_PALETTE[idx % this.YC_INFLATION_PALETTE.length],
-        cpi: last.value, mom, isQuarterly,
-        priorChg: prior ? last.value - prior.value : null,
-        spread: usLatest != null ? last.value - usLatest : null,
+        cpi, cpiYear, mom, isQuarterly, priorChg,
+        spread: (cpi != null && usLatestWB != null) ? cpi - usLatestWB : null,
       };
     });
     const sortKey = this.state.inflSort.key, sortDir = this.state.inflSort.dir;
@@ -2222,14 +2244,14 @@ const vtx = {
       if (av == null) return 1; if (bv == null) return -1;
       return typeof av === 'string' ? av.localeCompare(bv) * sortDir : (av - bv) * sortDir;
     });
-    const loaded = Object.keys(this.YC_INFLATION).length > 0;
+    const loaded = Object.keys(this.YC_INFLATION_WB).length > 0 || Object.keys(this.YC_INFLATION).length > 0;
     const sortArrow = key => this.state.inflSort.key === key ? (this.state.inflSort.dir === 1 ? ' ▲' : ' ▼') : '';
     const th = (key, label, align) => `<th onclick="vtx.inflSort('${key}')" style="cursor:pointer;text-align:${align || 'right'};padding:8px 10px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--line);white-space:nowrap;user-select:none;">${label}${sortArrow(key)}</th>`;
     const tableHtml = !loaded
       ? `<div style="padding:24px;text-align:center;color:var(--mut);font-size:11px;">Loading ${this.YC_INFLATION_COUNTRIES.length} countries…</div>`
       : `<div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;">
-          <thead><tr><th style="width:26px;border-bottom:1px solid var(--line);"></th>${th('country', 'Country', 'left')}${th('region', 'Region', 'left')}${th('cpi', 'CPI y/y')}${th('mom', 'CPI m/m')}${th('priorChg', 'Prior Chg')}${th('spread', 'vs US')}</tr></thead>
+          <thead><tr><th style="width:26px;border-bottom:1px solid var(--line);"></th>${th('country', 'Country', 'left')}${th('region', 'Region', 'left')}${th('cpi', 'CPI y/y')}${th('mom', 'CPI m/m')}${th('priorChg', 'vs Prior Yr')}${th('spread', 'vs US')}</tr></thead>
           <tbody>
             ${tableRows.map(r => {
               const inChart = chartIds.includes(r.id);
@@ -2238,7 +2260,7 @@ const vtx = {
                 <td style="padding:7px 4px 7px 10px;text-align:center;">${inChart ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};"></span>` : `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1px solid var(--line);"></span>`}</td>
                 <td style="padding:7px 10px;text-align:left;font-size:11.5px;color:var(--txt);">${r.label}</td>
                 <td style="padding:7px 10px;text-align:left;font-size:10px;color:var(--mut);">${r.region}</td>
-                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:700;color:${r.cpi == null ? 'var(--mut)' : 'var(--txt)'};">${r.cpi != null ? r.cpi.toFixed(1) + '%' : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:700;color:${r.cpi == null ? 'var(--mut)' : 'var(--txt)'};" title="${r.cpiYear ? 'World Bank actual, ' + r.cpiYear : ''}">${r.cpi != null ? r.cpi.toFixed(1) + '%' : '—'}${r.cpiYear ? ` <span style="font-size:8.5px;color:var(--mut);font-weight:400;">'${r.cpiYear.slice(2)}</span>` : ''}</td>
                 <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.mom == null ? 'var(--mut)' : r.mom >= 0 ? 'var(--neg)' : 'var(--pos)'};" title="${r.isQuarterly ? 'Quarterly CPI only — no monthly reading exists' : ''}">${r.isQuarterly ? 'n/a' : r.mom != null ? (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%' : '—'}</td>
                 <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.priorChg == null ? 'var(--mut)' : r.priorChg >= 0 ? 'var(--neg)' : 'var(--pos)'};">${r.priorChg != null ? (r.priorChg >= 0 ? '+' : '') + r.priorChg.toFixed(1) : '—'}</td>
                 <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.spread == null ? 'var(--mut)' : r.spread >= 0 ? 'var(--neg)' : 'var(--pos)'};">${r.spread != null ? (r.spread >= 0 ? '+' : '') + r.spread.toFixed(1) : '—'}</td>
@@ -2251,7 +2273,7 @@ const vtx = {
     el.innerHTML = `
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
         <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">World Inflation Comparison</span>
-        <span style="font-size:9px;color:var(--mut);">${this.YC_INFLATION_COUNTRIES.length} countries worldwide · CPI y/y</span>
+        <span style="font-size:9px;color:var(--mut);">${this.YC_INFLATION_COUNTRIES.length} countries worldwide · CPI y/y (World Bank annual)</span>
         <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
       </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
@@ -2261,7 +2283,7 @@ const vtx = {
         </div>
         <div style="padding:0 14px 8px;font-size:9px;color:var(--mut);">Click any row to add or remove it from the chart above.</div>
         ${tableHtml}
-        <div style="padding:10px 14px;border-top:1px solid var(--line);font-size:8.5px;color:var(--mut);">CPI m/m reflects each country's most recently published monthly reading — several OECD sources stopped updating this specific series starting 2024 (Japan since mid-2021), so it may lag the y/y figure by months to years. Real data, shown as available, not backfilled. Australia and New Zealand publish CPI quarterly only, so no monthly figure exists for them.</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--line);font-size:8.5px;color:var(--mut);">CPI y/y is each country's most recent annual actual from the World Bank (year shown per row — not every country reports the same year yet). CPI m/m and the trend chart above still use OECD monthly data via FRED; several of those sources stopped updating starting 2024 (Japan since mid-2021), so m/m may lag the y/y figure. Real data, shown as available, not backfilled or forecast. Australia and New Zealand publish CPI quarterly only, so no monthly figure exists for them.</div>
       </div>
     `;
   },
@@ -3822,6 +3844,21 @@ const vtx = {
       if (i + CHUNK < ids.length) await new Promise(r => setTimeout(r, 400));
     }
   },
+  // Powers the table's headline "CPI y/y" column. One batched server-side
+  // proxy call covers all 30 countries (World Bank has no CORS headers for
+  // browser fetches — confirmed live). See the note on YC_INFLATION_COUNTRIES
+  // for why this exists: the OECD monthly series below is frozen at 2025
+  // (or earlier) for most countries, while World Bank's annual actuals are
+  // genuinely current.
+  async loadYcInflationWB() {
+    try {
+      const res = await fetch('/api/intel/world-bank-cpi');
+      if (!res.ok) return;
+      const data = await res.json();
+      this.YC_INFLATION_WB = data.countries || {};
+    } catch (e) { /* table falls back to n/a per-row; chart/MoM unaffected */ }
+    if (this.state.view === 'worldInflation') this.renderWorldInflationView();
+  },
   inflSetRange(range) {
     this.state.inflRange = range;
     this.renderWorldInflationView();
@@ -3850,6 +3887,7 @@ const vtx = {
     this.render();
     if (!Object.keys(this.YC_INFLATION).length) this.loadYcInflation();
     if (!Object.keys(this.YC_INFLATION_MOM).length) this.loadYcInflationMoM();
+    if (!Object.keys(this.YC_INFLATION_WB).length) this.loadYcInflationWB();
   },
   // One batched request handles all 20 — /api/market/index-quote's own
   // batch path already chunks internally (5 at a time) with its own
