@@ -357,16 +357,16 @@ input{font-family:var(--ui)}
         </div>
 
         <!-- Market overview (shown when no ticker is drilled into) -->
-        <div id="overviewView" style="display:none;flex-direction:column;gap:8px;min-height:0;"></div>
+        <div id="overviewView" style="display:none;flex-direction:column;gap:8px;min-height:0;overflow-y:auto;"></div>
 
         <!-- Instrument view (index/futures/commodity — real price + chart, no equity-only fields) -->
-        <div id="instrumentView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
+        <div id="instrumentView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
 
         <!-- Indicator view (real FRED economic series — history chart, no price/equity fields) -->
-        <div id="indicatorView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
+        <div id="indicatorView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
 
         <!-- Private company view (no ticker — SEC Form D + federal contracts + news) -->
-        <div id="privateCompanyView" style="display:none;flex-direction:column;gap:10px;min-height:0;"></div>
+        <div id="privateCompanyView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
 
         <!-- Yield Curve view (search "YC") — real FRED Treasury curve with
              historical date navigation, Fed Funds/CPI overlays, upcoming
@@ -4987,7 +4987,7 @@ const vtx = {
         ...(isTreasury ? [] : [{ label: 'Volume', value: chart.volume != null ? (chart.volume/1e6).toFixed(1)+'M' : '—' }]),
       ];
       statsHtml = `
-        <div style="display:grid;grid-template-columns:repeat(${stats.length},1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:16px;">
+        <div style="flex-shrink:0;display:grid;grid-template-columns:repeat(${stats.length},1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:16px;">
           ${stats.map(st => `
             <div style="background:rgba(10,13,22,.6);padding:9px 11px;">
               <div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:3px;">${st.label}</div>
@@ -5278,7 +5278,7 @@ const vtx = {
           <div style="text-align:right;">${priceHtml}${watchlistBtnHtml}</div>
         </div>
       </div>
-      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
+      <div style="flex-shrink:0;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
         <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
           <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Charting</span>
           <span style="font-family:var(--mono);font-size:10px;color:var(--acc2);">${code} · ${s.tf}</span>
@@ -5288,27 +5288,27 @@ const vtx = {
         <div style="padding:8px 6px 4px;position:relative;">${chartHtml}</div>
       </div>
       ${statsHtml}
-      ${cryptoDetailHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+      ${cryptoDetailHtml ? `<div style="flex-shrink:0;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Market Data &amp; Sentiment</div>
         ${cryptoDetailHtml}
       </div>` : ''}
-      ${cftcCotHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+      ${cftcCotHtml ? `<div style="flex-shrink:0;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Futures Positioning (CFTC)</div>
         ${cftcCotHtml}
       </div>` : ''}
-      ${seasonalityHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+      ${seasonalityHtml ? `<div style="flex-shrink:0;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Seasonality</div>
         ${seasonalityHtml}
       </div>` : ''}
-      ${futuresCurveHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+      ${futuresCurveHtml ? `<div style="flex-shrink:0;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Forward Curve</div>
         ${futuresCurveHtml}
       </div>` : ''}
-      ${marketDynamicsHtml ? `<div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+      ${marketDynamicsHtml ? `<div style="flex-shrink:0;background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
         <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Market Dynamics</div>
         ${marketDynamicsHtml}
       </div>` : ''}
-      <div style="font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
+      <div style="flex-shrink:0;font-size:9px;color:var(--mut);padding:2px 2px 0;opacity:.75;">${inst.category === 'Crypto' ? 'Real-time quote: CoinGecko · Historical chart: Yahoo Finance.' : isTreasury ? 'Current yield: FRED (Treasury Constant Maturity Rate) · Historical chart: Yahoo’s real-time yield index — the two may differ very slightly since they’re computed by different conventions.' : 'Real-time quote &amp; historical chart: Yahoo Finance.'} ${inst.category === 'Futures' ? 'Futures prices reflect the front-month contract and may differ from the underlying index by a real, small basis.' : ''}</div>
     `;
     // The chart SVG above was just rebuilt via innerHTML, so its hover
     // catcher is a fresh element each time — re-wire it (harmless/no-op
