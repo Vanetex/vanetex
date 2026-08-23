@@ -386,6 +386,11 @@ input{font-family:var(--ui)}
         <!-- World Inflation Comparison view (search "CPI" / "world inflation")
              — real CPI y/y for 30 countries worldwide. -->
         <div id="worldInflationView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- World Equity Indices view (search "WEI" / "world equity") —
+             real Yahoo Finance quotes + price history for 20 major stock
+             indices worldwide. -->
+        <div id="worldEquityView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -490,7 +495,9 @@ const vtx = {
     ycGlobalSort: { key: 'yield', dir: -1 },
     ycPolicyRange: '5Y',
     inflRange: '5Y',
-    inflSort: { key: 'cpi', dir: -1 }
+    inflSort: { key: 'cpi', dir: -1 },
+    equityRange: '1Y',
+    equitySort: { key: 'chg1y', dir: -1 }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -626,6 +633,37 @@ const vtx = {
   ],
   YC_INFLATION_MAJORS: ['CPALTT01USM659N', 'CPALTT01DEM659N', 'CPALTT01GBM659N', 'CPALTT01JPM659N', 'CPALTT01FRM659N', 'CPALTT01CAM659N'],
   YC_INFLATION_COLORS: { CPALTT01USM659N: '#3fc7e0', CPALTT01DEM659N: '#e8a33d', CPALTT01GBM659N: '#33d38f', CPALTT01JPM659N: '#ef5468', CPALTT01FRM659N: '#a78bfa', CPALTT01CAM659N: '#f472b6' },
+
+  YC_EQUITY_QUOTES: null, // populated by loadYcEquityQuotes() — real Yahoo Finance quotes (price + day change), one batched fetch
+  YC_EQUITY_CANDLES: {}, // populated by loadYcEquityCandles() — real MAX-range price history per index code, keyed by code
+  // 20 world equity indices — the 7 already used elsewhere in the app
+  // (SPX/NDX/DOW/RUSSELL2000/FTSE/NIKKEI/HSI) plus 13 new ones, every
+  // Yahoo symbol verified live before being added to SYMBOL_MAP in
+  // app/api/market/index-quote/route.ts (not guessed).
+  YC_EQUITY_INDICES: [
+    { code: 'SPX', yahoo: '^GSPC', label: 'S&P 500', region: 'Americas' },
+    { code: 'NDX', yahoo: '^IXIC', label: 'Nasdaq Composite', region: 'Americas' },
+    { code: 'DOW', yahoo: '^DJI', label: 'Dow Jones', region: 'Americas' },
+    { code: 'RUSSELL2000', yahoo: '^RUT', label: 'Russell 2000', region: 'Americas' },
+    { code: 'TSX', yahoo: '^GSPTSE', label: 'S&P/TSX (Canada)', region: 'Americas' },
+    { code: 'BOVESPA', yahoo: '^BVSP', label: 'Bovespa (Brazil)', region: 'Americas' },
+    { code: 'FTSE', yahoo: '^FTSE', label: 'FTSE 100 (UK)', region: 'Europe' },
+    { code: 'DAX', yahoo: '^GDAXI', label: 'DAX (Germany)', region: 'Europe' },
+    { code: 'CAC40', yahoo: '^FCHI', label: 'CAC 40 (France)', region: 'Europe' },
+    { code: 'IBEX35', yahoo: '^IBEX', label: 'IBEX 35 (Spain)', region: 'Europe' },
+    { code: 'SMI', yahoo: '^SSMI', label: 'SMI (Switzerland)', region: 'Europe' },
+    { code: 'AEX', yahoo: '^AEX', label: 'AEX (Netherlands)', region: 'Europe' },
+    { code: 'OMXS30', yahoo: '^OMX', label: 'OMX Stockholm 30 (Sweden)', region: 'Europe' },
+    { code: 'NIKKEI', yahoo: '^N225', label: 'Nikkei 225 (Japan)', region: 'Asia-Pacific' },
+    { code: 'HSI', yahoo: '^HSI', label: 'Hang Seng (Hong Kong)', region: 'Asia-Pacific' },
+    { code: 'ASX200', yahoo: '^AXJO', label: 'ASX 200 (Australia)', region: 'Asia-Pacific' },
+    { code: 'NIFTY50', yahoo: '^NSEI', label: 'Nifty 50 (India)', region: 'Asia-Pacific' },
+    { code: 'KOSPI', yahoo: '^KS11', label: 'KOSPI (South Korea)', region: 'Asia-Pacific' },
+    { code: 'SSE', yahoo: '000001.SS', label: 'Shanghai Composite (China)', region: 'Asia-Pacific' },
+    { code: 'TAIEX', yahoo: '^TWII', label: 'TAIEX (Taiwan)', region: 'Asia-Pacific' },
+  ],
+  YC_EQUITY_MAJORS: ['SPX', 'DAX', 'NIKKEI', 'FTSE', 'HSI', 'ASX200'],
+  YC_EQUITY_COLORS: { SPX: '#3fc7e0', DAX: '#e8a33d', NIKKEI: '#33d38f', FTSE: '#ef5468', HSI: '#a78bfa', ASX200: '#f472b6' },
 
   // Curated FRED series for the Macro tab's dashboard grid — every id/title/
   // units/frequency below was verified live against /api/intel/econ-search
@@ -1696,6 +1734,60 @@ const vtx = {
       ${xLabels}
     </svg>`;
   },
+  // Equity indices span wildly different price scales (Nikkei ~40,000 vs
+  // S&P 500 ~6,700), so plotting raw levels on one shared axis like
+  // ycGlobalChart does would be meaningless — this normalizes every
+  // series to % change from its own first point in range before drawing,
+  // with an emphasized zero line as the shared baseline.
+  ycEquityChart(rawSeries, w, h) {
+    w = w || 760; h = h || 260;
+    const padL = 42, padB = 22, padT = 12, padR = 12;
+    const cw = w - padL - padR, ch = h - padT - padB;
+    const series = rawSeries.map(s => {
+      const base = s.points[0].value;
+      return { ...s, points: s.points.map(p => ({ date: p.date, value: base ? ((p.value / base) - 1) * 100 : 0 })) };
+    });
+    const allPts = series.flatMap(s => s.points);
+    if (!allPts.length) return '';
+    const times = allPts.map(p => Date.parse(p.date));
+    const values = allPts.map(p => p.value);
+    const tMin = Math.min(...times), tMax = Math.max(...times);
+    let vMin = Math.min(...values, 0), vMax = Math.max(...values, 0);
+    const vPad = (vMax - vMin) * 0.12 || 5;
+    vMin -= vPad; vMax += vPad;
+    const tSpan = (tMax - tMin) || 1, vSpan = (vMax - vMin) || 1;
+    const x = t => padL + ((t - tMin) / tSpan) * cw;
+    const y = v => padT + ch - ((v - vMin) / vSpan) * ch;
+
+    const GRID_N = 4;
+    const gridLines = Array.from({ length: GRID_N + 1 }, (_, i) => {
+      const v = vMin + (vSpan * i / GRID_N);
+      const yy = y(v);
+      const isZero = Math.abs(v) < (vSpan / GRID_N / 2);
+      return `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${w - padR}" y2="${yy.toFixed(1)}" stroke="${isZero ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.05)'}" stroke-width="1"/>
+        <text x="${(padL - 6).toFixed(1)}" y="${(yy + 3).toFixed(1)}" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--mut)">${v >= 0 ? '+' : ''}${v.toFixed(0)}%</text>`;
+    }).join('');
+    const TICK_N = 5;
+    const xLabels = Array.from({ length: TICK_N + 1 }, (_, i) => {
+      const t = tMin + (tSpan * i / TICK_N);
+      const d = new Date(t);
+      return `<text x="${x(t).toFixed(1)}" y="${h - 4}" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--mut)">${d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</text>`;
+    }).join('');
+
+    const lines = series.map(s => {
+      const path = s.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(Date.parse(p.date)).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+      const last = s.points[s.points.length - 1];
+      const lastX = x(Date.parse(last.date)).toFixed(1), lastY = y(last.value).toFixed(1);
+      return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${lastX}" cy="${lastY}" r="2.6" fill="${s.color}"/>`;
+    }).join('');
+
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">
+      ${gridLines}
+      ${lines}
+      ${xLabels}
+    </svg>`;
+  },
   renderYieldCurveView() {
     const el = document.getElementById('yieldCurveView');
     if (!el) return;
@@ -2072,6 +2164,110 @@ const vtx = {
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
         <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">World Inflation Comparison</span>
         <span style="font-size:9px;color:var(--mut);">${this.YC_INFLATION_COUNTRIES.length} countries worldwide · CPI y/y</span>
+        <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="padding:16px 12px 4px;">
+          ${chartHtml}
+          ${legendHtml ? `<div style="padding:8px 4px 2px;">${legendHtml}</div>` : ''}
+        </div>
+        ${tableHtml}
+      </div>
+    `;
+  },
+  // 20 world equity indices. Unlike the other three "world" views, price
+  // levels aren't directly comparable across indices (Nikkei ~40,000 vs
+  // S&P 500 ~6,700), so the chart uses ycEquityChart()'s normalized %
+  // return instead of raw values, and the table's performance column is a
+  // real 1Y return computed from the same MAX-range candles, not a raw
+  // price comparison.
+  renderWorldEquityView() {
+    const el = document.getElementById('worldEquityView');
+    if (!el) return;
+    const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
+    const rangeDays = RANGE_DAYS[this.state.equityRange] || RANGE_DAYS['1Y'];
+    const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
+    const majorsSeries = this.YC_EQUITY_MAJORS.map(code => {
+      const s = this.YC_EQUITY_CANDLES[code];
+      const idx = this.YC_EQUITY_INDICES.find(i => i.code === code);
+      if (!s || s.failed || !s.points || !s.points.length) return null;
+      const filtered = s.points.filter(p => Date.parse(p.date) >= cutoffTime);
+      if (filtered.length < 2) return null;
+      return { code, label: idx.label, color: this.YC_EQUITY_COLORS[code], points: filtered };
+    }).filter(Boolean);
+
+    let chartHtml, legendHtml = '';
+    if (!Object.keys(this.YC_EQUITY_CANDLES).length) {
+      chartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (!majorsSeries.length) {
+      chartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
+    } else {
+      chartHtml = this.ycEquityChart(majorsSeries, 760, 240);
+      legendHtml = majorsSeries.map(s => {
+        const base = s.points[0].value, last = s.points[s.points.length - 1].value;
+        const ret = base ? ((last / base) - 1) * 100 : 0;
+        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:14px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+          ${s.label} <span style="font-family:var(--mono);color:${ret >= 0 ? 'var(--pos)' : 'var(--neg)'};font-weight:600;">${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%</span>
+        </span>`;
+      }).join('');
+    }
+    const rangeBtn = (r, label) => `<button onclick="vtx.equitySetRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.equityRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.equityRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.equityRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+
+    // Table: live price + day change from the batched quote fetch; 1Y
+    // Return computed from the MAX-range candles (12 monthly bars back)
+    // — a fixed lookback independent of whatever range the chart above
+    // is showing, same convention as every other table in this view set.
+    const quotesFailed = !this.YC_EQUITY_QUOTES || this.YC_EQUITY_QUOTES.failed;
+    let tableRows = this.YC_EQUITY_INDICES.map(idx => {
+      const q = quotesFailed ? null : this.YC_EQUITY_QUOTES.quotes[idx.code];
+      const c = this.YC_EQUITY_CANDLES[idx.code];
+      let ret1y = null;
+      if (c && !c.failed && c.points && c.points.length > 12) {
+        const pts = c.points;
+        const last = pts[pts.length - 1].value, prior = pts[pts.length - 13].value;
+        if (prior) ret1y = ((last / prior) - 1) * 100;
+      }
+      return {
+        code: idx.code, label: idx.label, region: idx.region,
+        price: q ? q.price : null,
+        chg1d: q ? q.changePct : null,
+        ret1y,
+      };
+    });
+    const sortKey = this.state.equitySort.key, sortDir = this.state.equitySort.dir;
+    tableRows.sort((a, b) => {
+      const av = sortKey === 'country' ? a.label : sortKey === 'region' ? a.region : a[sortKey];
+      const bv = sortKey === 'country' ? b.label : sortKey === 'region' ? b.region : b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; if (bv == null) return -1;
+      return typeof av === 'string' ? av.localeCompare(bv) * sortDir : (av - bv) * sortDir;
+    });
+    const loaded = this.YC_EQUITY_QUOTES != null || Object.keys(this.YC_EQUITY_CANDLES).length > 0;
+    const sortArrow = key => this.state.equitySort.key === key ? (this.state.equitySort.dir === 1 ? ' ▲' : ' ▼') : '';
+    const th = (key, label, align) => `<th onclick="vtx.equitySort('${key}')" style="cursor:pointer;text-align:${align || 'right'};padding:8px 10px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--line);white-space:nowrap;user-select:none;">${label}${sortArrow(key)}</th>`;
+    const tableHtml = !loaded
+      ? `<div style="padding:24px;text-align:center;color:var(--mut);font-size:11px;">Loading ${this.YC_EQUITY_INDICES.length} indices…</div>`
+      : `<div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;">
+          <thead><tr>${th('country', 'Index', 'left')}${th('region', 'Region', 'left')}${th('price', 'Price')}${th('chg1d', '1D Chg')}${th('ret1y', '1Y Return')}</tr></thead>
+          <tbody>
+            ${tableRows.map(r => `
+              <tr>
+                <td style="padding:7px 10px;text-align:left;font-size:11.5px;color:var(--txt);">${r.label}</td>
+                <td style="padding:7px 10px;text-align:left;font-size:10px;color:var(--mut);">${r.region}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:700;color:${r.price == null ? 'var(--mut)' : 'var(--txt)'};">${r.price != null ? r.price.toLocaleString('en-US', { maximumFractionDigits: 1 }) : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.chg1d == null ? 'var(--mut)' : r.chg1d >= 0 ? 'var(--pos)' : 'var(--neg)'};">${r.chg1d != null ? (r.chg1d >= 0 ? '+' : '') + r.chg1d.toFixed(2) + '%' : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.ret1y == null ? 'var(--mut)' : r.ret1y >= 0 ? 'var(--pos)' : 'var(--neg)'};">${r.ret1y != null ? (r.ret1y >= 0 ? '+' : '') + r.ret1y.toFixed(1) + '%' : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">World Equity Indices</span>
+        <span style="font-size:9px;color:var(--mut);">${this.YC_EQUITY_INDICES.length} indices worldwide</span>
         <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
       </div>
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
@@ -2712,6 +2908,7 @@ const vtx = {
     else if (entry.type === 'globalYields') this.selectGlobalYields();
     else if (entry.type === 'policyRates') this.selectPolicyRates();
     else if (entry.type === 'worldInflation') this.selectWorldInflation();
+    else if (entry.type === 'worldEquity') this.selectWorldEquity();
     else this.viewTicker(entry.key, entry.label);
   },
   // "YC" as a search shortcut into the full Yield Curve view — matches the
@@ -2740,6 +2937,12 @@ const vtx = {
     const q = v.trim().toLowerCase();
     if (!q) return false;
     return q === 'cpi' || 'world inflation'.includes(q) || 'global inflation'.includes(q);
+  },
+  // "WEI" into the standalone World Equity Indices view.
+  matchWorldEquityShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'wei' || 'world equity'.includes(q) || 'world indices'.includes(q) || 'global indices'.includes(q);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
@@ -2866,7 +3069,7 @@ const vtx = {
       // Each row's own × removes just that entry (stopPropagation so it
       // doesn't also re-open the search); "Clear all" wipes the list.
       const recentRowHtml = e => {
-        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation') ? '▤' : '';
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation'||e.type==='worldEquity') ? '▤' : '';
         return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
@@ -2906,6 +3109,10 @@ const vtx = {
     if (this.matchWorldInflationShortcut(this.state.query)) {
       toolRows += toolRow('CPI', 'World Inflation Comparison', '30 countries worldwide',
         "vtx.recordRecentSearch({type:'worldInflation',key:'CPI',label:'CPI',sub:'World Inflation Comparison'});vtx.selectWorldInflation()");
+    }
+    if (this.matchWorldEquityShortcut(this.state.query)) {
+      toolRows += toolRow('WEI', 'World Equity Indices', '20 indices worldwide',
+        "vtx.recordRecentSearch({type:'worldEquity',key:'WEI',label:'WEI',sub:'World Equity Indices'});vtx.selectWorldEquity()");
     }
     const ycHtml = toolRows ? `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>${toolRows}` : '';
     let html = searchFailedHtml + ycHtml + r.map(t => `
@@ -3415,6 +3622,65 @@ const vtx = {
     this.setMobilePanel('chart');
     this.render();
     if (!Object.keys(this.YC_INFLATION).length) this.loadYcInflation();
+  },
+  // One batched request handles all 20 — /api/market/index-quote's own
+  // batch path already chunks internally (5 at a time) with its own
+  // rate-limit bucket, separate from the FRED-backed econ-series route
+  // every other "world" view uses.
+  async loadYcEquityQuotes() {
+    try {
+      const codes = this.YC_EQUITY_INDICES.map(i => i.code).join(',');
+      const res = await fetch(`/api/market/index-quote?symbols=${codes}`);
+      if (!res.ok) { this.YC_EQUITY_QUOTES = { failed: true }; if (this.state.view === 'worldEquity') this.renderWorldEquityView(); return; }
+      const data = await res.json();
+      this.YC_EQUITY_QUOTES = data.quotes ? data : { failed: true };
+    } catch (e) { this.YC_EQUITY_QUOTES = { failed: true }; }
+    if (this.state.view === 'worldEquity') this.renderWorldEquityView();
+  },
+  // Real MAX-range (10y monthly) price history per index, via the
+  // existing generic candles route (no backend change needed — it already
+  // passes any symbol straight to Yahoo, same as how VIX history works
+  // elsewhere in this file). Powers both the normalized trend chart and
+  // the table's 1Y Return column. Chunked like every other 20-series
+  // fan-out in this view set, even though stock:candles' own 40/60s limit
+  // has room — consistent defensive pattern, cheap to keep.
+  async loadYcEquityCandles() {
+    const CHUNK = 6;
+    const indices = this.YC_EQUITY_INDICES;
+    for (let i = 0; i < indices.length; i += CHUNK) {
+      const batch = indices.slice(i, i + CHUNK);
+      await Promise.all(batch.map(async idx => {
+        try {
+          const res = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(idx.yahoo)}&range=MAX`);
+          if (!res.ok) { this.YC_EQUITY_CANDLES[idx.code] = { failed: true }; return; }
+          const data = await res.json();
+          if (!data.prices || !data.prices.length || !data.times || !data.times.length) { this.YC_EQUITY_CANDLES[idx.code] = { failed: true }; return; }
+          const points = data.times.map((t, j) => ({ date: new Date(t * 1000).toISOString().slice(0, 10), value: data.prices[j] })).filter(p => p.value != null);
+          this.YC_EQUITY_CANDLES[idx.code] = { points };
+        } catch (e) { this.YC_EQUITY_CANDLES[idx.code] = { failed: true }; }
+      }));
+      if (this.state.view === 'worldEquity') this.renderWorldEquityView();
+      if (i + CHUNK < indices.length) await new Promise(r => setTimeout(r, 400));
+    }
+  },
+  equitySetRange(range) {
+    this.state.equityRange = range;
+    this.renderWorldEquityView();
+  },
+  equitySort(key) {
+    const s = this.state.equitySort;
+    this.state.equitySort = { key, dir: s.key === key ? -s.dir : -1 };
+    this.renderWorldEquityView();
+  },
+  selectWorldEquity() {
+    this.state.view = 'worldEquity';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+    if (!this.YC_EQUITY_QUOTES) this.loadYcEquityQuotes();
+    if (!Object.keys(this.YC_EQUITY_CANDLES).length) this.loadYcEquityCandles();
   },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
@@ -4807,6 +5073,7 @@ const vtx = {
     document.getElementById('globalYieldsView').style.display = s.view === 'globalYields' ? 'flex' : 'none';
     document.getElementById('policyRatesView').style.display = s.view === 'policyRates' ? 'flex' : 'none';
     document.getElementById('worldInflationView').style.display = s.view === 'worldInflation' ? 'flex' : 'none';
+    document.getElementById('worldEquityView').style.display = s.view === 'worldEquity' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
@@ -4823,6 +5090,8 @@ const vtx = {
       this.renderPolicyRateView();
     } else if (s.view === 'worldInflation') {
       this.renderWorldInflationView();
+    } else if (s.view === 'worldEquity') {
+      this.renderWorldEquityView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;

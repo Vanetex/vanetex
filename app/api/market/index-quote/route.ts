@@ -44,6 +44,21 @@ const SYMBOL_MAP: Record<string, string> = {
   NQ: "NQ=F",
   YM: "YM=F",
   RTY: "RTY=F",
+  // World Equity Indices view — every symbol below verified live against
+  // Yahoo's chart API before being added (not guessed).
+  DAX: "^GDAXI",
+  CAC40: "^FCHI",
+  ASX200: "^AXJO",
+  TSX: "^GSPTSE",
+  IBEX35: "^IBEX",
+  SMI: "^SSMI",
+  NIFTY50: "^NSEI",
+  KOSPI: "^KS11",
+  BOVESPA: "^BVSP",
+  SSE: "000001.SS",
+  TAIEX: "^TWII",
+  AEX: "^AEX",
+  OMXS30: "^OMX",
 };
 
 type IndexQuoteBody = { symbol: string; name: string; price: number; changePct: number };
