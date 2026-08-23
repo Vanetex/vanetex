@@ -474,7 +474,8 @@ const vtx = {
     // happens client-side against the already-fetched full histories, so
     // switching ranges never needs a new request.
     ycGlobalRange: '5Y',
-    ycGlobalSort: { key: 'yield', dir: -1 }
+    ycGlobalSort: { key: 'yield', dir: -1 },
+    ycPolicyRange: '5Y'
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -554,6 +555,19 @@ const vtx = {
   // "worldwide."
   YC_GLOBAL_MAJORS: ['DGS10', 'IRLTLT01DEM156N', 'IRLTLT01GBM156N', 'IRLTLT01JPM156N', 'IRLTLT01FRM156N', 'IRLTLT01CAM156N'],
   YC_GLOBAL_COLORS: { DGS10: '#3fc7e0', IRLTLT01DEM156N: '#e8a33d', IRLTLT01GBM156N: '#33d38f', IRLTLT01JPM156N: '#ef5468', IRLTLT01FRM156N: '#a78bfa', IRLTLT01CAM156N: '#f472b6' },
+  YC_POLICY: {}, // populated by loadYcPolicy() — real central bank policy rates, keyed by series id
+  // Fed and ECB legs are the actual policy instruments (FEDFUNDS: effective
+  // fed funds rate; ECBDFR: ECB's own Deposit Facility Rate). BOE/BOJ don't
+  // have as clean a single FRED series for the literal policy rate, so
+  // these use the closest verified proxy — each country's short-term
+  // interbank rate, which tracks the policy stance closely in practice.
+  // Labeled "proxy" in the UI rather than presented as the literal rate.
+  YC_POLICY_BANKS: [
+    { id: 'FEDFUNDS', label: 'Fed (US)', color: '#3fc7e0', proxy: false },
+    { id: 'ECBDFR', label: 'ECB (Eurozone)', color: '#e8a33d', proxy: false },
+    { id: 'IRSTCI01GBM156N', label: 'BOE (UK)', color: '#33d38f', proxy: true },
+    { id: 'IRSTCI01JPM156N', label: 'BOJ (Japan)', color: '#ef5468', proxy: true },
+  ],
 
   // Curated FRED series for the Macro tab's dashboard grid — every id/title/
   // units/frequency below was verified live against /api/intel/econ-search
@@ -1821,6 +1835,42 @@ const vtx = {
         </table>
       </div>`;
 
+    // Global Policy Rate Tracker — reuses ycGlobalChart() (it's already a
+    // generic multi-series-over-time renderer), same range-toggle pattern
+    // as the yield comparison above but with its own independent range
+    // state so the two charts don't fight over one control.
+    const POLICY_RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
+    const policyRangeDays = POLICY_RANGE_DAYS[this.state.ycPolicyRange] || POLICY_RANGE_DAYS['5Y'];
+    const policyCutoff = policyRangeDays === Infinity ? -Infinity : Date.now() - policyRangeDays * 86400000;
+    const policySeries = this.YC_POLICY_BANKS.map(b => {
+      const s = this.YC_POLICY[b.id];
+      if (!s || s.failed || !s.points || !s.points.length) return null;
+      const filtered = s.points.filter(p => Date.parse(p.date) >= policyCutoff);
+      if (!filtered.length) return null;
+      return { id: b.id, label: b.label, color: b.color, proxy: b.proxy, points: filtered };
+    }).filter(Boolean);
+
+    let policyChartHtml, policyLegendHtml = '';
+    if (!Object.keys(this.YC_POLICY).length) {
+      policyChartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (!policySeries.length) {
+      policyChartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
+    } else {
+      policyChartHtml = this.ycGlobalChart(policySeries, 760, 220);
+      const fedLatest = (this.YC_POLICY['FEDFUNDS'] && !this.YC_POLICY['FEDFUNDS'].failed) ? this.YC_POLICY['FEDFUNDS'].points[this.YC_POLICY['FEDFUNDS'].points.length - 1].value : null;
+      policyLegendHtml = policySeries.map(s => {
+        const last = s.points[s.points.length - 1];
+        const spread = (fedLatest != null && s.id !== 'FEDFUNDS') ? last.value - fedLatest : null;
+        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:14px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+          ${s.label}${s.proxy ? '<span title="Closest verified proxy — not the literal official policy rate" style="color:var(--warn);">*</span>' : ''}
+          <span style="font-family:var(--mono);color:var(--txt);font-weight:600;">${last.value.toFixed(2)}%</span>
+          ${spread != null ? `<span style="font-family:var(--mono);color:${spread >= 0 ? 'var(--pos)' : 'var(--neg)'};">${spread >= 0 ? '+' : ''}${spread.toFixed(2)} vs Fed</span>` : ''}
+        </span>`;
+      }).join('');
+    }
+    const policyRangeBtn = (r, label) => `<button onclick="vtx.ycSetPolicyRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.ycPolicyRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.ycPolicyRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.ycPolicyRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+
     el.innerHTML = `
       ${headerHtml}
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 12px 10px;flex-shrink:0;">
@@ -1851,6 +1901,18 @@ const vtx = {
           ${globalLegendHtml ? `<div style="padding:8px 4px 2px;">${globalLegendHtml}</div>` : ''}
         </div>
         ${globalTableHtml}
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Global Policy Rate Tracker</span>
+          <span style="font-size:9px;color:var(--mut);">Fed · ECB · BOE* · BOJ*</span>
+          <div style="margin-left:auto;display:flex;gap:5px;">${policyRangeBtn('1Y', '1Y')}${policyRangeBtn('5Y', '5Y')}${policyRangeBtn('MAX', 'MAX')}</div>
+        </div>
+        <div style="padding:14px 12px 10px;">
+          ${policyChartHtml}
+          ${policyLegendHtml ? `<div style="padding:8px 4px 2px;">${policyLegendHtml}</div>` : ''}
+          <div style="font-size:8.5px;color:var(--mut);padding:8px 4px 0;">* BOE/BOJ show the closest verified proxy (short-term interbank rate) — FRED doesn't carry a clean single series for the literal official policy rate for these two.</div>
+        </div>
       </div>
     `;
   },
@@ -3090,6 +3152,25 @@ const vtx = {
     this.state.ycGlobalSort = { key, dir: s.key === key ? -s.dir : -1 };
     this.renderYieldCurveView();
   },
+  // Only 4 series — well under the shared econ-series rate limit even
+  // fired alongside everything else selectYieldCurve() triggers, so no
+  // chunking needed here (unlike loadYcGlobal's 30).
+  async loadYcPolicy() {
+    await Promise.all(this.YC_POLICY_BANKS.map(async b => {
+      try {
+        const res = await fetch(`/api/intel/econ-series?id=${b.id}`);
+        if (!res.ok) { this.YC_POLICY[b.id] = { failed: true }; return; }
+        const data = await res.json();
+        if (!data.points || !data.points.length) { this.YC_POLICY[b.id] = { failed: true }; return; }
+        this.YC_POLICY[b.id] = { points: data.points };
+      } catch (e) { this.YC_POLICY[b.id] = { failed: true }; }
+    }));
+    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+  },
+  ycSetPolicyRange(range) {
+    this.state.ycPolicyRange = range;
+    this.renderYieldCurveView();
+  },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
     this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
@@ -3102,6 +3183,7 @@ const vtx = {
     if (!Object.keys(this.YC_MACRO).length) this.loadYcMacro();
     if (!this.YC_PROB) this.loadRateProbability();
     if (!Object.keys(this.YC_GLOBAL).length) this.loadYcGlobal();
+    if (!Object.keys(this.YC_POLICY).length) this.loadYcPolicy();
   },
   ycCurrentDate() {
     return (this.YC_VIEW && this.YC_VIEW.date && this.YC_VIEW.date !== 'latest') ? this.YC_VIEW.date : new Date().toISOString().slice(0, 10);
