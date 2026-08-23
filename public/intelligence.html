@@ -501,6 +501,12 @@ const vtx = {
     ycPolicyRange: '5Y',
     inflRange: '5Y',
     inflSort: { key: 'cpi', dir: -1 },
+    // Which countries currently show on the World Inflation chart —
+    // user-editable (click a table row, or the × on a legend chip).
+    // Seeded from YC_INFLATION_MAJORS the first time the view opens (see
+    // selectWorldInflation), null here since that array isn't reachable
+    // from inside this literal.
+    inflChartCountries: null,
     equityRange: '1Y',
     equitySort: { key: 'chg1y', dir: -1 },
     creditRange: '5Y'
@@ -638,7 +644,21 @@ const vtx = {
     { id: 'CPALTT01ZAM659N', label: 'South Africa', region: 'Africa' },
   ],
   YC_INFLATION_MAJORS: ['CPALTT01USM659N', 'CPALTT01DEM659N', 'CPALTT01GBM659N', 'CPALTT01JPM659N', 'CPALTT01FRM659N', 'CPALTT01CAM659N'],
-  YC_INFLATION_COLORS: { CPALTT01USM659N: '#3fc7e0', CPALTT01DEM659N: '#e8a33d', CPALTT01GBM659N: '#33d38f', CPALTT01JPM659N: '#ef5468', CPALTT01FRM659N: '#a78bfa', CPALTT01CAM659N: '#f472b6' },
+  // 12-color cycle, assigned by each country's fixed position in
+  // YC_INFLATION_COUNTRIES — every country always gets the same color
+  // regardless of add/remove order, so toggling chart membership never
+  // reshuffles an already-selected country's line color.
+  YC_INFLATION_PALETTE: ['#3fc7e0', '#e8a33d', '#33d38f', '#ef5468', '#a78bfa', '#f472b6', '#60a5fa', '#fbbf24', '#34d399', '#fb7185', '#c084fc', '#2dd4bf'],
+  // MoM ("growth rate on previous period") for the same countries — real,
+  // but genuinely discontinued by OECD/FRED starting 2024 across the
+  // board (Japan stopped even earlier, mid-2021) while the y/y series
+  // keeps updating. Verified live, not guessed — shown anyway since it's
+  // real data, with an honest "may lag y/y" note in the view rather than
+  // implying it's as current. Same id pattern as the y/y series with the
+  // suffix swapped (659N -> 657N); Australia/New Zealand only publish
+  // quarterly, so they're excluded here rather than mislabeling a QoQ
+  // figure as "MoM."
+  YC_INFLATION_MOM: {},
 
   YC_EQUITY_QUOTES: null, // populated by loadYcEquityQuotes() — real Yahoo Finance quotes (price + day change), one batched fetch
   YC_EQUITY_CANDLES: {}, // populated by loadYcEquityCandles() — real MAX-range price history per index code, keyed by code
@@ -2141,27 +2161,35 @@ const vtx = {
     const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
     const rangeDays = RANGE_DAYS[this.state.inflRange] || RANGE_DAYS['5Y'];
     const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
-    const majorsSeries = this.YC_INFLATION_MAJORS.map(id => {
+    const chartIds = this.state.inflChartCountries || this.YC_INFLATION_MAJORS;
+    const chartColor = id => {
+      const idx = this.YC_INFLATION_COUNTRIES.findIndex(c => c.id === id);
+      return this.YC_INFLATION_PALETTE[idx % this.YC_INFLATION_PALETTE.length];
+    };
+    const chartSeries = chartIds.map(id => {
       const s = this.YC_INFLATION[id];
       const country = this.YC_INFLATION_COUNTRIES.find(c => c.id === id);
-      if (!s || s.failed || !s.points || !s.points.length) return null;
+      if (!country || !s || s.failed || !s.points || !s.points.length) return null;
       const filtered = s.points.filter(p => Date.parse(p.date) >= cutoffTime);
       if (!filtered.length) return null;
-      return { id, label: country.label, color: this.YC_INFLATION_COLORS[id], points: filtered };
+      return { id, label: country.label, color: chartColor(id), points: filtered };
     }).filter(Boolean);
 
     let chartHtml, legendHtml = '';
-    if (!Object.keys(this.YC_INFLATION).length) {
+    if (!chartIds.length) {
+      chartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">No countries selected — click any row in the table below to add it.</div>`;
+    } else if (!Object.keys(this.YC_INFLATION).length) {
       chartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
-    } else if (!majorsSeries.length) {
+    } else if (!chartSeries.length) {
       chartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
     } else {
-      chartHtml = this.ycGlobalChart(majorsSeries, 760, 240);
-      legendHtml = majorsSeries.map(s => {
+      chartHtml = this.ycGlobalChart(chartSeries, 760, 240);
+      legendHtml = chartSeries.map(s => {
         const last = s.points[s.points.length - 1];
-        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:14px;">
+        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:14px;margin-bottom:6px;">
           <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
           ${s.label} <span style="font-family:var(--mono);color:var(--txt);font-weight:600;">${last.value.toFixed(1)}%</span>
+          <button onclick="vtx.inflToggleChartCountry('${s.id}')" title="Remove from chart" style="width:14px;height:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--mut);cursor:pointer;font-size:12px;line-height:1;border-radius:4px;padding:0;">×</button>
         </span>`;
       }).join('');
     }
@@ -2169,14 +2197,19 @@ const vtx = {
 
     const usSeries = this.YC_INFLATION['CPALTT01USM659N'];
     const usLatest = (usSeries && !usSeries.failed && usSeries.points && usSeries.points.length) ? usSeries.points[usSeries.points.length - 1].value : null;
-    let tableRows = this.YC_INFLATION_COUNTRIES.map(c => {
+    let tableRows = this.YC_INFLATION_COUNTRIES.map((c, idx) => {
       const s = this.YC_INFLATION[c.id];
-      if (!s || s.failed || !s.points || !s.points.length) return { id: c.id, label: c.label, region: c.region, cpi: null, priorChg: null, spread: null };
+      const momId = c.id.replace('659N', '657N');
+      const isQuarterly = c.id.includes('Q659N');
+      const momS = isQuarterly ? null : this.YC_INFLATION_MOM[momId];
+      const mom = (momS && !momS.failed && momS.points && momS.points.length) ? momS.points[momS.points.length - 1].value : null;
+      if (!s || s.failed || !s.points || !s.points.length) return { id: c.id, label: c.label, region: c.region, color: this.YC_INFLATION_PALETTE[idx % this.YC_INFLATION_PALETTE.length], cpi: null, mom, isQuarterly, priorChg: null, spread: null };
       const pts = s.points;
       const last = pts[pts.length - 1];
       const prior = pts.length > 1 ? pts[pts.length - 2] : null;
       return {
-        id: c.id, label: c.label, region: c.region, cpi: last.value,
+        id: c.id, label: c.label, region: c.region, color: this.YC_INFLATION_PALETTE[idx % this.YC_INFLATION_PALETTE.length],
+        cpi: last.value, mom, isQuarterly,
         priorChg: prior ? last.value - prior.value : null,
         spread: usLatest != null ? last.value - usLatest : null,
       };
@@ -2196,16 +2229,21 @@ const vtx = {
       ? `<div style="padding:24px;text-align:center;color:var(--mut);font-size:11px;">Loading ${this.YC_INFLATION_COUNTRIES.length} countries…</div>`
       : `<div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;">
-          <thead><tr>${th('country', 'Country', 'left')}${th('region', 'Region', 'left')}${th('cpi', 'CPI y/y')}${th('priorChg', 'Prior Chg')}${th('spread', 'vs US')}</tr></thead>
+          <thead><tr><th style="width:26px;border-bottom:1px solid var(--line);"></th>${th('country', 'Country', 'left')}${th('region', 'Region', 'left')}${th('cpi', 'CPI y/y')}${th('mom', 'CPI m/m')}${th('priorChg', 'Prior Chg')}${th('spread', 'vs US')}</tr></thead>
           <tbody>
-            ${tableRows.map(r => `
-              <tr>
+            ${tableRows.map(r => {
+              const inChart = chartIds.includes(r.id);
+              return `
+              <tr onclick="vtx.inflToggleChartCountry('${r.id}')" title="${inChart ? 'Remove from' : 'Add to'} chart" style="cursor:pointer;${inChart ? 'background:rgba(255,255,255,.03);' : ''}">
+                <td style="padding:7px 4px 7px 10px;text-align:center;">${inChart ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};"></span>` : `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1px solid var(--line);"></span>`}</td>
                 <td style="padding:7px 10px;text-align:left;font-size:11.5px;color:var(--txt);">${r.label}</td>
                 <td style="padding:7px 10px;text-align:left;font-size:10px;color:var(--mut);">${r.region}</td>
                 <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:700;color:${r.cpi == null ? 'var(--mut)' : 'var(--txt)'};">${r.cpi != null ? r.cpi.toFixed(1) + '%' : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.mom == null ? 'var(--mut)' : r.mom >= 0 ? 'var(--neg)' : 'var(--pos)'};" title="${r.isQuarterly ? 'Quarterly CPI only — no monthly reading exists' : ''}">${r.isQuarterly ? 'n/a' : r.mom != null ? (r.mom >= 0 ? '+' : '') + r.mom.toFixed(1) + '%' : '—'}</td>
                 <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.priorChg == null ? 'var(--mut)' : r.priorChg >= 0 ? 'var(--neg)' : 'var(--pos)'};">${r.priorChg != null ? (r.priorChg >= 0 ? '+' : '') + r.priorChg.toFixed(1) : '—'}</td>
                 <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.spread == null ? 'var(--mut)' : r.spread >= 0 ? 'var(--neg)' : 'var(--pos)'};">${r.spread != null ? (r.spread >= 0 ? '+' : '') + r.spread.toFixed(1) : '—'}</td>
-              </tr>`).join('')}
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>`;
@@ -2219,9 +2257,11 @@ const vtx = {
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
         <div style="padding:16px 12px 4px;">
           ${chartHtml}
-          ${legendHtml ? `<div style="padding:8px 4px 2px;">${legendHtml}</div>` : ''}
+          ${legendHtml ? `<div style="display:flex;flex-wrap:wrap;padding:8px 4px 2px;">${legendHtml}</div>` : ''}
         </div>
+        <div style="padding:0 14px 8px;font-size:9px;color:var(--mut);">Click any row to add or remove it from the chart above.</div>
         ${tableHtml}
+        <div style="padding:10px 14px;border-top:1px solid var(--line);font-size:8.5px;color:var(--mut);">CPI m/m reflects each country's most recently published monthly reading — several OECD sources stopped updating this specific series starting 2024 (Japan since mid-2021), so it may lag the y/y figure by months to years. Real data, shown as available, not backfilled. Australia and New Zealand publish CPI quarterly only, so no monthly figure exists for them.</div>
       </div>
     `;
   },
@@ -3758,6 +3798,30 @@ const vtx = {
       if (i + CHUNK < this.YC_INFLATION_COUNTRIES.length) await new Promise(r => setTimeout(r, 400));
     }
   },
+  // Same 30-country id list as loadYcInflation with the suffix swapped
+  // (659N -> 657N), minus Australia/New Zealand (quarterly-only, no
+  // monthly reading exists for them). Chunked for the same rate-limit
+  // reason as every other 30-series fetch in this view set.
+  async loadYcInflationMoM() {
+    const ids = this.YC_INFLATION_COUNTRIES
+      .filter(c => !c.id.includes('Q659N'))
+      .map(c => c.id.replace('659N', '657N'));
+    const CHUNK = 6;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = ids.slice(i, i + CHUNK);
+      await Promise.all(batch.map(async id => {
+        try {
+          const res = await fetch(`/api/intel/econ-series?id=${id}`);
+          if (!res.ok) { this.YC_INFLATION_MOM[id] = { failed: true }; return; }
+          const data = await res.json();
+          if (!data.points || !data.points.length) { this.YC_INFLATION_MOM[id] = { failed: true }; return; }
+          this.YC_INFLATION_MOM[id] = { points: data.points };
+        } catch (e) { this.YC_INFLATION_MOM[id] = { failed: true }; }
+      }));
+      if (this.state.view === 'worldInflation') this.renderWorldInflationView();
+      if (i + CHUNK < ids.length) await new Promise(r => setTimeout(r, 400));
+    }
+  },
   inflSetRange(range) {
     this.state.inflRange = range;
     this.renderWorldInflationView();
@@ -3767,14 +3831,25 @@ const vtx = {
     this.state.inflSort = { key, dir: s.key === key ? -s.dir : -1 };
     this.renderWorldInflationView();
   },
+  // Toggles one country in/out of the chart — click a table row, or the
+  // × on a legend chip. No cap: unlike the fixed "majors" subsets on the
+  // other views, this chart is explicitly user-curated, so the user's own
+  // choice of how many lines to show is the only limit.
+  inflToggleChartCountry(id) {
+    const cur = this.state.inflChartCountries || [];
+    this.state.inflChartCountries = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+    this.renderWorldInflationView();
+  },
   selectWorldInflation() {
     this.state.view = 'worldInflation';
     this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
     const input = document.getElementById('searchInput'); if (input) input.value = '';
     this.closeSearch();
     this.setMobilePanel('chart');
+    if (!this.state.inflChartCountries) this.state.inflChartCountries = [...this.YC_INFLATION_MAJORS];
     this.render();
     if (!Object.keys(this.YC_INFLATION).length) this.loadYcInflation();
+    if (!Object.keys(this.YC_INFLATION_MOM).length) this.loadYcInflationMoM();
   },
   // One batched request handles all 20 — /api/market/index-quote's own
   // batch path already chunks internally (5 at a time) with its own
