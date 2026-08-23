@@ -3192,18 +3192,18 @@ const vtx = {
           this.YC_GLOBAL[c.id] = { points: data.points };
         } catch (e) { this.YC_GLOBAL[c.id] = { failed: true }; }
       }));
-      if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+      if (this.state.view === 'globalYields') this.renderGlobalYieldsView();
       if (i + CHUNK < this.YC_GLOBAL_COUNTRIES.length) await new Promise(r => setTimeout(r, 400));
     }
   },
   ycSetGlobalRange(range) {
     this.state.ycGlobalRange = range;
-    this.renderYieldCurveView();
+    this.renderGlobalYieldsView();
   },
   ycSortGlobal(key) {
     const s = this.state.ycGlobalSort;
     this.state.ycGlobalSort = { key, dir: s.key === key ? -s.dir : -1 };
-    this.renderYieldCurveView();
+    this.renderGlobalYieldsView();
   },
   // Only 4 series — well under the shared econ-series rate limit even
   // fired alongside everything else selectYieldCurve() triggers, so no
@@ -3218,11 +3218,11 @@ const vtx = {
         this.YC_POLICY[b.id] = { points: data.points };
       } catch (e) { this.YC_POLICY[b.id] = { failed: true }; }
     }));
-    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+    if (this.state.view === 'policyRates') this.renderPolicyRateView();
   },
   ycSetPolicyRange(range) {
     this.state.ycPolicyRange = range;
-    this.renderYieldCurveView();
+    this.renderPolicyRateView();
   },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
