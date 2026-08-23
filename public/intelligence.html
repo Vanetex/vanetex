@@ -469,7 +469,12 @@ const vtx = {
     // Fed Funds Target Range defaults on (matches ustreasuryyieldcurve.com);
     // CPI YoY defaults off since it's a very different-shaped line to read
     // against a curve until the viewer opts in.
-    ycOverlays: { fedFunds: true, cpi: false }
+    ycOverlays: { fedFunds: true, cpi: false },
+    // Lookback window for the Global Yield Comparison chart — filtering
+    // happens client-side against the already-fetched full histories, so
+    // switching ranges never needs a new request.
+    ycGlobalRange: '5Y',
+    ycGlobalSort: { key: 'yield', dir: -1 }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -501,6 +506,58 @@ const vtx = {
     { id: 'A191RL1Q225SBEA', label: 'GDP (prior qtr)', transform: 'level', offset: 1, suffix: '%' },
     { id: 'UNRATE', label: 'Unemployment', transform: 'level', offset: 0, suffix: '%' },
   ],
+  YC_GLOBAL: {}, // populated by loadYcGlobal() — real FRED 10Y/long-term govt bond yields, keyed by series id
+  // Every country's long-term (~10Y) government bond yield — the US leg is
+  // FRED's own daily Treasury Constant Maturity series (already used for
+  // the main curve); every other country is FRED's OECD-sourced "long-term
+  // interest rate" family (monthly), except India which uses a differently-
+  // named FRED series. Every single id here was hit live against
+  // /api/intel/econ-series before being hardcoded (see the 50-ideas
+  // research pass) — not guessed. China, Brazil, Turkey, and Indonesia were
+  // checked under several plausible series-id patterns and genuinely
+  // aren't available this way; they're left out rather than faked.
+  YC_GLOBAL_COUNTRIES: [
+    { id: 'DGS10', label: 'United States', region: 'Americas' },
+    { id: 'IRLTLT01CAM156N', label: 'Canada', region: 'Americas' },
+    { id: 'IRLTLT01MXM156N', label: 'Mexico', region: 'Americas' },
+    { id: 'IRLTLT01CLM156N', label: 'Chile', region: 'Americas' },
+    { id: 'IRLTLT01DEM156N', label: 'Germany', region: 'Europe' },
+    { id: 'IRLTLT01GBM156N', label: 'United Kingdom', region: 'Europe' },
+    { id: 'IRLTLT01FRM156N', label: 'France', region: 'Europe' },
+    { id: 'IRLTLT01ITM156N', label: 'Italy', region: 'Europe' },
+    { id: 'IRLTLT01ESM156N', label: 'Spain', region: 'Europe' },
+    { id: 'IRLTLT01PTM156N', label: 'Portugal', region: 'Europe' },
+    { id: 'IRLTLT01GRM156N', label: 'Greece', region: 'Europe' },
+    { id: 'IRLTLT01NLM156N', label: 'Netherlands', region: 'Europe' },
+    { id: 'IRLTLT01BEM156N', label: 'Belgium', region: 'Europe' },
+    { id: 'IRLTLT01CHM156N', label: 'Switzerland', region: 'Europe' },
+    { id: 'IRLTLT01SEM156N', label: 'Sweden', region: 'Europe' },
+    { id: 'IRLTLT01NOM156N', label: 'Norway', region: 'Europe' },
+    { id: 'IRLTLT01DKM156N', label: 'Denmark', region: 'Europe' },
+    { id: 'IRLTLT01IEM156N', label: 'Ireland', region: 'Europe' },
+    { id: 'IRLTLT01ATM156N', label: 'Austria', region: 'Europe' },
+    { id: 'IRLTLT01ISM156N', label: 'Iceland', region: 'Europe' },
+    { id: 'IRLTLT01CZM156N', label: 'Czech Republic', region: 'Europe' },
+    { id: 'IRLTLT01HUM156N', label: 'Hungary', region: 'Europe' },
+    { id: 'IRLTLT01SKM156N', label: 'Slovakia', region: 'Europe' },
+    { id: 'IRLTLT01SIM156N', label: 'Slovenia', region: 'Europe' },
+    { id: 'IRLTLT01FIM156N', label: 'Finland', region: 'Europe' },
+    { id: 'IRLTLT01PLM156N', label: 'Poland', region: 'Europe' },
+    { id: 'IRLTLT01RUM156N', label: 'Russia', region: 'Europe' },
+    { id: 'IRLTLT01JPM156N', label: 'Japan', region: 'Asia-Pacific' },
+    { id: 'IRLTLT01AUM156N', label: 'Australia', region: 'Asia-Pacific' },
+    { id: 'IRLTLT01NZM156N', label: 'New Zealand', region: 'Asia-Pacific' },
+    { id: 'IRLTLT01KRM156N', label: 'South Korea', region: 'Asia-Pacific' },
+    { id: 'INDIRLTLT01STM', label: 'India', region: 'Asia-Pacific' },
+    { id: 'IRLTLT01ILM156N', label: 'Israel', region: 'Middle East' },
+    { id: 'IRLTLT01ZAM156N', label: 'South Africa', region: 'Africa' },
+  ],
+  // The chart can only read a handful of overlaid lines at once — this is
+  // the subset it shows by default; the full 34-country list above powers
+  // the sortable table instead, which is what actually needed to be
+  // "worldwide."
+  YC_GLOBAL_MAJORS: ['DGS10', 'IRLTLT01DEM156N', 'IRLTLT01GBM156N', 'IRLTLT01JPM156N', 'IRLTLT01FRM156N', 'IRLTLT01CAM156N'],
+  YC_GLOBAL_COLORS: { DGS10: '#3fc7e0', IRLTLT01DEM156N: '#e8a33d', IRLTLT01GBM156N: '#33d38f', IRLTLT01JPM156N: '#ef5468', IRLTLT01FRM156N: '#a78bfa', IRLTLT01CAM156N: '#f472b6' },
 
   // Curated FRED series for the Macro tab's dashboard grid — every id/title/
   // units/frequency below was verified live against /api/intel/econ-search
@@ -1522,6 +1579,55 @@ const vtx = {
       ${xLabels}
     </svg>`;
   },
+  // Multi-country 10Y yield over real calendar time (not maturity-ordinal
+  // like ycMainChart) — each series plotted on a shared date-based x-axis
+  // and shared yield y-axis. US is daily; every other country is FRED's
+  // monthly OECD series, so lines will visibly differ in point density —
+  // that's real, not a bug, left as-is rather than faking synthetic points.
+  ycGlobalChart(series, w, h) {
+    w = w || 760; h = h || 260;
+    const padL = 38, padB = 22, padT = 12, padR = 12;
+    const cw = w - padL - padR, ch = h - padT - padB;
+    const allPts = series.flatMap(s => s.points);
+    if (!allPts.length) return '';
+    const times = allPts.map(p => Date.parse(p.date));
+    const values = allPts.map(p => p.value);
+    const tMin = Math.min(...times), tMax = Math.max(...times);
+    let vMin = Math.min(...values), vMax = Math.max(...values);
+    const vPad = (vMax - vMin) * 0.12 || 0.5;
+    vMin -= vPad; vMax += vPad;
+    const tSpan = (tMax - tMin) || 1, vSpan = (vMax - vMin) || 1;
+    const x = t => padL + ((t - tMin) / tSpan) * cw;
+    const y = v => padT + ch - ((v - vMin) / vSpan) * ch;
+
+    const GRID_N = 4;
+    const gridLines = Array.from({ length: GRID_N + 1 }, (_, i) => {
+      const v = vMin + (vSpan * i / GRID_N);
+      const yy = y(v);
+      return `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${w - padR}" y2="${yy.toFixed(1)}" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <text x="${(padL - 6).toFixed(1)}" y="${(yy + 3).toFixed(1)}" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--mut)">${v.toFixed(1)}%</text>`;
+    }).join('');
+    const TICK_N = 5;
+    const xLabels = Array.from({ length: TICK_N + 1 }, (_, i) => {
+      const t = tMin + (tSpan * i / TICK_N);
+      const d = new Date(t);
+      return `<text x="${x(t).toFixed(1)}" y="${h - 4}" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--mut)">${d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</text>`;
+    }).join('');
+
+    const lines = series.map(s => {
+      const path = s.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(Date.parse(p.date)).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+      const last = s.points[s.points.length - 1];
+      const lastX = x(Date.parse(last.date)).toFixed(1), lastY = y(last.value).toFixed(1);
+      return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${lastX}" cy="${lastY}" r="2.6" fill="${s.color}"/>`;
+    }).join('');
+
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">
+      ${gridLines}
+      ${lines}
+      ${xLabels}
+    </svg>`;
+  },
   renderYieldCurveView() {
     const el = document.getElementById('yieldCurveView');
     if (!el) return;
@@ -1638,6 +1744,86 @@ const vtx = {
         </div>`;
     }
 
+    // Global Yield Comparison — a compact multi-country trend chart for a
+    // "majors" subset (any more than ~6 overlaid lines stops being
+    // readable), plus a full sortable table across every country FRED
+    // actually has real data for (34 total — see YC_GLOBAL_COUNTRIES).
+    const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, 'MAX': Infinity };
+    const rangeDays = RANGE_DAYS[this.state.ycGlobalRange] || RANGE_DAYS['5Y'];
+    const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
+    const majorsSeries = this.YC_GLOBAL_MAJORS.map(id => {
+      const s = this.YC_GLOBAL[id];
+      const country = this.YC_GLOBAL_COUNTRIES.find(c => c.id === id);
+      if (!s || s.failed || !s.points || !s.points.length) return null;
+      const filtered = s.points.filter(p => Date.parse(p.date) >= cutoffTime);
+      if (!filtered.length) return null;
+      return { id, label: country.label, color: this.YC_GLOBAL_COLORS[id], points: filtered };
+    }).filter(Boolean);
+
+    let globalChartHtml, globalLegendHtml = '';
+    if (!Object.keys(this.YC_GLOBAL).length) {
+      globalChartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (!majorsSeries.length) {
+      globalChartHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now.</div>`;
+    } else {
+      globalChartHtml = this.ycGlobalChart(majorsSeries, 760, 240);
+      globalLegendHtml = majorsSeries.map(s => {
+        const last = s.points[s.points.length - 1];
+        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:14px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+          ${s.label} <span style="font-family:var(--mono);color:var(--txt);font-weight:600;">${last.value.toFixed(2)}%</span>
+        </span>`;
+      }).join('');
+    }
+    const rangeBtn = (r, label) => `<button onclick="vtx.ycSetGlobalRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.ycGlobalRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.ycGlobalRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.ycGlobalRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+
+    // Table: full 34-country list. 1M change compares against ~1 trading
+    // month back for the US's daily series vs. 1 entry back for everyone
+    // else's monthly series — different units of "a month," same real intent.
+    const usSeries = this.YC_GLOBAL['DGS10'];
+    const usLatest = (usSeries && !usSeries.failed && usSeries.points && usSeries.points.length) ? usSeries.points[usSeries.points.length - 1].value : null;
+    let tableRows = this.YC_GLOBAL_COUNTRIES.map(c => {
+      const s = this.YC_GLOBAL[c.id];
+      if (!s || s.failed || !s.points || !s.points.length) return { id: c.id, label: c.label, region: c.region, yield: null, chg1m: null, spread: null };
+      const pts = s.points;
+      const last = pts[pts.length - 1];
+      const priorIdx = c.id === 'DGS10' ? Math.max(0, pts.length - 22) : Math.max(0, pts.length - 2);
+      const prior = pts[priorIdx];
+      return {
+        id: c.id, label: c.label, region: c.region, yield: last.value,
+        chg1m: prior ? last.value - prior.value : null,
+        spread: usLatest != null ? last.value - usLatest : null,
+      };
+    });
+    const sortKey = this.state.ycGlobalSort.key, sortDir = this.state.ycGlobalSort.dir;
+    tableRows.sort((a, b) => {
+      const av = sortKey === 'country' ? a.label : sortKey === 'region' ? a.region : a[sortKey];
+      const bv = sortKey === 'country' ? b.label : sortKey === 'region' ? b.region : b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; if (bv == null) return -1;
+      return typeof av === 'string' ? av.localeCompare(bv) * sortDir : (av - bv) * sortDir;
+    });
+    const globalLoaded = Object.keys(this.YC_GLOBAL).length > 0;
+    const sortArrow = key => this.state.ycGlobalSort.key === key ? (this.state.ycGlobalSort.dir === 1 ? ' ▲' : ' ▼') : '';
+    const th = (key, label, align) => `<th onclick="vtx.ycSortGlobal('${key}')" style="cursor:pointer;text-align:${align || 'right'};padding:8px 10px;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--line);white-space:nowrap;user-select:none;">${label}${sortArrow(key)}</th>`;
+    const globalTableHtml = !globalLoaded
+      ? `<div style="padding:24px;text-align:center;color:var(--mut);font-size:11px;">Loading ${this.YC_GLOBAL_COUNTRIES.length} countries…</div>`
+      : `<div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;">
+          <thead><tr>${th('country', 'Country', 'left')}${th('region', 'Region', 'left')}${th('yield', '10Y Yield')}${th('chg1m', '1M Chg')}${th('spread', 'vs US')}</tr></thead>
+          <tbody>
+            ${tableRows.map(r => `
+              <tr>
+                <td style="padding:7px 10px;text-align:left;font-size:11.5px;color:var(--txt);">${r.label}</td>
+                <td style="padding:7px 10px;text-align:left;font-size:10px;color:var(--mut);">${r.region}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:700;color:${r.yield == null ? 'var(--mut)' : 'var(--txt)'};">${r.yield != null ? r.yield.toFixed(2) + '%' : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.chg1m == null ? 'var(--mut)' : r.chg1m >= 0 ? 'var(--pos)' : 'var(--neg)'};">${r.chg1m != null ? (r.chg1m >= 0 ? '+' : '') + r.chg1m.toFixed(2) : '—'}</td>
+                <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:11px;color:${r.spread == null ? 'var(--mut)' : r.spread >= 0 ? 'var(--pos)' : 'var(--neg)'};">${r.spread != null ? (r.spread >= 0 ? '+' : '') + r.spread.toFixed(2) : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+
     el.innerHTML = `
       ${headerHtml}
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 12px 10px;flex-shrink:0;">
@@ -1656,6 +1842,18 @@ const vtx = {
           <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Rate Expectations</div>
           ${probHtml}
         </div>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Global 10Y Yield Comparison</span>
+          <span style="font-size:9px;color:var(--mut);">${this.YC_GLOBAL_COUNTRIES.length} countries</span>
+          <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('MAX', 'MAX')}</div>
+        </div>
+        <div style="padding:14px 12px 4px;">
+          ${globalChartHtml}
+          ${globalLegendHtml ? `<div style="padding:8px 4px 2px;">${globalLegendHtml}</div>` : ''}
+        </div>
+        ${globalTableHtml}
       </div>
     `;
   },
@@ -2857,6 +3055,41 @@ const vtx = {
     } catch (e) { this.YC_PROB = { failed: true }; }
     if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
   },
+  // Each country's full 10Y history, fetched once via the existing generic
+  // econ-series route — the same "fetch full history, filter client-side"
+  // pattern as loadYcOverlayData(), so switching the lookback range never
+  // needs a new request.
+  async loadYcGlobal() {
+    // 34 countries in one Promise.all blew straight through
+    // /api/intel/econ-series's 30-req/60s rate limit (confirmed live —
+    // real 429s, not local-only noise, since loadYcMacro/loadYcOverlayData
+    // hit the same route around the same time). Same small-chunks-with-a-
+    // gap fan-out pattern already used everywhere else in this file.
+    const CHUNK = 6;
+    for (let i = 0; i < this.YC_GLOBAL_COUNTRIES.length; i += CHUNK) {
+      const batch = this.YC_GLOBAL_COUNTRIES.slice(i, i + CHUNK);
+      await Promise.all(batch.map(async c => {
+        try {
+          const res = await fetch(`/api/intel/econ-series?id=${c.id}`);
+          if (!res.ok) { this.YC_GLOBAL[c.id] = { failed: true }; return; }
+          const data = await res.json();
+          if (!data.points || !data.points.length) { this.YC_GLOBAL[c.id] = { failed: true }; return; }
+          this.YC_GLOBAL[c.id] = { points: data.points };
+        } catch (e) { this.YC_GLOBAL[c.id] = { failed: true }; }
+      }));
+      if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+      if (i + CHUNK < this.YC_GLOBAL_COUNTRIES.length) await new Promise(r => setTimeout(r, 400));
+    }
+  },
+  ycSetGlobalRange(range) {
+    this.state.ycGlobalRange = range;
+    this.renderYieldCurveView();
+  },
+  ycSortGlobal(key) {
+    const s = this.state.ycGlobalSort;
+    this.state.ycGlobalSort = { key, dir: s.key === key ? -s.dir : -1 };
+    this.renderYieldCurveView();
+  },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
     this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
@@ -2868,6 +3101,7 @@ const vtx = {
     if (!Object.keys(this.YC_OVERLAY_DATA).length) this.loadYcOverlayData();
     if (!Object.keys(this.YC_MACRO).length) this.loadYcMacro();
     if (!this.YC_PROB) this.loadRateProbability();
+    if (!Object.keys(this.YC_GLOBAL).length) this.loadYcGlobal();
   },
   ycCurrentDate() {
     return (this.YC_VIEW && this.YC_VIEW.date && this.YC_VIEW.date !== 'latest') ? this.YC_VIEW.date : new Date().toISOString().slice(0, 10);
