@@ -6367,9 +6367,18 @@ const vtx = {
       document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">Loading movers…</div>`;
       return;
     }
+    // The heatmap's roster refreshes in a rotating slice (see stock/heatmap's
+    // own comment), so at any given moment only part of the ~80-stock
+    // universe has a real quote yet — on a lopsided day this can mean
+    // real negative movers are scarce or absent. Filtering by sign before
+    // slicing (rather than just taking the bottom 5 by value) means
+    // "Losers" never pads itself out with barely-positive stocks that
+    // aren't actually down, and vice versa for "Gainers" — confirmed live,
+    // this really happens (a moment with only 6 quotes warm and just 1
+    // negative among them).
     const all = Object.values(heat).flat().filter(c => c.changePct != null);
-    const gainers = [...all].sort((a,b) => b.changePct - a.changePct).slice(0, 5);
-    const losers = [...all].sort((a,b) => a.changePct - b.changePct).slice(0, 5);
+    const gainers = all.filter(c => c.changePct > 0).sort((a,b) => b.changePct - a.changePct).slice(0, 5);
+    const losers = all.filter(c => c.changePct < 0).sort((a,b) => a.changePct - b.changePct).slice(0, 5);
     const row = c => `<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:5px 13px;font-family:var(--mono);font-size:11px;">
       <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span class="symlink" onclick="vtx.jumpToTicker('${c.sym}')" style="font-weight:700;color:var(--acc2);cursor:pointer;">${c.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${c.name}</span></span>
       <span style="text-align:right;font-weight:600;color:${c.changePct>=0?'var(--pos)':'var(--neg)'};">${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%</span>
