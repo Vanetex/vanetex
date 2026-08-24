@@ -212,16 +212,19 @@ input{font-family:var(--ui)}
           <div id="watchlistBody" style="overflow-y:auto;flex:1;padding:5px;"></div>
         </div>
 
-        <!-- Time & Sales -->
+        <!-- Sidebar carousel: Live Tape / Crypto / Futures & Overnight /
+             Gainers & Losers — flip with the arrows so this space stays
+             useful when the market (and the tape) is closed. -->
         <div style="display:flex;flex-direction:column;min-height:0;flex:1;background:linear-gradient(180deg,rgba(18,22,38,.92),rgba(8,11,20,.96));border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.04);">
-          <div style="display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);flex-shrink:0;">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos);animation:pulse 1.4s ease infinite;"></span>
-            <span id="tapeSourceLabel" style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Live Tape · Time &amp; Sales (simulated)</span>
+          <div style="display:flex;align-items:center;gap:7px;padding:9px 9px 9px 13px;border-bottom:1px solid var(--line);flex-shrink:0;">
+            <span id="tapePulseDot" style="width:6px;height:6px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos);animation:pulse 1.4s ease infinite;flex-shrink:0;"></span>
+            <span id="tapeSourceLabel" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Live Tape · Time &amp; Sales (simulated)</span>
+            <button onclick="vtx.setSidebarSlide(-1)" title="Previous" style="width:19px;height:19px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:5px;color:var(--mut);cursor:pointer;font-size:11px;line-height:1;padding:0;">‹</button>
+            <button onclick="vtx.setSidebarSlide(1)" title="Next" style="width:19px;height:19px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:5px;color:var(--mut);cursor:pointer;font-size:11px;line-height:1;padding:0;">›</button>
           </div>
-          <div style="display:grid;grid-template-columns:64px 1fr auto auto;gap:8px;padding:6px 13px;font-size:8.5px;letter-spacing:.1em;color:var(--mut);text-transform:uppercase;border-bottom:1px solid var(--line);flex-shrink:0;">
-            <span>Time</span><span>Sym</span><span style="text-align:right;">Price</span><span style="text-align:right;">Size</span>
-          </div>
+          <div id="tapeColHeader"></div>
           <div id="timeSalesBody" style="overflow-y:auto;flex:1;"></div>
+          <div id="tapeDots" style="display:flex;justify-content:center;gap:5px;padding:7px 0;flex-shrink:0;"></div>
         </div>
       </div>
 
@@ -469,6 +472,10 @@ const vtx = {
   state: {
     variant: 'A', focus: 'NVDA', view: 'overview', tab: 'news', tf: '1D',
     query: '', searchOpen: false, remoteResults: [], instrumentMatches: [], remoteIndicators: [], searchFailed: false, tickers: [], tape: [], tickerBarData: [],
+    // Sidebar carousel (Live Tape card) — 'tape' is the default so page
+    // load looks unchanged; the other 3 slides stay real content even
+    // when markets are closed and the tape itself has nothing to print.
+    sidebarSlide: 'tape',
     chat: [{role:'ai', text:'Intelligence online. Ask me about any symbol in your watchlist — price action, fundamentals, insider filings, or dark-pool prints.'}],
     chatInput: '', aiTyping: false, latency: null, // set by loadQuotes() from a real measured round-trip time
     indicators: { sma9: false, sma20: false },
@@ -4237,6 +4244,24 @@ const vtx = {
   MARKET_SNAPSHOT_SYMS: ['SPX','NDX','VIX','GOLD','OIL','SILVER','NATGAS','COPPER','EURUSD','USDJPY','GBPUSD','FTSE','NIKKEI','HSI',
     'DOW','RUSSELL2000','ES','NQ','YM','RTY','PLATINUM','PALLADIUM','BRENT','HEATOIL','GASOLINE','CORN','WHEAT','SOYBEANS','COFFEE','COTTON','SUGAR'],
 
+  // Sidebar carousel — the Live Tape card cycles through these via the
+  // header's back/forward arrows. 'tape' is real trade prints (only
+  // useful while the market's open); the other three stay real and
+  // useful regardless of market hours, reusing data already polled
+  // elsewhere (MARKET_SNAPSHOT, CRYPTO_SNAPSHOT, heatmap) — no new fetches.
+  SIDEBAR_SLIDES: ['tape', 'crypto', 'futures', 'movers'],
+  // US index futures trade nearly 24/5 (unlike their cash indices), and
+  // these three overnight international cash indices cover the Asia/
+  // Europe sessions that are often live while US markets are shut — all
+  // already fetched every 60s as part of MARKET_SNAPSHOT_SYMS above.
+  SIDEBAR_FUTURES_ROW: [
+    { code: 'ES', label: 'S&P 500 Fut' }, { code: 'NQ', label: 'Nasdaq Fut' },
+    { code: 'YM', label: 'Dow Fut' }, { code: 'RTY', label: 'Russell Fut' },
+  ],
+  SIDEBAR_OVERNIGHT_ROW: [
+    { code: 'NIKKEI', label: 'Nikkei 225' }, { code: 'HSI', label: 'Hang Seng' }, { code: 'FTSE', label: 'FTSE 100' },
+  ],
+
   // Real, chartable non-equity instruments — clicking a tile for any of
   // these drops into a lightweight Instrument View (real price + real
   // chart via the same /api/stock/candles route stocks use) rather than
@@ -4619,6 +4644,7 @@ const vtx = {
       this.state.heatmap = data;
       if (this.state.tab === 'movers') this.renderRight();
       if (this.state.view === 'overview') this.renderOverview();
+      if (this.state.sidebarSlide === 'movers') this.renderTimeSales();
       this.renderHeaderPulse();
     } catch (e) { /* keep previous data on failure */ }
   },
@@ -5524,7 +5550,10 @@ const vtx = {
     const mode = this.state.feedMode;
     const signedIn = this.state.signedIn;
     const pollReason = signedIn === false ? 'sign in for real-time' : signedIn === true ? 'reconnecting' : 'Finnhub quotes';
-    const tapeLabel = document.getElementById('tapeSourceLabel');
+    // Only the tape slide's title reflects live-feed status — the other
+    // three slides set their own static title in renderTimeSales(), so
+    // this must not stomp on it when a different slide is showing.
+    const tapeLabel = this.state.sidebarSlide === 'tape' ? document.getElementById('tapeSourceLabel') : null;
     if (tapeLabel) tapeLabel.textContent = !live ? 'Live Tape · Time & Sales (market closed)' : mode === 'ws' ? 'Live Tape · Time & Sales (Finnhub real-time)' : `Live Tape · Time & Sales (${pollReason})`;
     const dataMode = document.getElementById('dataModeLabel');
     if (dataMode) dataMode.textContent = !live ? '◆ MARKET CLOSED' : mode === 'ws' ? '◆ LIVE TRADES (FINNHUB)' : signedIn === false ? '◆ SIGN IN FOR LIVE TRADES' : '◆ LIVE QUOTES (FINNHUB)';
@@ -6227,8 +6256,34 @@ const vtx = {
     this.renderSearch();
   },
 
+  setSidebarSlide(delta) {
+    const slides = this.SIDEBAR_SLIDES;
+    const idx = slides.indexOf(this.state.sidebarSlide);
+    this.state.sidebarSlide = slides[(idx + delta + slides.length) % slides.length];
+    this.renderTimeSales();
+    this.renderFeedLabels();
+  },
+  // Dispatches to one of 4 slides — this function name is kept as the
+  // single render entry point for the whole card so every existing call
+  // site (handleTrade, market-open transitions, poll loops) works
+  // unchanged; only the tape slide reads state.tape, the other three
+  // read data other parts of the app already keep refreshed regardless
+  // of market hours.
   renderTimeSales() {
+    const slide = this.state.sidebarSlide || 'tape';
+    document.getElementById('tapeDots').innerHTML = this.SIDEBAR_SLIDES.map(s =>
+      `<span style="width:5px;height:5px;border-radius:50%;background:${s===slide?'var(--acc2)':'var(--line)'};"></span>`).join('');
+    if (slide === 'tape') this.renderTapeSlide();
+    else if (slide === 'crypto') this.renderCryptoSlide();
+    else if (slide === 'futures') this.renderFuturesSlide();
+    else if (slide === 'movers') this.renderMoversSlide();
+  },
+  renderTapeSlide() {
     const cPos='var(--pos)', cNeg='var(--neg)';
+    document.getElementById('tapeColHeader').innerHTML = `
+      <div style="display:grid;grid-template-columns:64px 1fr auto auto;gap:8px;padding:6px 13px;font-size:8.5px;letter-spacing:.1em;color:var(--mut);text-transform:uppercase;border-bottom:1px solid var(--line);">
+        <span>Time</span><span>Sym</span><span style="text-align:right;">Price</span><span style="text-align:right;">Size</span>
+      </div>`;
     if (this.state.tape.length === 0) {
       const msg = !this.state.marketOpen
         ? (this.state.feedLive ? 'Market is closed — waiting for the next live print.' : 'Market is closed — live prints resume at the next open.')
@@ -6243,6 +6298,88 @@ const vtx = {
         <span style="text-align:right;color:${p.side==='B'?cPos:cNeg};font-weight:600;">${p.price}</span>
         <span style="text-align:right;color:var(--mut);">${p.size}</span>
       </div>`).join('');
+  },
+  // Crypto trades 24/7, so this is the one slide that keeps the original
+  // "live tape" spirit alive even when equities are shut — same
+  // CRYPTO_SNAPSHOT already polled every 60s for the Global Markets tiles.
+  renderCryptoSlide() {
+    document.getElementById('tapeSourceLabel').textContent = 'Crypto · Live Prices';
+    document.getElementById('tapeColHeader').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:6px 13px;font-size:8.5px;letter-spacing:.1em;color:var(--mut);text-transform:uppercase;border-bottom:1px solid var(--line);">
+        <span>Coin</span><span style="text-align:right;">Price</span><span style="text-align:right;">24h</span>
+      </div>`;
+    const coins = this.CRYPTO_SNAPSHOT;
+    if (!coins || !coins.length) {
+      document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">Loading crypto prices…</div>`;
+      return;
+    }
+    document.getElementById('timeSalesBody').innerHTML = coins.map(c => {
+      const up = c.changePct >= 0;
+      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 13px;border-left:2.5px solid ${up?'var(--pos)':'var(--neg)'};font-family:var(--mono);font-size:11px;">
+        <span style="font-weight:700;color:var(--txt);">${c.symbol}</span>
+        <span style="text-align:right;color:var(--txt);">${c.price>=1?c.price.toLocaleString('en-US',{maximumFractionDigits:2}):c.price.toFixed(4)}</span>
+        <span style="text-align:right;font-weight:600;color:${up?'var(--pos)':'var(--neg)'};">${up?'+':''}${c.changePct.toFixed(2)}%</span>
+      </div>`;
+    }).join('') + `<div style="padding:10px 13px 4px;font-size:8px;color:var(--mut);opacity:.7;">Crypto trades 24/7 — CoinGecko, updates every 60s.</div>`;
+  },
+  // Cash indices freeze at the prior close once the 9:30-4:00 session
+  // ends; ES/NQ/YM/RTY are the real, moving read on the market overnight
+  // (same reasoning already used for the Overview's futures swap), plus
+  // 3 international cash indices that are often live during US off-hours.
+  // All from MARKET_SNAPSHOT, already polled every 60s — no new fetch.
+  renderFuturesSlide() {
+    document.getElementById('tapeSourceLabel').textContent = 'Futures & Overnight';
+    document.getElementById('tapeColHeader').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:6px 13px;font-size:8.5px;letter-spacing:.1em;color:var(--mut);text-transform:uppercase;border-bottom:1px solid var(--line);">
+        <span>Index</span><span style="text-align:right;">Price</span><span style="text-align:right;">Chg</span>
+      </div>`;
+    const snap = this.MARKET_SNAPSHOT || {};
+    if (!Object.keys(snap).length) {
+      document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">Loading futures &amp; overnight data…</div>`;
+      return;
+    }
+    const row = (code, label) => {
+      const q = snap[code];
+      if (!q) return `<div style="padding:6px 13px;font-family:var(--mono);font-size:11px;color:var(--mut);">${label} — loading…</div>`;
+      const up = q.changePct >= 0;
+      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 13px;border-left:2.5px solid ${up?'var(--pos)':'var(--neg)'};font-family:var(--mono);font-size:11px;">
+        <span style="font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</span>
+        <span style="text-align:right;color:var(--txt);">${q.price.toLocaleString('en-US',{maximumFractionDigits:2})}</span>
+        <span style="text-align:right;font-weight:600;color:${up?'var(--pos)':'var(--neg)'};">${up?'+':''}${q.changePct.toFixed(2)}%</span>
+      </div>`;
+    };
+    document.getElementById('timeSalesBody').innerHTML = `
+      <div style="padding:8px 13px 3px;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);opacity:.75;">US Futures</div>
+      ${this.SIDEBAR_FUTURES_ROW.map(r => row(r.code, r.label)).join('')}
+      <div style="padding:10px 13px 3px;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);opacity:.75;">Overnight</div>
+      ${this.SIDEBAR_OVERNIGHT_ROW.map(r => row(r.code, r.label)).join('')}
+      <div style="padding:10px 13px 4px;font-size:8px;color:var(--mut);opacity:.7;">Futures trade nearly 24/5 — Yahoo Finance, updates every 60s.</div>`;
+  },
+  // Real gainers/losers across the ~80-stock sector heatmap universe
+  // (same data as the Sectors tab) — not the full market, and honestly
+  // labeled as such in the footnote, but it's a real cross-sector sample
+  // rather than just the watchlist.
+  renderMoversSlide() {
+    document.getElementById('tapeSourceLabel').textContent = 'Gainers & Losers';
+    document.getElementById('tapeColHeader').innerHTML = '';
+    const heat = this.state.heatmap;
+    if (!heat) {
+      document.getElementById('timeSalesBody').innerHTML = `<div style="padding:18px 13px;font-size:11px;color:var(--mut);line-height:1.6;">Loading movers…</div>`;
+      return;
+    }
+    const all = Object.values(heat).flat().filter(c => c.changePct != null);
+    const gainers = [...all].sort((a,b) => b.changePct - a.changePct).slice(0, 5);
+    const losers = [...all].sort((a,b) => a.changePct - b.changePct).slice(0, 5);
+    const row = c => `<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:5px 13px;font-family:var(--mono);font-size:11px;">
+      <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span class="symlink" onclick="vtx.jumpToTicker('${c.sym}')" style="font-weight:700;color:var(--acc2);cursor:pointer;">${c.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${c.name}</span></span>
+      <span style="text-align:right;font-weight:600;color:${c.changePct>=0?'var(--pos)':'var(--neg)'};">${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%</span>
+    </div>`;
+    document.getElementById('timeSalesBody').innerHTML = `
+      <div style="padding:8px 13px 3px;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--pos);opacity:.85;">Gainers</div>
+      ${gainers.length ? gainers.map(row).join('') : `<div style="padding:4px 13px;font-size:11px;color:var(--mut);">No data yet.</div>`}
+      <div style="padding:10px 13px 3px;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--neg);opacity:.85;">Losers</div>
+      ${losers.length ? losers.map(row).join('') : `<div style="padding:4px 13px;font-size:11px;color:var(--mut);">No data yet.</div>`}
+      <div style="padding:10px 13px 4px;font-size:8px;color:var(--mut);opacity:.7;">Across the ~80-stock sector heatmap universe, not the full market — Finnhub, updates every few minutes.</div>`;
   },
 
   renderTabs() {
