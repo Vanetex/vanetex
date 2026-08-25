@@ -2866,7 +2866,10 @@ const vtx = {
       const series = this.YC_HOUSING[sel.id];
       let chartHtml = '';
       if (series && !series.failed && series.points && series.points.length) {
-        chartHtml = this.ycGlobalChart([{ id: sel.abbr, label: sel.name, color: '#34d3ff', points: series.points }], 720, 180);
+        // Index level, not a percentage — pre-existing gap from the
+        // original build (same "%" mislabel class as the permits chart
+        // below), caught during this pass and fixed the same way.
+        chartHtml = this.ycGlobalChart([{ id: sel.abbr, label: sel.name, color: '#34d3ff', points: series.points }], 720, 180, v => v.toFixed(0));
       }
       // Building permits — monthly, so "1 year ago" uses the same
       // 350-380-day real-date window as the HPI's YoY above, which works
