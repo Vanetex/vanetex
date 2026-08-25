@@ -812,58 +812,67 @@ const vtx = {
   // then embedded as static path data so intelligence.html stays a
   // single dependency-free file at runtime.
   YC_HOUSING: {}, // populated by loadYcHousing() — keyed by series id
+  // Building permits, not literal "housing starts" — Census only
+  // publishes starts nationally and by the 4 broad regions, never per
+  // state (confirmed live, no state-level starts series exists on FRED).
+  // Permits (new units authorized) are the real state-level metric
+  // analysts actually use as the construction-activity proxy, via
+  // FRED's {STATE}BPPRIVSA family — verified live for all 51 before
+  // hardcoding, real monthly data, not a substitute presented as the
+  // real thing. Keyed by series id, populated by loadYcHousingPermits().
+  YC_HOUSING_PERMITS: {},
   YC_HOUSING_STATES: [
-    { abbr: 'AL', name: "Alabama", id: 'ALSTHPI' },
-    { abbr: 'AK', name: "Alaska", id: 'AKSTHPI' },
-    { abbr: 'AZ', name: "Arizona", id: 'AZSTHPI' },
-    { abbr: 'AR', name: "Arkansas", id: 'ARSTHPI' },
-    { abbr: 'CA', name: "California", id: 'CASTHPI' },
-    { abbr: 'CO', name: "Colorado", id: 'COSTHPI' },
-    { abbr: 'CT', name: "Connecticut", id: 'CTSTHPI' },
-    { abbr: 'DE', name: "Delaware", id: 'DESTHPI' },
-    { abbr: 'DC', name: "District of Columbia", id: 'DCSTHPI' },
-    { abbr: 'FL', name: "Florida", id: 'FLSTHPI' },
-    { abbr: 'GA', name: "Georgia", id: 'GASTHPI' },
-    { abbr: 'HI', name: "Hawaii", id: 'HISTHPI' },
-    { abbr: 'ID', name: "Idaho", id: 'IDSTHPI' },
-    { abbr: 'IL', name: "Illinois", id: 'ILSTHPI' },
-    { abbr: 'IN', name: "Indiana", id: 'INSTHPI' },
-    { abbr: 'IA', name: "Iowa", id: 'IASTHPI' },
-    { abbr: 'KS', name: "Kansas", id: 'KSSTHPI' },
-    { abbr: 'KY', name: "Kentucky", id: 'KYSTHPI' },
-    { abbr: 'LA', name: "Louisiana", id: 'LASTHPI' },
-    { abbr: 'ME', name: "Maine", id: 'MESTHPI' },
-    { abbr: 'MD', name: "Maryland", id: 'MDSTHPI' },
-    { abbr: 'MA', name: "Massachusetts", id: 'MASTHPI' },
-    { abbr: 'MI', name: "Michigan", id: 'MISTHPI' },
-    { abbr: 'MN', name: "Minnesota", id: 'MNSTHPI' },
-    { abbr: 'MS', name: "Mississippi", id: 'MSSTHPI' },
-    { abbr: 'MO', name: "Missouri", id: 'MOSTHPI' },
-    { abbr: 'MT', name: "Montana", id: 'MTSTHPI' },
-    { abbr: 'NE', name: "Nebraska", id: 'NESTHPI' },
-    { abbr: 'NV', name: "Nevada", id: 'NVSTHPI' },
-    { abbr: 'NH', name: "New Hampshire", id: 'NHSTHPI' },
-    { abbr: 'NJ', name: "New Jersey", id: 'NJSTHPI' },
-    { abbr: 'NM', name: "New Mexico", id: 'NMSTHPI' },
-    { abbr: 'NY', name: "New York", id: 'NYSTHPI' },
-    { abbr: 'NC', name: "North Carolina", id: 'NCSTHPI' },
-    { abbr: 'ND', name: "North Dakota", id: 'NDSTHPI' },
-    { abbr: 'OH', name: "Ohio", id: 'OHSTHPI' },
-    { abbr: 'OK', name: "Oklahoma", id: 'OKSTHPI' },
-    { abbr: 'OR', name: "Oregon", id: 'ORSTHPI' },
-    { abbr: 'PA', name: "Pennsylvania", id: 'PASTHPI' },
-    { abbr: 'RI', name: "Rhode Island", id: 'RISTHPI' },
-    { abbr: 'SC', name: "South Carolina", id: 'SCSTHPI' },
-    { abbr: 'SD', name: "South Dakota", id: 'SDSTHPI' },
-    { abbr: 'TN', name: "Tennessee", id: 'TNSTHPI' },
-    { abbr: 'TX', name: "Texas", id: 'TXSTHPI' },
-    { abbr: 'UT', name: "Utah", id: 'UTSTHPI' },
-    { abbr: 'VT', name: "Vermont", id: 'VTSTHPI' },
-    { abbr: 'VA', name: "Virginia", id: 'VASTHPI' },
-    { abbr: 'WA', name: "Washington", id: 'WASTHPI' },
-    { abbr: 'WV', name: "West Virginia", id: 'WVSTHPI' },
-    { abbr: 'WI', name: "Wisconsin", id: 'WISTHPI' },
-    { abbr: 'WY', name: "Wyoming", id: 'WYSTHPI' },
+    { abbr: 'AL', name: "Alabama", id: 'ALSTHPI', permitsId: 'ALBPPRIVSA' },
+    { abbr: 'AK', name: "Alaska", id: 'AKSTHPI', permitsId: 'AKBPPRIVSA' },
+    { abbr: 'AZ', name: "Arizona", id: 'AZSTHPI', permitsId: 'AZBPPRIVSA' },
+    { abbr: 'AR', name: "Arkansas", id: 'ARSTHPI', permitsId: 'ARBPPRIVSA' },
+    { abbr: 'CA', name: "California", id: 'CASTHPI', permitsId: 'CABPPRIVSA' },
+    { abbr: 'CO', name: "Colorado", id: 'COSTHPI', permitsId: 'COBPPRIVSA' },
+    { abbr: 'CT', name: "Connecticut", id: 'CTSTHPI', permitsId: 'CTBPPRIVSA' },
+    { abbr: 'DE', name: "Delaware", id: 'DESTHPI', permitsId: 'DEBPPRIVSA' },
+    { abbr: 'DC', name: "District of Columbia", id: 'DCSTHPI', permitsId: 'DCBPPRIVSA' },
+    { abbr: 'FL', name: "Florida", id: 'FLSTHPI', permitsId: 'FLBPPRIVSA' },
+    { abbr: 'GA', name: "Georgia", id: 'GASTHPI', permitsId: 'GABPPRIVSA' },
+    { abbr: 'HI', name: "Hawaii", id: 'HISTHPI', permitsId: 'HIBPPRIVSA' },
+    { abbr: 'ID', name: "Idaho", id: 'IDSTHPI', permitsId: 'IDBPPRIVSA' },
+    { abbr: 'IL', name: "Illinois", id: 'ILSTHPI', permitsId: 'ILBPPRIVSA' },
+    { abbr: 'IN', name: "Indiana", id: 'INSTHPI', permitsId: 'INBPPRIVSA' },
+    { abbr: 'IA', name: "Iowa", id: 'IASTHPI', permitsId: 'IABPPRIVSA' },
+    { abbr: 'KS', name: "Kansas", id: 'KSSTHPI', permitsId: 'KSBPPRIVSA' },
+    { abbr: 'KY', name: "Kentucky", id: 'KYSTHPI', permitsId: 'KYBPPRIVSA' },
+    { abbr: 'LA', name: "Louisiana", id: 'LASTHPI', permitsId: 'LABPPRIVSA' },
+    { abbr: 'ME', name: "Maine", id: 'MESTHPI', permitsId: 'MEBPPRIVSA' },
+    { abbr: 'MD', name: "Maryland", id: 'MDSTHPI', permitsId: 'MDBPPRIVSA' },
+    { abbr: 'MA', name: "Massachusetts", id: 'MASTHPI', permitsId: 'MABPPRIVSA' },
+    { abbr: 'MI', name: "Michigan", id: 'MISTHPI', permitsId: 'MIBPPRIVSA' },
+    { abbr: 'MN', name: "Minnesota", id: 'MNSTHPI', permitsId: 'MNBPPRIVSA' },
+    { abbr: 'MS', name: "Mississippi", id: 'MSSTHPI', permitsId: 'MSBPPRIVSA' },
+    { abbr: 'MO', name: "Missouri", id: 'MOSTHPI', permitsId: 'MOBPPRIVSA' },
+    { abbr: 'MT', name: "Montana", id: 'MTSTHPI', permitsId: 'MTBPPRIVSA' },
+    { abbr: 'NE', name: "Nebraska", id: 'NESTHPI', permitsId: 'NEBPPRIVSA' },
+    { abbr: 'NV', name: "Nevada", id: 'NVSTHPI', permitsId: 'NVBPPRIVSA' },
+    { abbr: 'NH', name: "New Hampshire", id: 'NHSTHPI', permitsId: 'NHBPPRIVSA' },
+    { abbr: 'NJ', name: "New Jersey", id: 'NJSTHPI', permitsId: 'NJBPPRIVSA' },
+    { abbr: 'NM', name: "New Mexico", id: 'NMSTHPI', permitsId: 'NMBPPRIVSA' },
+    { abbr: 'NY', name: "New York", id: 'NYSTHPI', permitsId: 'NYBPPRIVSA' },
+    { abbr: 'NC', name: "North Carolina", id: 'NCSTHPI', permitsId: 'NCBPPRIVSA' },
+    { abbr: 'ND', name: "North Dakota", id: 'NDSTHPI', permitsId: 'NDBPPRIVSA' },
+    { abbr: 'OH', name: "Ohio", id: 'OHSTHPI', permitsId: 'OHBPPRIVSA' },
+    { abbr: 'OK', name: "Oklahoma", id: 'OKSTHPI', permitsId: 'OKBPPRIVSA' },
+    { abbr: 'OR', name: "Oregon", id: 'ORSTHPI', permitsId: 'ORBPPRIVSA' },
+    { abbr: 'PA', name: "Pennsylvania", id: 'PASTHPI', permitsId: 'PABPPRIVSA' },
+    { abbr: 'RI', name: "Rhode Island", id: 'RISTHPI', permitsId: 'RIBPPRIVSA' },
+    { abbr: 'SC', name: "South Carolina", id: 'SCSTHPI', permitsId: 'SCBPPRIVSA' },
+    { abbr: 'SD', name: "South Dakota", id: 'SDSTHPI', permitsId: 'SDBPPRIVSA' },
+    { abbr: 'TN', name: "Tennessee", id: 'TNSTHPI', permitsId: 'TNBPPRIVSA' },
+    { abbr: 'TX', name: "Texas", id: 'TXSTHPI', permitsId: 'TXBPPRIVSA' },
+    { abbr: 'UT', name: "Utah", id: 'UTSTHPI', permitsId: 'UTBPPRIVSA' },
+    { abbr: 'VT', name: "Vermont", id: 'VTSTHPI', permitsId: 'VTBPPRIVSA' },
+    { abbr: 'VA', name: "Virginia", id: 'VASTHPI', permitsId: 'VABPPRIVSA' },
+    { abbr: 'WA', name: "Washington", id: 'WASTHPI', permitsId: 'WABPPRIVSA' },
+    { abbr: 'WV', name: "West Virginia", id: 'WVSTHPI', permitsId: 'WVBPPRIVSA' },
+    { abbr: 'WI', name: "Wisconsin", id: 'WISTHPI', permitsId: 'WIBPPRIVSA' },
+    { abbr: 'WY', name: "Wyoming", id: 'WYSTHPI', permitsId: 'WYBPPRIVSA' },
   ],
   // Real US state boundary paths (Albers USA projection — the standard
   // compact continental-US layout with Alaska/Hawaii repositioned as
@@ -2852,6 +2861,28 @@ const vtx = {
       if (series && !series.failed && series.points && series.points.length) {
         chartHtml = this.ycGlobalChart([{ id: sel.abbr, label: sel.name, color: '#34d3ff', points: series.points }], 720, 180);
       }
+      // Building permits — monthly, so "1 year ago" uses the same
+      // 350-380-day real-date window as the HPI's YoY above, which works
+      // just as well at monthly granularity as it does at quarterly.
+      const permitsSeries = this.YC_HOUSING_PERMITS[sel.permitsId];
+      let permitsStatHtml = '', permitsChartHtml = '';
+      if (permitsSeries && !permitsSeries.failed && permitsSeries.points && permitsSeries.points.length) {
+        const pts = permitsSeries.points;
+        const last = pts[pts.length - 1];
+        const lastTime = Date.parse(last.date);
+        const yearAgo = [...pts].reverse().find(p => {
+          const dt = lastTime - Date.parse(p.date);
+          return dt >= 350 * 86400000 && dt <= 380 * 86400000;
+        });
+        const permitsYoy = yearAgo ? ((last.value / yearAgo.value) - 1) * 100 : null;
+        permitsStatHtml = `<span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${permitsYoy == null ? 'var(--mut)' : permitsYoy >= 0 ? 'var(--pos)' : 'var(--neg)'};">${permitsYoy != null ? (permitsYoy >= 0 ? '+' : '') + permitsYoy.toFixed(1) + '% YoY' : ''}</span>`;
+        permitsChartHtml = this.ycGlobalChart([{ id: sel.permitsId, label: sel.name + ' Permits', color: '#f0c419', points: pts }], 720, 130);
+      } else if (permitsSeries && permitsSeries.failed) {
+        permitsStatHtml = `<span style="font-size:10px;color:var(--mut);">Couldn't load</span>`;
+      } else {
+        permitsStatHtml = `<span style="font-size:10px;color:var(--mut);">Loading…</span>`;
+      }
+      const permitsLatest = permitsSeries && permitsSeries.points && permitsSeries.points.length ? permitsSeries.points[permitsSeries.points.length - 1] : null;
       detailHtml = `
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
           <div style="padding:12px 14px;">
@@ -2862,6 +2893,14 @@ const vtx = {
             </div>
             <div style="font-size:10px;color:var(--mut);margin-top:2px;">FHFA House Price Index ${sel.latest != null ? sel.latest.toFixed(1) : '—'} as of ${sel.latestDate || '—'} · Index 1980:Q1=100</div>
             ${chartHtml ? `<div style="margin-top:10px;">${chartHtml}</div>` : ''}
+          </div>
+          <div style="padding:10px 14px 12px;border-top:1px solid var(--line);">
+            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+              <span style="font-size:11px;font-weight:700;color:var(--txt);">Building Permits</span>
+              ${permitsStatHtml}
+            </div>
+            <div style="font-size:10px;color:var(--mut);margin-top:2px;">${permitsLatest != null ? Math.round(permitsLatest.value).toLocaleString('en-US') + ' units authorized, ' + permitsLatest.date : 'New privately-owned units authorized by permit'} · not the same as housing starts, which the Census Bureau doesn't publish per state</div>
+            ${permitsChartHtml ? `<div style="margin-top:8px;">${permitsChartHtml}</div>` : ''}
           </div>
         </div>`;
     }
@@ -2876,7 +2915,7 @@ const vtx = {
         <div style="padding:0 10px 12px;">${legendHtml}</div>
       </div>
       ${detailHtml}
-      <div style="font-size:8.5px;color:var(--mut);padding:2px 2px 12px;opacity:.7;">FHFA All-Transactions House Price Index, per state, via FRED — real quarterly data, not seasonally adjusted, not a forecast. Click any state for its full history. Map: US Census TIGER geometry (Albers USA projection).</div>
+      <div style="font-size:8.5px;color:var(--mut);padding:2px 2px 12px;opacity:.7;">Map: FHFA All-Transactions House Price Index, per state, via FRED — real quarterly data, not seasonally adjusted, not a forecast. Click any state for its full history, including real monthly building permits (new units authorized, seasonally adjusted) — the state-level construction-activity proxy, since the Census Bureau only publishes literal housing starts nationally and by region. Map geometry: US Census TIGER (Albers USA projection).</div>
     `;
   },
   selectIndicator(meta) {
@@ -4458,6 +4497,27 @@ const vtx = {
       if (i + CHUNK < this.YC_HOUSING_STATES.length) await new Promise(r => setTimeout(r, 400));
     }
   },
+  // Same fan-out pattern as loadYcHousing(), against each state's
+  // permitsId instead — a separate loader (not merged into loadYcHousing)
+  // since it's a genuinely different series family, monthly not
+  // quarterly, and shouldn't block the map's own data on this one.
+  async loadYcHousingPermits() {
+    const CHUNK = 6;
+    for (let i = 0; i < this.YC_HOUSING_STATES.length; i += CHUNK) {
+      const batch = this.YC_HOUSING_STATES.slice(i, i + CHUNK);
+      await Promise.all(batch.map(async s => {
+        try {
+          const res = await fetch(`/api/intel/econ-series?id=${s.permitsId}`);
+          if (!res.ok) { this.YC_HOUSING_PERMITS[s.permitsId] = { failed: true }; return; }
+          const data = await res.json();
+          if (!data.points || !data.points.length) { this.YC_HOUSING_PERMITS[s.permitsId] = { failed: true }; return; }
+          this.YC_HOUSING_PERMITS[s.permitsId] = { points: data.points };
+        } catch (e) { this.YC_HOUSING_PERMITS[s.permitsId] = { failed: true }; }
+      }));
+      if (this.state.view === 'regionalHousing' && this.state.housingSelected) this.renderRegionalHousingView();
+      if (i + CHUNK < this.YC_HOUSING_STATES.length) await new Promise(r => setTimeout(r, 400));
+    }
+  },
   // Click a state on the map to open/close its detail card — clicking the
   // already-open state (or its own Close button) toggles it off.
   selectHousingState(abbr) {
@@ -4472,6 +4532,7 @@ const vtx = {
     this.setMobilePanel('chart');
     this.render();
     if (!Object.keys(this.YC_HOUSING).length) this.loadYcHousing();
+    if (!Object.keys(this.YC_HOUSING_PERMITS).length) this.loadYcHousingPermits();
   },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
