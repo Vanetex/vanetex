@@ -1958,8 +1958,15 @@ const vtx = {
   // and shared yield y-axis. US is daily; every other country is FRED's
   // monthly OECD series, so lines will visibly differ in point density —
   // that's real, not a bug, left as-is rather than faking synthetic points.
-  ycGlobalChart(series, w, h) {
+  // fmtY formats each y-axis grid label — defaults to the "%" suffix
+  // every existing caller (GDP growth, CPI, policy rates, credit spreads,
+  // HPI) actually wants, so omitting it changes nothing for them. Added
+  // because reusing this chart for the Regional Housing permits series (a
+  // raw unit count, not a percentage) with the hardcoded "%" produced
+  // nonsense axis labels like "30506.7%" — caught live before shipping.
+  ycGlobalChart(series, w, h, fmtY) {
     w = w || 760; h = h || 260;
+    fmtY = fmtY || (v => v.toFixed(1) + '%');
     const padL = 38, padB = 22, padT = 12, padR = 12;
     const cw = w - padL - padR, ch = h - padT - padB;
     const allPts = series.flatMap(s => s.points);
@@ -1979,7 +1986,7 @@ const vtx = {
       const v = vMin + (vSpan * i / GRID_N);
       const yy = y(v);
       return `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${w - padR}" y2="${yy.toFixed(1)}" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
-        <text x="${(padL - 6).toFixed(1)}" y="${(yy + 3).toFixed(1)}" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--mut)">${v.toFixed(1)}%</text>`;
+        <text x="${(padL - 6).toFixed(1)}" y="${(yy + 3).toFixed(1)}" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--mut)">${fmtY(v)}</text>`;
     }).join('');
     const TICK_N = 5;
     const xLabels = Array.from({ length: TICK_N + 1 }, (_, i) => {
@@ -2876,7 +2883,8 @@ const vtx = {
         });
         const permitsYoy = yearAgo ? ((last.value / yearAgo.value) - 1) * 100 : null;
         permitsStatHtml = `<span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${permitsYoy == null ? 'var(--mut)' : permitsYoy >= 0 ? 'var(--pos)' : 'var(--neg)'};">${permitsYoy != null ? (permitsYoy >= 0 ? '+' : '') + permitsYoy.toFixed(1) + '% YoY' : ''}</span>`;
-        permitsChartHtml = this.ycGlobalChart([{ id: sel.permitsId, label: sel.name + ' Permits', color: '#f0c419', points: pts }], 720, 130);
+        permitsChartHtml = this.ycGlobalChart([{ id: sel.permitsId, label: sel.name + ' Permits', color: '#f0c419', points: pts }], 720, 130,
+          v => v >= 1000 ? (v / 1000).toFixed(1) + 'K' : v.toFixed(0));
       } else if (permitsSeries && permitsSeries.failed) {
         permitsStatHtml = `<span style="font-size:10px;color:var(--mut);">Couldn't load</span>`;
       } else {
