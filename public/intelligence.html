@@ -4402,24 +4402,42 @@ const vtx = {
     }
     dates.reverse(); // oldest to newest
 
+    const fetchOne = async date => {
+      try {
+        const res = await fetch(`/api/intel/yield-curve?date=${date}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.points || !data.points.length) return null;
+        return { date, points: data.points };
+      } catch (e) { return null; }
+    };
+
     this.YC_SURFACE = new Array(dates.length).fill(null);
     const CHUNK = 4;
     for (let i = 0; i < dates.length; i += CHUNK) {
       const batch = dates.slice(i, i + CHUNK);
-      const results = await Promise.all(batch.map(async date => {
-        try {
-          const res = await fetch(`/api/intel/yield-curve?date=${date}`);
-          if (!res.ok) return null;
-          const data = await res.json();
-          if (!data.points || !data.points.length) return null;
-          return { date, points: data.points };
-        } catch (e) { return null; }
-      }));
+      const results = await Promise.all(batch.map(fetchOne));
       results.forEach((r, j) => { this.YC_SURFACE[i + j] = r; });
       this.state.yc3dLoadStatus = { loaded: Math.min(i + CHUNK, dates.length), total: dates.length };
       if (this.state.view === 'yieldCurve' && this.state.yc3d) this.renderYieldCurveView();
       if (i + CHUNK < dates.length) await new Promise(r => setTimeout(r, 15000));
     }
+
+    // A null here almost never means "no data for this date" — Treasury
+    // yields exist for essentially every real business day in this 24-
+    // month window — confirmed live: a date that failed mid-batch just
+    // succeeded on its own moments later. Far more likely explanation is
+    // a transient 429 from other traffic sharing this route's rate-limit
+    // bucket during the several minutes this load runs. One retry pass,
+    // spaced out from the main loop, recovers those real dates instead of
+    // leaving a permanent gap in the surface for the rest of the session.
+    const missing = this.YC_SURFACE.map((r, idx) => (r ? null : idx)).filter(idx => idx !== null);
+    if (missing.length) {
+      await new Promise(r => setTimeout(r, 10000));
+      const retried = await Promise.all(missing.map(idx => fetchOne(dates[idx])));
+      retried.forEach((r, k) => { if (r) this.YC_SURFACE[missing[k]] = r; });
+    }
+
     this.state.yc3dLoadStatus = null;
     if (this.state.view === 'yieldCurve' && this.state.yc3d) this.renderYieldCurveView();
   },
