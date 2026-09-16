@@ -36,6 +36,15 @@ type QuoteBody = {
   // the Yahoo fallback, which covers foreign-exchange-only symbols priced
   // in their local currency (JPY, KRW, CHF, ...), never assumed as USD.
   currency: string;
+  // Real pre/post-market price + % change, or null when there's no
+  // extended-hours activity to report. Previously the frontend only had
+  // this when a live WebSocket trade tick happened to arrive for that
+  // specific symbol — which requires being signed in AND that symbol
+  // actually trading during the session, so illiquid names (and anyone
+  // on the polling fallback) never showed it at all. See
+  // fetchYahooExtendedHours for the real source this replaces that with.
+  ahPrice: number | null;
+  ahChangePct: number | null;
 };
 
 type QuoteResult =
@@ -50,7 +59,7 @@ type QuoteResult =
 // is no regularMarketOpen in Yahoo's meta, so "open" honestly falls back to
 // the prior close rather than inventing a number, same convention the
 // frontend itself already applies when open is otherwise unavailable.
-async function fetchYahooFallbackQuote(sym: string): Promise<QuoteBody | null> {
+async function fetchYahooFallbackQuote(sym: string): Promise<Omit<QuoteBody, "ahPrice" | "ahChangePct"> | null> {
   try {
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`,
@@ -110,22 +119,62 @@ async function fetchYahooFallbackQuote(sym: string): Promise<QuoteBody | null> {
   }
 }
 
-// Cache-first fetch of one symbol's quote — shared by the single-symbol
-// and batch paths below so a symbol warmed by one is warm for the other,
-// and neither path duplicates a Finnhub call the other already made.
-async function fetchOneQuote(sym: string, apiKey: string | null): Promise<QuoteResult> {
-  const cacheKey = `quote:${sym}`;
-  const cached = await kvGet<QuoteBody>(cacheKey);
-  if (cached) return { ok: true, body: cached };
+// Real extended-hours price, independent of Finnhub entirely (its free
+// tier /quote has no such field — confirmed live: `c` and its timestamp
+// stay frozen at the prior regular close straight through pre-market) and
+// independent of whether a live WebSocket trade tick happened to arrive —
+// this is what actually fixes "after hours only shows for some stocks":
+// that old path needed a real trade AND an active signed-in WS connection,
+// so illiquid names and anyone on the polling fallback never got one at
+// all. Yahoo's chart meta carries `fulldayPrice`, which reflects the real
+// current price across pre/regular/post sessions, confirmed live across
+// several liquid and less-liquid names (NVDA, PLTR, COIN) each showing a
+// real, different figure from the frozen regularMarketPrice during actual
+// pre-market hours.
+async function fetchYahooExtendedHours(sym: string): Promise<{ ahPrice: number; ahChangePct: number } | null> {
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1m&range=1d&includePrePost=true`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      chart: {
+        result?: Array<{
+          meta: {
+            hasPrePostMarketData?: boolean;
+            regularMarketPrice?: number;
+            fulldayPrice?: number;
+            fulldayChangePercent?: number;
+          };
+        }>;
+      };
+    };
+    const meta = data.chart.result?.[0]?.meta;
+    if (!meta?.hasPrePostMarketData || meta.fulldayPrice == null || meta.regularMarketPrice == null) return null;
+    // Equal values mean no extended-session trade has happened yet, not a
+    // real (flat) after-hours price — treated as "nothing to report" rather
+    // than shown as a zero-change figure that would misleadingly imply a
+    // real, confirmed extended-hours trade occurred.
+    if (Math.abs(meta.fulldayPrice - meta.regularMarketPrice) < 0.0001) return null;
+    return { ahPrice: meta.fulldayPrice, ahChangePct: meta.fulldayChangePercent ?? 0 };
+  } catch (err) {
+    console.error(`[stock/quote] Yahoo extended-hours fetch failed for ${sym}:`, err);
+    return null;
+  }
+}
 
+async function fetchPrimaryQuote(sym: string, apiKey: string | null): Promise<
+  | { ok: true; body: Omit<QuoteBody, "ahPrice" | "ahChangePct"> }
+  | { ok: false; reason: "not_found" | "failed" }
+> {
   // No Finnhub key configured (local dev, which has none of this app's paid
   // keys) — go straight to the keyless Yahoo fallback rather than failing
   // outright. In production the key is always present, so this branch never
   // runs there and existing behavior is unchanged.
   if (!apiKey) {
     const fallback = await fetchYahooFallbackQuote(sym);
-    if (fallback) { await kvSet(cacheKey, fallback, CACHE_TTL_S); return { ok: true, body: fallback }; }
-    return { ok: false, reason: "not_found" };
+    return fallback ? { ok: true, body: fallback } : { ok: false, reason: "not_found" };
   }
 
   try {
@@ -141,8 +190,7 @@ async function fetchOneQuote(sym: string, apiKey: string | null): Promise<QuoteR
     // generic "failed" before ever reaching that branch.
     if (!quoteRes.ok || !profileRes.ok) {
       const fallback = await fetchYahooFallbackQuote(sym);
-      if (fallback) { await kvSet(cacheKey, fallback, CACHE_TTL_S); return { ok: true, body: fallback }; }
-      return { ok: false, reason: "failed" };
+      return fallback ? { ok: true, body: fallback } : { ok: false, reason: "failed" };
     }
 
     const quote = (await quoteRes.json()) as {
@@ -158,36 +206,58 @@ async function fetchOneQuote(sym: string, apiKey: string | null): Promise<QuoteR
     // "not found" for a symbol that genuinely trades, just not on Finnhub.
     if (!quote.c) {
       const fallback = await fetchYahooFallbackQuote(sym);
-      if (fallback) { await kvSet(cacheKey, fallback, CACHE_TTL_S); return { ok: true, body: fallback }; }
-      return { ok: false, reason: "not_found" };
+      return fallback ? { ok: true, body: fallback } : { ok: false, reason: "not_found" };
     }
 
-    const body: QuoteBody = {
-      symbol: sym,
-      name: profile.name ?? sym,
-      exchange: profile.exchange ?? "",
-      industry: profile.finnhubIndustry ?? "",
-      logo: profile.logo || null,
-      ipo: profile.ipo || null,
-      website: profile.weburl || null,
-      isFund: !profile.name,
-      price: quote.c,
-      change: quote.d,
-      changePct: quote.dp,
-      dayHigh: quote.h,
-      dayLow: quote.l,
-      open: quote.o,
-      prevClose: quote.pc,
-      currency: "USD",
+    return {
+      ok: true,
+      body: {
+        symbol: sym,
+        name: profile.name ?? sym,
+        exchange: profile.exchange ?? "",
+        industry: profile.finnhubIndustry ?? "",
+        logo: profile.logo || null,
+        ipo: profile.ipo || null,
+        website: profile.weburl || null,
+        isFund: !profile.name,
+        price: quote.c,
+        change: quote.d,
+        changePct: quote.dp,
+        dayHigh: quote.h,
+        dayLow: quote.l,
+        open: quote.o,
+        prevClose: quote.pc,
+        currency: "USD",
+      },
     };
-    await kvSet(cacheKey, body, CACHE_TTL_S);
-    return { ok: true, body };
   } catch (err) {
     console.error(`[stock/quote] fetch failed for ${sym}:`, err);
     const fallback = await fetchYahooFallbackQuote(sym);
-    if (fallback) { await kvSet(cacheKey, fallback, CACHE_TTL_S); return { ok: true, body: fallback }; }
-    return { ok: false, reason: "failed" };
+    return fallback ? { ok: true, body: fallback } : { ok: false, reason: "failed" };
   }
+}
+
+// Cache-first fetch of one symbol's quote — shared by the single-symbol
+// and batch paths below so a symbol warmed by one is warm for the other,
+// and neither path duplicates a Finnhub call the other already made.
+// Runs the primary quote and the extended-hours lookup in parallel and
+// merges them — the two are independent real sources (Finnhub-or-Yahoo
+// for the primary price, Yahoo alone for extended-hours), so one failing
+// doesn't need to block the other.
+async function fetchOneQuote(sym: string, apiKey: string | null): Promise<QuoteResult> {
+  const cacheKey = `quote:${sym}`;
+  const cached = await kvGet<QuoteBody>(cacheKey);
+  if (cached) return { ok: true, body: cached };
+
+  const [primary, ah] = await Promise.all([
+    fetchPrimaryQuote(sym, apiKey),
+    fetchYahooExtendedHours(sym),
+  ]);
+  if (!primary.ok) return primary;
+
+  const body: QuoteBody = { ...primary.body, ahPrice: ah?.ahPrice ?? null, ahChangePct: ah?.ahChangePct ?? null };
+  await kvSet(cacheKey, body, CACHE_TTL_S);
+  return { ok: true, body };
 }
 
 export async function GET(request: NextRequest) {

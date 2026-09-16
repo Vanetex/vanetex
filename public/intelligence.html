@@ -4110,6 +4110,17 @@ const vtx = {
       if (!res.ok) return;
       const data = await res.json();
       if (!data.quotes) return;
+      // handleTrade() only ever sets ahPrice/ahTime from a live WebSocket
+      // trade print — which requires being signed in AND that symbol
+      // actually printing a trade during the extended session, so illiquid
+      // names (and anyone on this poll path with no WS at all) never got an
+      // after-hours price before. q.ahPrice below is real too (Yahoo's
+      // fulldayPrice, see fetchYahooExtendedHours server-side) and refreshes
+      // every 60s regardless of trade activity or sign-in state — a real
+      // WS trade within the last 90s still wins (it's strictly fresher),
+      // this just stops "no recent trade tick" from meaning "no AH price at
+      // all."
+      const nowMs = Date.now();
       this.state.tickers = this.state.tickers.map(t => {
         const q = data.quotes[t.sym];
         if (!q || !q.price) return t;
@@ -4119,6 +4130,7 @@ const vtx = {
         // into an unrelated fake shape every 60s).
         const hist = (t.hist || []).concat(q.price);
         if (hist.length > 46) hist.shift();
+        const wsAhIsFresh = t.ahTime != null && (nowMs - t.ahTime) < 90 * 1000;
         return {
           ...t,
           price: q.price,
@@ -4135,6 +4147,8 @@ const vtx = {
           isFund: q.isFund,
           dayHigh: q.dayHigh,
           dayLow: q.dayLow,
+          ahPrice: wsAhIsFresh ? t.ahPrice : (q.ahPrice ?? null),
+          ahTime: wsAhIsFresh ? t.ahTime : (q.ahPrice != null ? nowMs : null),
         };
       });
       this.render();
