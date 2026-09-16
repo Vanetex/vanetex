@@ -515,7 +515,11 @@ const vtx = {
     // is meant to be studied, not just watched.
     yc3d: false,
     yc3dRotY: 0.5,
+    yc3dRotX: 0.32, // pitch — starts tilted down slightly so the surface reads as a landscape, not a flat strip
+    yc3dZoom: 1,
+    yc3dMonths: 24, // lookback for the surface — 12/24/36, selectable in the 3D toolbar
     yc3dLoadStatus: null, // {loaded, total} while fetching, or null once done/not started
+    yc3dHover: null, // {label, date, yield} for the vertex under the cursor, or null
     // Lookback window for the Global Yield Comparison chart — filtering
     // happens client-side against the already-fetched full histories, so
     // switching ranges never needs a new request.
@@ -561,8 +565,9 @@ const vtx = {
   // instrument sidebar) assumes is always "today's" curve. This one tracks
   // whatever date is currently being viewed, which may be historical.
   YC_VIEW: null, // { date, points, spread10y2y, inverted, loading, error }
-  YC_MACRO: {}, // populated by loadYcMacro() — real FRED CPI/PCE/PPI/GDP/Unemployment, keyed by series id
+  YC_MACRO: {}, // populated by loadYcMacro() — real FRED CPI/PCE/PPI/GDP/Unemployment/breakeven inflation, keyed by series id
   YC_PROB: null, // populated by loadRateProbability() — real Atlanta Fed hike/hold/cut probabilities
+  YC_RECESSION: null, // populated by loadRecessionProbability() — real NY Fed "Yield Curve as a Leading Indicator" model output
   YC_OVERLAY_DATA: {}, // populated by loadYcOverlayData() — full DFEDTARU/DFEDTARL/CPIAUCSL histories, fetched once and reused across every date navigation click (cheaper than re-fetching per date)
   // 3D surface — real monthly curve snapshots (the same real
   // /api/intel/yield-curve?date=X data behind the 2D date-nav, just
@@ -578,6 +583,11 @@ const vtx = {
     { id: 'A191RL1Q225SBEA', label: 'GDP (latest qtr)', transform: 'level', offset: 0, suffix: '%' },
     { id: 'A191RL1Q225SBEA', label: 'GDP (prior qtr)', transform: 'level', offset: 1, suffix: '%' },
     { id: 'UNRATE', label: 'Unemployment', transform: 'level', offset: 0, suffix: '%' },
+    // 10Y breakeven inflation — nominal 10Y minus real (TIPS) 10Y yield,
+    // published directly by FRED (not derived here) as the market's own
+    // implied average inflation expectation over the next decade. Verified
+    // live via /api/intel/econ-series?id=T10YIE (2.38% as of 2026-09-15).
+    { id: 'T10YIE', label: '10Y Breakeven Inflation', transform: 'level', offset: 0, suffix: '%' },
   ],
   YC_GLOBAL: {}, // populated by loadYcGlobal() — real FRED 10Y/long-term govt bond yields, keyed by series id
   // Every country's long-term (~10Y) government bond yield — the US leg is
@@ -2143,7 +2153,10 @@ const vtx = {
           <button onclick="vtx.ycShiftDay(-1)" title="Previous business day" style="width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--txt);cursor:pointer;font-size:12px;">‹</button>
           <input type="date" value="${date}" max="${today}" onchange="vtx.ycSetDate(this.value)" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:6px;color:var(--txt);font-family:var(--mono);font-size:11px;padding:3px 6px;"/>
           <button onclick="vtx.ycShiftDay(1)" title="Next business day" ${isToday ? 'disabled' : ''} style="width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:${isToday ? 'var(--mut)' : 'var(--txt)'};cursor:${isToday ? 'default' : 'pointer'};font-size:12px;">›</button>
-          ${!isToday ? `<button onclick="vtx.ycToday()" style="border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--acc2);cursor:pointer;font-size:10px;padding:4px 8px;">Today</button>` : ''}` : ''}
+          ${!isToday ? `<button onclick="vtx.ycToday()" style="border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--acc2);cursor:pointer;font-size:10px;padding:4px 8px;">Today</button>` : ''}` : `
+          <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;" title="Surface lookback window">
+            ${[[12,'1Y'],[24,'2Y'],[36,'3Y']].map(([m,lbl]) => `<button onclick="vtx.setYc3dLookback(${m})" ${this.state.yc3dLoadStatus ? 'disabled' : ''} style="font-family:var(--ui);font-size:10px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:${this.state.yc3dLoadStatus ? 'default' : 'pointer'};background:${this.state.yc3dMonths===m ? 'rgba(var(--glow),.2)' : 'transparent'};color:${this.state.yc3dMonths===m ? 'var(--acc2)' : 'var(--mut)'};">${lbl}</button>`).join('')}
+          </div>`}
         </div>
       </div>
       ${!is3d ? `<div style="display:flex;gap:14px;padding:7px 2px 0;flex-shrink:0;">
@@ -2168,7 +2181,56 @@ const vtx = {
         chart3dHtml = `<div style="padding:70px 0;text-align:center;color:var(--mut);font-size:12px;">Not enough historical data to build a surface. <button onclick="vtx.loadYc3dSurface()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
       } else {
         chart3dHtml = `<canvas id="yc3dCanvas" width="760" height="320" style="width:100%;height:320px;display:block;cursor:grab;touch-action:none;"></canvas>
-          <div style="text-align:center;font-size:9px;color:var(--mut);margin-top:4px;">Drag to rotate · maturity (left–right) × time, last 24 months (depth) × yield (height) · color = yield level</div>`;
+          <div style="text-align:center;font-size:9px;color:var(--mut);margin-top:4px;">Drag to rotate/tilt · scroll to zoom · hover for exact readings · maturity (left–right) × time, last ${this.state.yc3dMonths} months (depth) × yield (height) · color = yield level, red = curve inverted that month</div>`;
+      }
+    }
+
+    // Curve Analytics — real level/slope/curvature and implied-forward
+    // figures computed straight from the surface data already on the
+    // client (see ycCurveMetrics/ycImpliedForward above), no extra
+    // requests. Only shown once the surface has real data to compute from.
+    let curveAnalyticsHtml = '';
+    if (is3d && this.YC_SURFACE) {
+      const validSurface = this.YC_SURFACE.filter(Boolean);
+      if (validSurface.length >= 2) {
+        const latest = validSurface[validSurface.length - 1];
+        const m = this.ycCurveMetrics(latest.points);
+        const fwd1y1y = this.ycImpliedForward(latest.points, 12, 24);
+        const fwd2y1y = this.ycImpliedForward(latest.points, 24, 36);
+        const fwd5y5y = this.ycImpliedForward(latest.points, 60, 120);
+        const invertedMonths = validSurface.filter(s => this.ycCurveMetrics(s.points).slope3m10y != null && this.ycCurveMetrics(s.points).slope3m10y < 0).length;
+        const metricSeries = [
+          { key: 'level', label: '10Y (Level)', color: '#f0c419' },
+          { key: 'slope3m10y', label: 'Slope (10Y−3M)', color: '#3fc7e0' },
+          { key: 'curvature', label: 'Curvature (2s5s10s)', color: '#c084fc' },
+        ].map(s => ({
+          ...s,
+          points: validSurface.map(snap => ({ date: snap.date, value: this.ycCurveMetrics(snap.points)[s.key] })).filter(p => p.value != null),
+        })).filter(s => s.points.length >= 2);
+        const tile = (label, val, sub) => `
+          <div style="flex:1;min-width:110px;">
+            <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">${label}</div>
+            <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--txt);">${val}</div>
+            ${sub ? `<div style="font-size:8.5px;color:var(--mut);margin-top:1px;">${sub}</div>` : ''}
+          </div>`;
+        curveAnalyticsHtml = `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Curve Shape</span>
+              <span style="font-size:9px;color:var(--mut);">as of ${latest.date}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;">
+              ${tile('Level (10Y)', m.level != null ? m.level.toFixed(2) + '%' : '—')}
+              ${tile('Slope (10Y−3M)', m.slope3m10y != null ? (m.slope3m10y >= 0 ? '+' : '') + m.slope3m10y.toFixed(2) + '%' : '—', 'NY Fed model input')}
+              ${tile('Curvature (2s5s10s)', m.curvature != null ? (m.curvature >= 0 ? '+' : '') + m.curvature.toFixed(2) + '%' : '—', 'butterfly')}
+              ${tile('1Y1Y Fwd', fwd1y1y != null ? fwd1y1y.toFixed(2) + '%' : '—', 'implied, est.')}
+              ${tile('2Y1Y Fwd', fwd2y1y != null ? fwd2y1y.toFixed(2) + '%' : '—', 'implied, est.')}
+              ${tile('5Y5Y Fwd', fwd5y5y != null ? fwd5y5y.toFixed(2) + '%' : '—', 'implied, est.')}
+              ${tile('Inverted (10Y−3M)', `${invertedMonths} / ${validSurface.length} mo`, 'in this window')}
+            </div>
+            ${metricSeries.length ? this.ycGlobalChart(metricSeries, 760, 150) : ''}
+            ${metricSeries.length ? `<div style="display:flex;gap:14px;justify-content:center;margin-top:4px;">${metricSeries.map(s => `<span style="font-size:9px;color:var(--mut);"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:4px;"></span>${s.label}</span>`).join('')}</div>` : ''}
+          </div>`;
       }
     }
 
@@ -2261,10 +2323,35 @@ const vtx = {
         </div>`;
     }
 
+    // Recession Probability — the real NY Fed "Yield Curve as a Leading
+    // Indicator" model output (see loadRecessionProbability), not a
+    // formula reconstructed client-side.
+    let recessionHtml;
+    if (!this.YC_RECESSION) {
+      recessionHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading…</div>`;
+    } else if (this.YC_RECESSION.failed) {
+      recessionHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Unavailable right now. <button onclick="vtx.loadRecessionProbability()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else {
+      const r = this.YC_RECESSION;
+      const pColor = r.probability >= 50 ? 'var(--neg)' : r.probability >= 25 ? '#f0c419' : 'var(--pos)';
+      const sparkSeries = [{ color: pColor, points: r.history.slice(-60).map(p => ({ date: p.date, value: p.probability })) }];
+      recessionHtml = `
+        <div style="padding:12px 14px;">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
+            <span style="font-family:var(--mono);font-size:26px;font-weight:800;color:${pColor};">${r.probability.toFixed(0)}%</span>
+            <span style="font-size:9.5px;color:var(--mut);">probability by ${r.asOf}</span>
+          </div>
+          ${r.latestSpread ? `<div style="font-size:9px;color:var(--mut);margin-bottom:8px;">10Y−3M spread ${r.latestSpread.value >= 0 ? '+' : ''}${r.latestSpread.value.toFixed(2)}% as of ${r.latestSpread.date}</div>` : ''}
+          ${this.ycGlobalChart(sparkSeries, 220, 90, v => v.toFixed(0) + '%')}
+          <div style="font-size:8.5px;color:var(--mut);margin-top:6px;">Source: Federal Reserve Bank of New York — probit model on the 10Y−3M Treasury spread</div>
+        </div>`;
+    }
+
     el.innerHTML = `
       ${headerHtml}
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 12px 10px;flex-shrink:0;">
         ${is3d ? chart3dHtml : chartHtml}
+        ${curveAnalyticsHtml}
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;flex-shrink:0;">
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
@@ -2279,12 +2366,50 @@ const vtx = {
           <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Rate Expectations</div>
           ${probHtml}
         </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Recession Probability</div>
+          ${recessionHtml}
+        </div>
       </div>
     `;
     // The canvas was just rebuilt via innerHTML, so it needs a fresh draw
     // and its drag listeners re-wired every time (same reasoning as
     // wireInstrumentChartHover elsewhere in this file).
     if (is3d) { this.renderYc3dCanvas(); this.wireYc3dDrag(); }
+  },
+  // Standard rates-desk curve-shape decomposition — the same level/slope/
+  // curvature factors a real fixed-income analyst reads off a curve, not
+  // decorative labels. slope3m10y is literally the NY Fed recession model's
+  // own input variable (see loadRecessionProbability); curvature is the
+  // classic 2s5s10s butterfly. Reads whatever maturities are present, so a
+  // historical snapshot missing one (1M didn't trade before 2001) degrades
+  // to null for just the metrics that need it rather than throwing.
+  ycCurveMetrics(points) {
+    const byLabel = {};
+    points.forEach(p => { byLabel[p.label] = p.yield; });
+    const g = l => byLabel[l] != null ? byLabel[l] : null;
+    const y3m = g('3M'), y2y = g('2Y'), y5y = g('5Y'), y10y = g('10Y');
+    return {
+      level: y10y,
+      slope3m10y: (y3m != null && y10y != null) ? y10y - y3m : null,
+      slope2y10y: (y2y != null && y10y != null) ? y10y - y2y : null,
+      curvature: (y2y != null && y5y != null && y10y != null) ? (2 * y5y - y2y - y10y) : null,
+    };
+  },
+  // Implied forward yield between two maturities, via the standard
+  // compounding identity (1+y2)^t2 = (1+y1)^t1 * (1+f)^(t2-t1). Treats the
+  // published CMT par yields as spot rates, same simplification every
+  // retail-facing "implied forward rate" tool uses — a real desk would
+  // bootstrap a zero curve from coupon bond prices first, which needs data
+  // this app doesn't have. Surfaced in the UI as an estimate for that reason.
+  ycImpliedForward(points, fromMonths, toMonths) {
+    const byMonths = {};
+    points.forEach(p => { byMonths[p.months] = p.yield; });
+    const y1 = byMonths[fromMonths], y2 = byMonths[toMonths];
+    if (y1 == null || y2 == null || toMonths <= fromMonths) return null;
+    const t1 = fromMonths / 12, t2 = toMonths / 12;
+    const growth = Math.pow(1 + y2 / 100, t2) / Math.pow(1 + y1 / 100, t1);
+    return (Math.pow(growth, 1 / (t2 - t1)) - 1) * 100;
   },
   // Same rotate-around-the-vertical-axis + perspective-projection technique
   // as the decorative globe elsewhere in this file (initWorldMap) — reused
@@ -2303,7 +2428,7 @@ const vtx = {
     ctx.clearRect(0, 0, W, H);
 
     const surface = (this.YC_SURFACE || []).filter(Boolean);
-    if (surface.length < 2) return;
+    if (surface.length < 2) { this._yc3d = null; return; }
 
     // Same maturity order/labels the backend's MATURITIES list uses
     // (app/api/intel/yield-curve/route.ts) — matched by label, not
@@ -2317,19 +2442,32 @@ const vtx = {
     });
     const nDates = grid.length, nMat = MATURITY_LABELS.length;
     const allYields = grid.flat().filter(v => v != null);
-    if (allYields.length < 4) return;
+    if (allYields.length < 4) { this._yc3d = null; return; }
     const yMin = Math.min(...allYields), yMax = Math.max(...allYields);
     const ySpan = (yMax - yMin) || 1;
 
+    // Real inversion regime per date column (2Y vs 10Y — same convention
+    // as the 2D view's own spread10y2y/inverted badge), used to tint the
+    // surface wherever the curve was actually inverted that month. A real
+    // recession-warning signal, not decoration.
+    const i2y = MATURITY_LABELS.indexOf('2Y'), i10y = MATURITY_LABELS.indexOf('10Y');
+    const invertedCol = grid.map(col => (col[i2y] != null && col[i10y] != null) ? (col[i10y] - col[i2y]) < 0 : false);
+
     const CX = W / 2, CY = H / 2 + 26;
     const RANGE = Math.min(W, H) * 0.62, HEIGHT = H * 0.34;
-    const rotY = this.state.yc3dRotY;
-    const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+    const rotY = this.state.yc3dRotY, rotX = this.state.yc3dRotX || 0, zoom = this.state.yc3dZoom || 1;
+    const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+    const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
     const fov = RANGE * 3.2;
     const project = (gx, gy, gz) => {
-      const rx = gx * cosR + gz * sinR, rz = -gx * sinR + gz * cosR;
-      const sc = fov / (fov - rz);
-      return { px: CX + rx * sc, py: CY + gy * sc, pz: rz };
+      // Yaw around the vertical axis, then pitch around the horizontal —
+      // the standard two-rotation composition of an orbit camera. The
+      // original single-axis version (still used by the decorative globe
+      // elsewhere in this file) only ever yawed.
+      const rx = gx * cosY + gz * sinY, rz1 = -gx * sinY + gz * cosY;
+      const ry = gy * cosX - rz1 * sinX, rz = gy * sinX + rz1 * cosX;
+      const sc = (fov / (fov - rz)) * zoom;
+      return { px: CX + rx * sc, py: CY + ry * sc, pz: rz };
     };
     const vertAt = (i, j) => {
       const v = grid[j][i];
@@ -2343,6 +2481,10 @@ const vtx = {
     const verts = [];
     for (let j = 0; j < nDates; j++) { verts.push([]); for (let i = 0; i < nMat; i++) verts[j].push(vertAt(i, j)); }
 
+    // Cached for wireYc3dDrag's hover hit-test, so a mousemove doesn't need
+    // to recompute the whole projection just to find the nearest vertex.
+    this._yc3d = { verts, grid, MATURITY_LABELS, surface, nDates, nMat };
+
     const colorForYield = v => {
       const t = Math.max(0, Math.min(1, (v - yMin) / ySpan));
       const c0 = [63, 199, 224], c1 = [240, 196, 25]; // cyan (low) -> amber (high), app's own accent pair
@@ -2355,7 +2497,8 @@ const vtx = {
       for (let i = 0; i < nMat - 1; i++) {
         const a = verts[j][i], b = verts[j][i + 1], c = verts[j + 1][i + 1], d = verts[j + 1][i];
         if (a.v == null || b.v == null || c.v == null || d.v == null) continue;
-        quads.push({ pts: [a, b, c, d], pz: (a.pz + b.pz + c.pz + d.pz) / 4, v: (a.v + b.v + c.v + d.v) / 4 });
+        const inv = invertedCol[j] || invertedCol[j + 1];
+        quads.push({ pts: [a, b, c, d], pz: (a.pz + b.pz + c.pz + d.pz) / 4, v: (a.v + b.v + c.v + d.v) / 4, inv });
       }
     }
     quads.sort((q1, q2) => q1.pz - q2.pz);
@@ -2364,7 +2507,7 @@ const vtx = {
       ctx.moveTo(q.pts[0].px, q.pts[0].py);
       for (let k = 1; k < 4; k++) ctx.lineTo(q.pts[k].px, q.pts[k].py);
       ctx.closePath();
-      ctx.fillStyle = `rgba(${colorForYield(q.v)},.82)`;
+      ctx.fillStyle = q.inv ? 'rgba(255,77,94,.55)' : `rgba(${colorForYield(q.v)},.82)`;
       ctx.fill();
       ctx.strokeStyle = 'rgba(4,5,10,.4)';
       ctx.lineWidth = 0.6;
@@ -2389,25 +2532,92 @@ const vtx = {
       ctx.textAlign = 'right';
       ctx.fillText(surface[j].date.slice(0, 7), v.px - 6, v.py + 3);
     });
+
+    // Hovered vertex — exact reading under the cursor, driven by
+    // wireYc3dDrag's mousemove hit-test (this.state.yc3dHover). A real
+    // terminal always gives you the precise number, not just the color.
+    const hov = this.state.yc3dHover;
+    if (hov && grid[hov.j] && grid[hov.j][hov.i] != null) {
+      const v = verts[hov.j][hov.i];
+      ctx.beginPath();
+      ctx.arc(v.px, v.py, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.5)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      const label = `${MATURITY_LABELS[hov.i]} · ${surface[hov.j].date.slice(0, 7)} · ${grid[hov.j][hov.i].toFixed(2)}%`;
+      // Canvas text can't resolve a CSS custom property (var(--mono) here
+      // would silently fall back to the browser's default font) — spelled
+      // out as the same stack --mono itself resolves to, unlike the two
+      // pre-existing axis-label lines above which still pass var(--mono)
+      // through unresolved.
+      ctx.font = "10.5px 'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace";
+      const tw = ctx.measureText(label).width;
+      const tx = Math.min(Math.max(v.px - tw / 2, 4), W - tw - 4), ty = v.py - 12;
+      ctx.fillStyle = 'rgba(6,8,16,.85)';
+      ctx.fillRect(tx - 5, ty - 12, tw + 10, 16);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, tx, ty);
+    }
   },
   wireYc3dDrag() {
     const cvs = document.getElementById('yc3dCanvas');
     if (!cvs || cvs._ycDragWired) return;
     cvs._ycDragWired = true;
-    let dragging = false, lastX = 0;
+    let dragging = false, lastX = 0, lastY = 0;
     const xOf = e => (e.touches ? e.touches[0].clientX : e.clientX);
-    const onDown = e => { dragging = true; lastX = xOf(e); cvs.style.cursor = 'grabbing'; };
+    const yOf = e => (e.touches ? e.touches[0].clientY : e.clientY);
+    const onDown = e => { dragging = true; lastX = xOf(e); lastY = yOf(e); cvs.style.cursor = 'grabbing'; };
     const onMove = e => {
       if (!dragging) return;
-      const x = xOf(e), dx = x - lastX; lastX = x;
+      const x = xOf(e), y = yOf(e), dx = x - lastX, dy = y - lastY; lastX = x; lastY = y;
       this.state.yc3dRotY += dx * 0.008;
+      // Pitch is clamped — past roughly ±0.9 rad the surface goes edge-on
+      // or top-down, where the painter's-algorithm depth sort and the
+      // fixed-edge label placement both stop making sense.
+      this.state.yc3dRotX = Math.max(-0.9, Math.min(0.9, (this.state.yc3dRotX || 0) - dy * 0.006));
       this.renderYc3dCanvas();
       if (e.cancelable) e.preventDefault();
     };
     const onUp = () => { dragging = false; cvs.style.cursor = 'grab'; };
+    const onWheel = e => {
+      e.preventDefault();
+      this.state.yc3dZoom = Math.max(0.6, Math.min(2.2, (this.state.yc3dZoom || 1) - e.deltaY * 0.001));
+      this.renderYc3dCanvas();
+    };
+    // Hover hit-test — nearest vertex to the cursor in canvas-pixel space,
+    // using the grid renderYc3dCanvas just cached on this._yc3d. Only
+    // updates state (and redraws) when the nearest vertex actually
+    // changes, so idle movement over the same cell doesn't force
+    // continuous re-renders.
+    const onHoverMove = e => {
+      if (dragging || !this._yc3d) return;
+      const rect = cvs.getBoundingClientRect();
+      const mx = (xOf(e) - rect.left) * (cvs.width / rect.width);
+      const my = (yOf(e) - rect.top) * (cvs.height / rect.height);
+      const { verts, nDates, nMat } = this._yc3d;
+      let best = null, bestD = 400; // ~20px hit radius in canvas-pixel space
+      for (let j = 0; j < nDates; j++) {
+        for (let i = 0; i < nMat; i++) {
+          const v = verts[j][i];
+          if (v.v == null) continue;
+          const d = (v.px - mx) ** 2 + (v.py - my) ** 2;
+          if (d < bestD) { bestD = d; best = { i, j }; }
+        }
+      }
+      const cur = this.state.yc3dHover;
+      const changed = (!cur && best) || (cur && !best) || (cur && best && (cur.i !== best.i || cur.j !== best.j));
+      if (changed) { this.state.yc3dHover = best; this.renderYc3dCanvas(); }
+    };
+    const onLeave = () => { if (this.state.yc3dHover) { this.state.yc3dHover = null; this.renderYc3dCanvas(); } };
     cvs.addEventListener('mousedown', onDown);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    cvs.addEventListener('mousemove', onHoverMove);
+    cvs.addEventListener('mouseleave', onLeave);
+    cvs.addEventListener('wheel', onWheel, { passive: false });
     cvs.addEventListener('touchstart', onDown, { passive: true });
     cvs.addEventListener('touchmove', onMove, { passive: false });
     cvs.addEventListener('touchend', onUp);
@@ -4392,9 +4602,10 @@ const vtx = {
     }));
     if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
   },
-  // 24 real monthly snapshots (2 years), oldest to newest, each the exact
-  // same /api/intel/yield-curve?date=X the 2D date-nav already uses — just
-  // fetched for many dates to build a surface instead of one curve.
+  // Real monthly snapshots (state.yc3dMonths back, default 24 = 2 years),
+  // oldest to newest, each the exact same /api/intel/yield-curve?date=X the
+  // 2D date-nav already uses — just fetched for many dates to build a
+  // surface instead of one curve.
   //
   // Paced much more conservatively than every other multi-item fetch in
   // this file: intel/yield-curve's own rate limit is 20 requests/60s per
@@ -4403,14 +4614,15 @@ const vtx = {
   // 11 chunked FRED calls internally — so this uses CHUNK=4 with a real
   // 15s gap, not the usual 300-400ms, to safely stay under that ceiling.
   // A cold build (first ever load of a given month) takes roughly a
-  // minute; every date is cached 30 days server-side afterward, so this
-  // is a one-time cost, not a per-visit one. state.yc3dLoadStatus drives
-  // an honest "loading N of 24" progress message rather than a silent
-  // multi-second hang.
+  // minute per 24 months; every date is cached 30 days server-side
+  // afterward, so this is a one-time cost per lookback length, not a
+  // per-visit one. state.yc3dLoadStatus drives an honest "loading N of
+  // total" progress message rather than a silent multi-second hang.
   async loadYc3dSurface() {
+    const months = this.state.yc3dMonths || 24;
     const today = new Date();
     const dates = [];
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < months; i++) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, today.getDate());
       dates.push(d.toISOString().slice(0, 10));
     }
@@ -4460,6 +4672,17 @@ const vtx = {
     if (this.state.yc3d && !this.YC_SURFACE) this.loadYc3dSurface();
     this.renderYieldCurveView();
   },
+  // Switches the surface's lookback window and rebuilds it from scratch —
+  // a different month count is a genuinely different set of dates, not a
+  // client-side filter of what's already loaded (unlike ycGlobalRange etc.
+  // elsewhere in this file, which filter an already-fetched full history).
+  setYc3dLookback(months) {
+    if (this.state.yc3dMonths === months || this.state.yc3dLoadStatus) return;
+    this.state.yc3dMonths = months;
+    this.YC_SURFACE = null;
+    this.loadYc3dSurface();
+    this.renderYieldCurveView();
+  },
   // Latest real value in a points array at or before a given date — used
   // to look up "what was the Fed Funds Target Range / CPI on this date"
   // from the full histories loadYcOverlayData() already fetched, so
@@ -4498,6 +4721,20 @@ const vtx = {
       const data = await res.json();
       this.YC_PROB = (data.windows && data.windows.length) ? data : { failed: true };
     } catch (e) { this.YC_PROB = { failed: true }; }
+    if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+  },
+  // Real NY Fed "Yield Curve as a Leading Indicator" model — the actual
+  // published probit model output (see app/api/market/recession-probability/
+  // route.ts), not a formula reconstructed here. asOf is ~12 months ahead
+  // of the latest real Treasury spread reading, since the model computes
+  // each date's probability from the spread observed 12 months prior.
+  async loadRecessionProbability() {
+    try {
+      const res = await fetch('/api/market/recession-probability');
+      if (!res.ok) { this.YC_RECESSION = { failed: true }; if (this.state.view === 'yieldCurve') this.renderYieldCurveView(); return; }
+      const data = await res.json();
+      this.YC_RECESSION = (data.history && data.history.length) ? data : { failed: true };
+    } catch (e) { this.YC_RECESSION = { failed: true }; }
     if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
   },
   // Each country's full 10Y history, fetched once via the existing generic
@@ -4829,6 +5066,7 @@ const vtx = {
     if (!Object.keys(this.YC_OVERLAY_DATA).length) this.loadYcOverlayData();
     if (!Object.keys(this.YC_MACRO).length) this.loadYcMacro();
     if (!this.YC_PROB) this.loadRateProbability();
+    if (!this.YC_RECESSION) this.loadRecessionProbability();
   },
   selectGlobalYields() {
     this.state.view = 'globalYields';
