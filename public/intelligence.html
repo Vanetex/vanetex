@@ -510,6 +510,12 @@ const vtx = {
     // CPI YoY defaults off since it's a very different-shaped line to read
     // against a curve until the viewer opts in.
     ycOverlays: { fedFunds: true, cpi: false },
+    // 3D yield-curve surface toggle — starts at a fixed pleasant angle
+    // rather than auto-rotating (unlike the decorative globe), since this
+    // is meant to be studied, not just watched.
+    yc3d: false,
+    yc3dRotY: 0.5,
+    yc3dLoadStatus: null, // {loaded, total} while fetching, or null once done/not started
     // Lookback window for the Global Yield Comparison chart — filtering
     // happens client-side against the already-fetched full histories, so
     // switching ranges never needs a new request.
@@ -558,6 +564,12 @@ const vtx = {
   YC_MACRO: {}, // populated by loadYcMacro() — real FRED CPI/PCE/PPI/GDP/Unemployment, keyed by series id
   YC_PROB: null, // populated by loadRateProbability() — real Atlanta Fed hike/hold/cut probabilities
   YC_OVERLAY_DATA: {}, // populated by loadYcOverlayData() — full DFEDTARU/DFEDTARL/CPIAUCSL histories, fetched once and reused across every date navigation click (cheaper than re-fetching per date)
+  // 3D surface — real monthly curve snapshots (the same real
+  // /api/intel/yield-curve?date=X data behind the 2D date-nav, just
+  // fetched for many dates instead of one), populated by
+  // loadYc3dSurface(). Each entry: { date, points } or null if that
+  // month's fetch failed — array index order is oldest to newest.
+  YC_SURFACE: null,
   YC_MACRO_SERIES: [
     { id: 'CPIAUCSL', label: 'CPI y/y', transform: 'yoy' },
     { id: 'CPIAUCSL', label: 'CPI m/m', transform: 'mom' },
@@ -2117,25 +2129,48 @@ const vtx = {
     const spread = yc && yc.spread10y2y;
     const spreadHtml = spread != null ? `<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:${yc.inverted ? 'var(--neg)' : 'var(--pos)'};">10Y−2Y ${spread >= 0 ? '+' : ''}${spread.toFixed(2)}%${yc.inverted ? ' · INVERTED' : ''}</span>` : '';
 
+    const is3d = this.state.yc3d;
     const headerHtml = `
       <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
         <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">US Treasury Yield Curve</span>
-        ${spreadHtml}
+        ${!is3d ? spreadHtml : ''}
         <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+          <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;">
+            <button onclick="${is3d ? 'vtx.toggleYc3d()' : ''}" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${!is3d ? 'rgba(var(--glow),.2)' : 'transparent'};color:${!is3d ? 'var(--acc2)' : 'var(--mut)'};">2D</button>
+            <button onclick="${!is3d ? 'vtx.toggleYc3d()' : ''}" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:4px 9px;border:none;border-radius:6px;cursor:pointer;background:${is3d ? 'rgba(var(--glow),.2)' : 'transparent'};color:${is3d ? 'var(--acc2)' : 'var(--mut)'};">3D</button>
+          </div>
+          ${!is3d ? `
           <button onclick="vtx.ycShiftDay(-1)" title="Previous business day" style="width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--txt);cursor:pointer;font-size:12px;">‹</button>
           <input type="date" value="${date}" max="${today}" onchange="vtx.ycSetDate(this.value)" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:6px;color:var(--txt);font-family:var(--mono);font-size:11px;padding:3px 6px;"/>
           <button onclick="vtx.ycShiftDay(1)" title="Next business day" ${isToday ? 'disabled' : ''} style="width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:${isToday ? 'var(--mut)' : 'var(--txt)'};cursor:${isToday ? 'default' : 'pointer'};font-size:12px;">›</button>
-          ${!isToday ? `<button onclick="vtx.ycToday()" style="border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--acc2);cursor:pointer;font-size:10px;padding:4px 8px;">Today</button>` : ''}
+          ${!isToday ? `<button onclick="vtx.ycToday()" style="border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.03);color:var(--acc2);cursor:pointer;font-size:10px;padding:4px 8px;">Today</button>` : ''}` : ''}
         </div>
       </div>
-      <div style="display:flex;gap:14px;padding:7px 2px 0;flex-shrink:0;">
+      ${!is3d ? `<div style="display:flex;gap:14px;padding:7px 2px 0;flex-shrink:0;">
         <label style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--mut);cursor:pointer;">
           <input type="checkbox" ${ov.fedFunds ? 'checked' : ''} onchange="vtx.ycToggleOverlay('fedFunds')"/> Fed Funds Target Range
         </label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--mut);cursor:pointer;">
           <input type="checkbox" ${ov.cpi ? 'checked' : ''} onchange="vtx.ycToggleOverlay('cpi')"/> CPI y/y
         </label>
-      </div>`;
+      </div>` : ''}`;
+
+    // 3D surface — real monthly snapshots via loadYc3dSurface(), same
+    // underlying /api/intel/yield-curve data as the 2D date-nav.
+    let chart3dHtml = '';
+    if (is3d) {
+      if (this.state.yc3dLoadStatus) {
+        const p = this.state.yc3dLoadStatus;
+        chart3dHtml = `<div style="padding:70px 0;text-align:center;color:var(--mut);font-size:12px;">Loading 3D surface — ${p.loaded} of ${p.total} months…<br><span style="font-size:9.5px;opacity:.7;">First load only; each month is cached for 30 days after.</span></div>`;
+      } else if (!this.YC_SURFACE) {
+        chart3dHtml = `<div style="padding:70px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+      } else if (this.YC_SURFACE.filter(Boolean).length < 2) {
+        chart3dHtml = `<div style="padding:70px 0;text-align:center;color:var(--mut);font-size:12px;">Not enough historical data to build a surface. <button onclick="vtx.loadYc3dSurface()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        chart3dHtml = `<canvas id="yc3dCanvas" width="760" height="320" style="width:100%;height:320px;display:block;cursor:grab;touch-action:none;"></canvas>
+          <div style="text-align:center;font-size:9px;color:var(--mut);margin-top:4px;">Drag to rotate · maturity (left–right) × time, last 24 months (depth) × yield (height) · color = yield level</div>`;
+      }
+    }
 
     // Upcoming Events — reuses this.ECON as-is (already loaded/refreshed
     // by the app's own init, same real FRED+FOMC data the Macro tab uses).
@@ -2229,7 +2264,7 @@ const vtx = {
     el.innerHTML = `
       ${headerHtml}
       <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 12px 10px;flex-shrink:0;">
-        ${chartHtml}
+        ${is3d ? chart3dHtml : chartHtml}
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;flex-shrink:0;">
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);">
@@ -2246,6 +2281,136 @@ const vtx = {
         </div>
       </div>
     `;
+    // The canvas was just rebuilt via innerHTML, so it needs a fresh draw
+    // and its drag listeners re-wired every time (same reasoning as
+    // wireInstrumentChartHover elsewhere in this file).
+    if (is3d) { this.renderYc3dCanvas(); this.wireYc3dDrag(); }
+  },
+  // Same rotate-around-the-vertical-axis + perspective-projection technique
+  // as the decorative globe elsewhere in this file (initWorldMap) — reused
+  // here for a Cartesian height-field instead of a sphere: maturity and
+  // time form the ground plane (rotated together around Y), yield is
+  // height. Unlike the globe's simple front/back sphere clip, an open
+  // surface needs real depth-sorting — each quad is filled back-to-front
+  // by its own projected depth (a standard painter's-algorithm approach,
+  // valid here because a real yield surface never folds over itself).
+  renderYc3dCanvas() {
+    const cvs = document.getElementById('yc3dCanvas');
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    if (!ctx) return;
+    const W = cvs.width, H = cvs.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const surface = (this.YC_SURFACE || []).filter(Boolean);
+    if (surface.length < 2) return;
+
+    // Same maturity order/labels the backend's MATURITIES list uses
+    // (app/api/intel/yield-curve/route.ts) — matched by label, not
+    // assumed positionally, so a snapshot missing one maturity (e.g. 1M
+    // before it started trading in 2001) doesn't misalign the grid.
+    const MATURITY_LABELS = ['1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y', '7Y', '10Y', '20Y', '30Y'];
+    const grid = surface.map(snap => {
+      const byLabel = {};
+      snap.points.forEach(p => { byLabel[p.label] = p.yield; });
+      return MATURITY_LABELS.map(l => (byLabel[l] != null ? byLabel[l] : null));
+    });
+    const nDates = grid.length, nMat = MATURITY_LABELS.length;
+    const allYields = grid.flat().filter(v => v != null);
+    if (allYields.length < 4) return;
+    const yMin = Math.min(...allYields), yMax = Math.max(...allYields);
+    const ySpan = (yMax - yMin) || 1;
+
+    const CX = W / 2, CY = H / 2 + 26;
+    const RANGE = Math.min(W, H) * 0.62, HEIGHT = H * 0.34;
+    const rotY = this.state.yc3dRotY;
+    const cosR = Math.cos(rotY), sinR = Math.sin(rotY);
+    const fov = RANGE * 3.2;
+    const project = (gx, gy, gz) => {
+      const rx = gx * cosR + gz * sinR, rz = -gx * sinR + gz * cosR;
+      const sc = fov / (fov - rz);
+      return { px: CX + rx * sc, py: CY + gy * sc, pz: rz };
+    };
+    const vertAt = (i, j) => {
+      const v = grid[j][i];
+      const gx = (i / (nMat - 1) - 0.5) * RANGE;
+      const gz = (j / (nDates - 1) - 0.5) * RANGE;
+      const gy = v != null ? -((v - yMin) / ySpan - 0.5) * HEIGHT : 0;
+      const p = project(gx, gy, gz);
+      return { px: p.px, py: p.py, pz: p.pz, v };
+    };
+
+    const verts = [];
+    for (let j = 0; j < nDates; j++) { verts.push([]); for (let i = 0; i < nMat; i++) verts[j].push(vertAt(i, j)); }
+
+    const colorForYield = v => {
+      const t = Math.max(0, Math.min(1, (v - yMin) / ySpan));
+      const c0 = [63, 199, 224], c1 = [240, 196, 25]; // cyan (low) -> amber (high), app's own accent pair
+      const mix = c0.map((c, k) => Math.round(c + (c1[k] - c) * t));
+      return `${mix[0]},${mix[1]},${mix[2]}`;
+    };
+
+    const quads = [];
+    for (let j = 0; j < nDates - 1; j++) {
+      for (let i = 0; i < nMat - 1; i++) {
+        const a = verts[j][i], b = verts[j][i + 1], c = verts[j + 1][i + 1], d = verts[j + 1][i];
+        if (a.v == null || b.v == null || c.v == null || d.v == null) continue;
+        quads.push({ pts: [a, b, c, d], pz: (a.pz + b.pz + c.pz + d.pz) / 4, v: (a.v + b.v + c.v + d.v) / 4 });
+      }
+    }
+    quads.sort((q1, q2) => q1.pz - q2.pz);
+    quads.forEach(q => {
+      ctx.beginPath();
+      ctx.moveTo(q.pts[0].px, q.pts[0].py);
+      for (let k = 1; k < 4; k++) ctx.lineTo(q.pts[k].px, q.pts[k].py);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(${colorForYield(q.v)},.82)`;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(4,5,10,.4)';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+    });
+
+    // Minimal orientation labels — maturity along the oldest-date edge
+    // (a fixed reference regardless of rotation), a few date labels down
+    // the shortest-maturity edge. Real 3D label placement that stays
+    // legible from every angle is a much bigger problem than this view
+    // needs; this matches the globe's own light-touch labeling.
+    ctx.font = '9px var(--mono)'; ctx.fillStyle = 'rgba(255,255,255,.5)';
+    MATURITY_LABELS.forEach((lbl, i) => {
+      if (i % 2 === 1 && nMat > 7) return; // thin out labels on the full 11-maturity axis
+      const v = verts[0][i];
+      ctx.textAlign = 'center';
+      ctx.fillText(lbl, v.px, v.py + 12);
+    });
+    const dateTickIdxs = [0, Math.floor((nDates - 1) / 2), nDates - 1];
+    dateTickIdxs.forEach(j => {
+      const v = verts[j][0];
+      ctx.textAlign = 'right';
+      ctx.fillText(surface[j].date.slice(0, 7), v.px - 6, v.py + 3);
+    });
+  },
+  wireYc3dDrag() {
+    const cvs = document.getElementById('yc3dCanvas');
+    if (!cvs || cvs._ycDragWired) return;
+    cvs._ycDragWired = true;
+    let dragging = false, lastX = 0;
+    const xOf = e => (e.touches ? e.touches[0].clientX : e.clientX);
+    const onDown = e => { dragging = true; lastX = xOf(e); cvs.style.cursor = 'grabbing'; };
+    const onMove = e => {
+      if (!dragging) return;
+      const x = xOf(e), dx = x - lastX; lastX = x;
+      this.state.yc3dRotY += dx * 0.008;
+      this.renderYc3dCanvas();
+      if (e.cancelable) e.preventDefault();
+    };
+    const onUp = () => { dragging = false; cvs.style.cursor = 'grab'; };
+    cvs.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    cvs.addEventListener('touchstart', onDown, { passive: true });
+    cvs.addEventListener('touchmove', onMove, { passive: false });
+    cvs.addEventListener('touchend', onUp);
   },
   // A compact "majors" trend chart (any more than ~6 overlaid lines stops
   // being readable) plus a full sortable table across a curated 30-country
@@ -4212,6 +4377,56 @@ const vtx = {
       } catch (e) { this.YC_OVERLAY_DATA[id] = { failed: true }; }
     }));
     if (this.state.view === 'yieldCurve') this.renderYieldCurveView();
+  },
+  // 24 real monthly snapshots (2 years), oldest to newest, each the exact
+  // same /api/intel/yield-curve?date=X the 2D date-nav already uses — just
+  // fetched for many dates to build a surface instead of one curve.
+  //
+  // Paced much more conservatively than every other multi-item fetch in
+  // this file: intel/yield-curve's own rate limit is 20 requests/60s per
+  // client (tighter than intel/econ-series, which most other 20-50-item
+  // fan-outs this session hit), and each request already costs the server
+  // 11 chunked FRED calls internally — so this uses CHUNK=4 with a real
+  // 15s gap, not the usual 300-400ms, to safely stay under that ceiling.
+  // A cold build (first ever load of a given month) takes roughly a
+  // minute; every date is cached 30 days server-side afterward, so this
+  // is a one-time cost, not a per-visit one. state.yc3dLoadStatus drives
+  // an honest "loading N of 24" progress message rather than a silent
+  // multi-second hang.
+  async loadYc3dSurface() {
+    const today = new Date();
+    const dates = [];
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, today.getDate());
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    dates.reverse(); // oldest to newest
+
+    this.YC_SURFACE = new Array(dates.length).fill(null);
+    const CHUNK = 4;
+    for (let i = 0; i < dates.length; i += CHUNK) {
+      const batch = dates.slice(i, i + CHUNK);
+      const results = await Promise.all(batch.map(async date => {
+        try {
+          const res = await fetch(`/api/intel/yield-curve?date=${date}`);
+          if (!res.ok) return null;
+          const data = await res.json();
+          if (!data.points || !data.points.length) return null;
+          return { date, points: data.points };
+        } catch (e) { return null; }
+      }));
+      results.forEach((r, j) => { this.YC_SURFACE[i + j] = r; });
+      this.state.yc3dLoadStatus = { loaded: Math.min(i + CHUNK, dates.length), total: dates.length };
+      if (this.state.view === 'yieldCurve' && this.state.yc3d) this.renderYieldCurveView();
+      if (i + CHUNK < dates.length) await new Promise(r => setTimeout(r, 15000));
+    }
+    this.state.yc3dLoadStatus = null;
+    if (this.state.view === 'yieldCurve' && this.state.yc3d) this.renderYieldCurveView();
+  },
+  toggleYc3d() {
+    this.state.yc3d = !this.state.yc3d;
+    if (this.state.yc3d && !this.YC_SURFACE) this.loadYc3dSurface();
+    this.renderYieldCurveView();
   },
   // Latest real value in a points array at or before a given date — used
   // to look up "what was the Fed Funds Target Range / CPI on this date"
