@@ -2189,6 +2189,31 @@ const vtx = {
           <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mut);margin-bottom:2px;"><span>${label}</span><span style="font-family:var(--mono);color:${color};font-weight:700;">${val.toFixed(1)}%</span></div>
           <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden;"><div style="height:100%;width:${Math.min(100, Math.max(0, val))}%;background:${color};"></div></div>
         </div>`;
+      // The Atlanta Fed's own file carries more than just the nearest
+      // reference window — up to 4 real forward-looking windows — but
+      // only windows[0] was ever rendered, silently dropping the rest.
+      // A compact table for the full set (nearest window still gets the
+      // bars above, as the headline figure) shows the real trend in how
+      // the market's hike/cut odds shift further out.
+      const laterWindows = this.YC_PROB.windows.slice(1);
+      const tableHtml = laterWindows.length ? `
+        <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+          <thead><tr style="font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);">
+            <th style="text-align:left;padding:4px 0;font-weight:600;">By</th>
+            <th style="text-align:right;padding:4px 0;font-weight:600;">Hike</th>
+            <th style="text-align:right;padding:4px 0;font-weight:600;">Steady</th>
+            <th style="text-align:right;padding:4px 0;font-weight:600;">Cut</th>
+          </tr></thead>
+          <tbody>
+            ${laterWindows.map(w => `
+              <tr style="border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;">
+                <td style="padding:4px 0;color:var(--txt);">${w.referenceStart}</td>
+                <td style="text-align:right;padding:4px 0;color:var(--neg);">${w.probHike.toFixed(1)}%</td>
+                <td style="text-align:right;padding:4px 0;color:var(--mut);">${w.probSteady.toFixed(1)}%</td>
+                <td style="text-align:right;padding:4px 0;color:var(--pos);">${w.probCut.toFixed(1)}%</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : '';
       probHtml = `
         <div style="padding:12px 14px;">
           <div style="font-size:10.5px;color:var(--txt);margin-bottom:2px;">By ${w0.referenceStart}</div>
@@ -2196,6 +2221,7 @@ const vtx = {
           ${bar('Rate Hike', w0.probHike, 'var(--neg)')}
           ${bar('Steady', w0.probSteady, 'var(--mut)')}
           ${bar('Rate Cut', w0.probCut, 'var(--pos)')}
+          ${tableHtml}
           <div style="font-size:8.5px;color:var(--mut);margin-top:8px;">As of ${this.YC_PROB.asOf} · Source: Federal Reserve Bank of Atlanta (CME SOFR options)</div>
         </div>`;
     }
