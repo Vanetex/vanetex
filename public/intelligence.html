@@ -603,6 +603,7 @@ const vtx = {
     // survey, real and free via FRED, already used elsewhere in this file
     // (MACRO_SERIES catalog) as the same honestly-labeled substitute.
     { id: 'GACDFSA066MSFRBPHI', label: 'Philly Fed Mfg. Index', transform: 'level', offset: 0, suffix: '' },
+    { id: 'ICSA', label: 'Jobless Claims', transform: 'thousands' },
   ],
   // Click-through metadata for the Macro Indicators rows above — routes
   // into the existing generic indicator detail view (selectIndicator),
@@ -625,6 +626,12 @@ const vtx = {
     UNRATE: { title: 'Unemployment Rate', units: 'Percent', frequency: 'Monthly', seasonalAdjustment: 'SA', compareId: 'U6RATE', compareLabel: 'U-6 (Total Unemployed + Underemployed + Marginally Attached)' },
     T10YIE: { title: '10-Year Breakeven Inflation Rate', units: 'Percent', frequency: 'Daily', seasonalAdjustment: 'NSA' },
     GACDFSA066MSFRBPHI: { title: 'Philadelphia Fed Manufacturing Business Outlook Survey — Current General Activity', units: 'Diffusion index (>0 = expansion)', frequency: 'Monthly', seasonalAdjustment: 'SA', compareId: 'GACDISA066MSFRBNY', compareLabel: 'Empire State Mfg. Index (NY Fed)' },
+    // Compared against the 4-week moving average (IC4WSA) — the DOL's own
+    // published smoothing of this exact series, not computed here, so it's
+    // always on the same scale as the raw weekly print (unlike continuing
+    // claims, which run ~9x larger and would make the initial-claims line
+    // unreadable on a shared axis).
+    ICSA: { title: 'Initial Jobless Claims', units: 'Number, weekly', frequency: 'Weekly, Ending Saturday', seasonalAdjustment: 'SA', compareId: 'IC4WSA', compareLabel: '4-Week Moving Average' },
   },
   YC_GLOBAL: {}, // populated by loadYcGlobal() — real FRED 10Y/long-term govt bond yields, keyed by series id
   // Every country's long-term (~10Y) government bond yield — the US leg is
@@ -2321,6 +2328,12 @@ const vtx = {
       } else if (entry.transform === 'mom') {
         const lastI = pts.length - 1, priorI = lastI - 1;
         if (priorI >= 0) { display = (((pts[lastI].value / pts[priorI].value) - 1) * 100).toFixed(1) + '%'; dateLabel = pts[lastI].date; }
+      } else if (entry.transform === 'thousands') {
+        // Raw claims counts (e.g. 196,000) read far better as "196K" than
+        // toFixed(1)'s "196000.0" — the level branch's format, which every
+        // other row here uses a small enough number for.
+        const lastI = pts.length - 1;
+        display = (pts[lastI].value / 1000).toFixed(0) + 'K'; dateLabel = pts[lastI].date;
       } else {
         const idx = pts.length - 1 - (entry.offset || 0);
         if (idx >= 0) { display = pts[idx].value.toFixed(1) + (entry.suffix || ''); dateLabel = pts[idx].date; }
