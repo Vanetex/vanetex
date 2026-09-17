@@ -598,7 +598,34 @@ const vtx = {
     // implied average inflation expectation over the next decade. Verified
     // live via /api/intel/econ-series?id=T10YIE (2.38% as of 2026-09-15).
     { id: 'T10YIE', label: '10Y Breakeven Inflation', transform: 'level', offset: 0, suffix: '%' },
+    // Free-tier stand-in for ISM Manufacturing PMI, which isn't published
+    // under an open license — the Philly Fed's own regional manufacturing
+    // survey, real and free via FRED, already used elsewhere in this file
+    // (MACRO_SERIES catalog) as the same honestly-labeled substitute.
+    { id: 'GACDFSA066MSFRBPHI', label: 'Philly Fed Mfg. Index', transform: 'level', offset: 0, suffix: '' },
   ],
+  // Click-through metadata for the Macro Indicators rows above — routes
+  // into the existing generic indicator detail view (selectIndicator),
+  // extended here with an optional compareId for the handful where a
+  // second real FRED series makes the number genuinely a "breakdown,"
+  // not just a bigger version of the same single-line chart: Core CPI/PCE
+  // strip out the food & energy noise from the headline print, and U-6
+  // captures underemployment the headline unemployment rate misses
+  // entirely. Every id (including the compare ids) verified live via
+  // /api/intel/econ-series before being wired in — CPILFESL, PCEPILFE,
+  // U6RATE, GACDISA066MSFRBNY. transform:'yoy' applies the same
+  // year-over-year calc the Macro Indicators row itself already uses (see
+  // macroHtml below) to both the headline number and the chart, computed
+  // client-side via yoySeries() — not a second request.
+  YC_MACRO_DETAIL: {
+    CPIAUCSL: { title: 'Consumer Price Index for All Urban Consumers: All Items', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'yoy', compareId: 'CPILFESL', compareLabel: 'Core CPI (ex Food & Energy)' },
+    PCEPI: { title: 'Personal Consumption Expenditures Price Index', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'yoy', compareId: 'PCEPILFE', compareLabel: "Core PCE — the Fed's preferred inflation gauge" },
+    PPIACO: { title: 'Producer Price Index by Commodity: All Commodities', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'NSA', transform: 'yoy' },
+    A191RL1Q225SBEA: { title: 'Real Gross Domestic Product Growth', units: 'Percent change from preceding period, SAAR', frequency: 'Quarterly', seasonalAdjustment: 'SA' },
+    UNRATE: { title: 'Unemployment Rate', units: 'Percent', frequency: 'Monthly', seasonalAdjustment: 'SA', compareId: 'U6RATE', compareLabel: 'U-6 (Total Unemployed + Underemployed + Marginally Attached)' },
+    T10YIE: { title: '10-Year Breakeven Inflation Rate', units: 'Percent', frequency: 'Daily', seasonalAdjustment: 'NSA' },
+    GACDFSA066MSFRBPHI: { title: 'Philadelphia Fed Manufacturing Business Outlook Survey — Current General Activity', units: 'Diffusion index (>0 = expansion)', frequency: 'Monthly', seasonalAdjustment: 'SA', compareId: 'GACDISA066MSFRBNY', compareLabel: 'Empire State Mfg. Index (NY Fed)' },
+  },
   YC_GLOBAL: {}, // populated by loadYcGlobal() — real FRED 10Y/long-term govt bond yields, keyed by series id
   // Every country's long-term (~10Y) government bond yield — the US leg is
   // FRED's own daily Treasury Constant Maturity series (already used for
@@ -2274,8 +2301,17 @@ const vtx = {
     // (0 = latest, 1 = one period prior), used for the two GDP rows.
     const macroHtml = this.YC_MACRO_SERIES.map(entry => {
       const s = this.YC_MACRO[entry.id];
+      // Rows with a real detail catalog entry navigate into the generic
+      // indicator view (see YC_MACRO_DETAIL above) — same click-through
+      // whether or not this row's own data has loaded yet, since the
+      // detail view fetches its own data independently.
+      const detail = this.YC_MACRO_DETAIL[entry.id];
+      const meta = detail ? { id: entry.id, label: entry.label, ...detail } : null;
+      const clickAttr = meta ? ` onclick='vtx.selectIndicator(${JSON.stringify(meta).replace(/'/g, "&#39;")})'` : '';
+      const rowCursor = meta ? 'cursor:pointer;' : '';
+      const chevron = meta ? ` <span style="color:var(--mut);font-size:9px;">›</span>` : '';
       if (!s || s.failed || !s.points || !s.points.length) {
-        return `<div style="display:flex;justify-content:space-between;padding:7px 11px;border-bottom:1px solid var(--line);"><span style="font-size:11px;color:var(--mut);">${entry.label}</span><span style="font-size:11px;color:var(--mut);">—</span></div>`;
+        return `<div${clickAttr} style="display:flex;justify-content:space-between;padding:7px 11px;border-bottom:1px solid var(--line);${rowCursor}"><span style="font-size:11px;color:var(--mut);">${entry.label}${chevron}</span><span style="font-size:11px;color:var(--mut);">—</span></div>`;
       }
       const pts = s.points;
       let display = '—', dateLabel = '';
@@ -2289,8 +2325,8 @@ const vtx = {
         const idx = pts.length - 1 - (entry.offset || 0);
         if (idx >= 0) { display = pts[idx].value.toFixed(1) + (entry.suffix || ''); dateLabel = pts[idx].date; }
       }
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 11px;border-bottom:1px solid var(--line);">
-        <span style="font-size:11px;color:var(--txt);">${entry.label}</span>
+      return `<div${clickAttr} style="display:flex;justify-content:space-between;align-items:center;padding:7px 11px;border-bottom:1px solid var(--line);${rowCursor}">
+        <span style="font-size:11px;color:var(--txt);">${entry.label}${chevron}</span>
         <span style="text-align:right;"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);">${display}</span><br/><span style="font-size:8px;color:var(--mut);">${dateLabel}</span></span>
       </div>`;
     }).join('');
@@ -2432,6 +2468,14 @@ const vtx = {
     const t1 = fromMonths / 12, t2 = toMonths / 12;
     const growth = Math.pow(1 + y2 / 100, t2) / Math.pow(1 + y1 / 100, t1);
     return (Math.pow(growth, 1 / (t2 - t1)) - 1) * 100;
+  },
+  // Year-over-year % change series from a raw monthly index-level series
+  // (CPI, PCE, PPI, ...) — the same calc the Macro Indicators row already
+  // does for its single headline figure (see macroHtml), generalized into
+  // a full series so the indicator detail view can chart it, not just
+  // display one point-in-time number.
+  yoySeries(points) {
+    return points.slice(12).map((p, i) => ({ date: p.date, value: ((p.value / points[i].value) - 1) * 100 }));
   },
   // Same rotate-around-the-vertical-axis + perspective-projection technique
   // as the decorative globe elsewhere in this file (initWorldMap) — reused
@@ -3507,6 +3551,10 @@ const vtx = {
     this.setMobilePanel('chart');
     this.render();
     this.loadIndicatorData(meta.id);
+    // meta.compareId (Core CPI/PCE, U-6, ...) is a second real FRED series
+    // fetched the exact same way — see YC_MACRO_DETAIL for which
+    // indicators carry one.
+    if (meta.compareId) this.loadIndicatorData(meta.compareId);
     this.loadNews();
   },
   async loadIndicatorData(id) {
@@ -3517,7 +3565,11 @@ const vtx = {
     } catch (e) {
       this._indicatorData[id] = { __failed: true };
     }
-    if (this.state.view === 'indicator' && this.state.indicatorMeta && this.state.indicatorMeta.id === id) this.renderIndicatorView();
+    // Also re-render on the compare series landing, not just the primary
+    // one — both fetches are in flight together from selectIndicator, and
+    // whichever resolves second should still trigger the redraw.
+    const meta = this.state.indicatorMeta;
+    if (this.state.view === 'indicator' && meta && (meta.id === id || meta.compareId === id)) this.renderIndicatorView();
   },
   // Same chart geometry as buildChart (574x150 viewBox) so it drops into
   // the same SVG skeleton, but deliberately simpler — a real economic
@@ -3645,30 +3697,75 @@ const vtx = {
     } else if (data.__failed) {
       bodyHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load this series.<br><button onclick="vtx.loadIndicatorData('${meta.id}')" style="margin-top:8px;background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
     } else {
-      const points = data.points;
+      // meta.transform: 'yoy' (CPI/PCE/PPI) applies the same year-over-year
+      // calc the Macro Indicators row itself uses to BOTH the headline
+      // figure and the chart below, via yoySeries() — every other caller
+      // of this view (Macro Dashboard tiles, search's Indicators results)
+      // never sets meta.transform, so they fall through to the original
+      // raw-level behavior unchanged.
+      const points = meta.transform === 'yoy' ? this.yoySeries(data.points) : data.points;
+      const unitSuffix = meta.transform === 'yoy' ? '%' : '';
+      if (!points.length) {
+        bodyHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Not enough history yet for a year-over-year figure.</div>`;
+      } else {
       const last = points[points.length - 1];
       const prev = points.length > 1 ? points[points.length - 2] : null;
       const chg = prev ? last.value - prev.value : null;
-      const ch = this.buildIndicatorChart(points);
       const cPos = 'var(--pos)', cNeg = 'var(--neg)';
+      const fmtVal = v => unitSuffix ? v.toFixed(1) + unitSuffix : v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+      // meta.compareId (Core CPI/PCE, U-6, ...) — a real second FRED
+      // series, plotted alongside the primary one via the same shared-axis
+      // multi-line chart the Yield Curve/Credit Ladder/GDP views already
+      // use, rather than the single-series buildIndicatorChart below.
+      // Falls back to the single-series chart whenever there's no
+      // compareId, or its fetch hasn't landed/failed — this view still
+      // works exactly as before for every indicator without one.
+      const compareData = meta.compareId && this._indicatorData && this._indicatorData[meta.compareId];
+      const compareRawOk = compareData && !compareData.__failed && compareData.points && compareData.points.length;
+      const comparePoints = compareRawOk ? (meta.transform === 'yoy' ? this.yoySeries(compareData.points) : compareData.points) : null;
+
+      let chartSectionHtml;
+      if (comparePoints && comparePoints.length >= 2) {
+        const series = [
+          { id: meta.id, label: meta.label || meta.title, color: '#34d3ff', points },
+          { id: meta.compareId, label: meta.compareLabel, color: '#f0c419', points: comparePoints },
+        ];
+        const legendHtml = series.map(s => {
+          const l = s.points[s.points.length - 1];
+          return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:14px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+            ${s.label} <span style="font-family:var(--mono);color:var(--txt);font-weight:600;">${fmtVal(l.value)}</span>
+          </span>`;
+        }).join('');
+        chartSectionHtml = `
+          ${this.ycGlobalChart(series, 720, 220, v => fmtVal(v))}
+          <div style="padding:8px 4px 2px;">${legendHtml}</div>`;
+      } else {
+        const ch = this.buildIndicatorChart(points);
+        chartSectionHtml = `
+          <svg viewBox="0 0 ${ch.W} 150" width="100%" height="210" preserveAspectRatio="none" fill="none" style="display:block;">
+            <defs><linearGradient id="indArea" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--acc)" stop-opacity="0.32"></stop>
+              <stop offset="100%" stop-color="var(--acc)" stop-opacity="0"></stop>
+            </linearGradient></defs>
+            <path d="${ch.area}" fill="url(#indArea)"></path>
+            <path d="${ch.line}" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>
+            <circle cx="${ch.endX}" cy="${ch.endY}" r="3.4" fill="var(--acc)"></circle>
+          </svg>
+          <div style="display:flex;justify-content:space-between;padding:2px 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);">${ch.dateLabels.map(l=>`<span>${l}</span>`).join('')}</div>`;
+      }
+
       bodyHtml = `
         <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:2px;">
-          <span style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${last.value.toLocaleString('en-US',{maximumFractionDigits:2})}</span>
-          ${chg != null ? `<span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${chg>=0?cPos:cNeg};">${chg>=0?'+':''}${chg.toLocaleString('en-US',{maximumFractionDigits:2})} vs prior reading</span>` : ''}
+          <span style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${fmtVal(last.value)}</span>
+          ${chg != null ? `<span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${chg>=0?cPos:cNeg};">${chg>=0?'+':''}${chg.toLocaleString('en-US',{maximumFractionDigits:2})}${unitSuffix} vs prior reading</span>` : ''}
         </div>
         <div style="font-size:11px;color:var(--mut);margin-bottom:14px;">${meta.units} · as of ${last.date}</div>
-        <svg viewBox="0 0 ${ch.W} 150" width="100%" height="210" preserveAspectRatio="none" fill="none" style="display:block;">
-          <defs><linearGradient id="indArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--acc)" stop-opacity="0.32"></stop>
-            <stop offset="100%" stop-color="var(--acc)" stop-opacity="0"></stop>
-          </linearGradient></defs>
-          <path d="${ch.area}" fill="url(#indArea)"></path>
-          <path d="${ch.line}" stroke="var(--acc)" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 5px rgba(var(--glow),.6));"></path>
-          <circle cx="${ch.endX}" cy="${ch.endY}" r="3.4" fill="var(--acc)"></circle>
-        </svg>
-        <div style="display:flex;justify-content:space-between;padding:2px 0 0;font-family:var(--mono);font-size:9px;color:var(--mut);">${ch.dateLabels.map(l=>`<span>${l}</span>`).join('')}</div>
-        <div style="margin-top:6px;font-size:9px;color:var(--mut);opacity:.75;">Real historical data from FRED (Federal Reserve Economic Data) — ${meta.frequency}${meta.seasonalAdjustment && meta.seasonalAdjustment !== 'NSA' ? ', ' + meta.seasonalAdjustment : ''}.</div>
+        ${chartSectionHtml}
+        <div style="margin-top:6px;font-size:9px;color:var(--mut);opacity:.75;">Real historical data from FRED (Federal Reserve Economic Data) — ${meta.frequency}${meta.seasonalAdjustment && meta.seasonalAdjustment !== 'NSA' ? ', ' + meta.seasonalAdjustment : ''}${meta.compareId ? (comparePoints ? ` · compared against ${meta.compareLabel}` : '') : ''}.</div>
       `;
+      }
     }
 
     el.innerHTML = `
