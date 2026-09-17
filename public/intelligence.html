@@ -409,6 +409,14 @@ input{font-family:var(--ui)}
              House Price Index by state, real US map geometry (not a
              tile-grid), click a state for its full quarterly history. -->
         <div id="regionalHousingView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- Nonfarm Payrolls view (search "NFP") — real FRED PAYEMS, the
+             headline monthly jobs report. -->
+        <div id="nfpView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- Housing Starts view (search "HS") — real FRED HOUST + PERMIT,
+             national housing starts and building permits. -->
+        <div id="housingStartsView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -539,6 +547,8 @@ const vtx = {
     creditRange: '5Y',
     gdpRange: '10Y',
     gdpSort: { key: 'nominal', dir: -1 },
+    nfpRange: '5Y',
+    housingStartsRange: '5Y',
     // Macro tab's Economic Calendar — 'relevance' matches the order the
     // server already returns (relevance tier, then date within tier);
     // 'date' re-sorts client-side to pure chronological, no new request.
@@ -843,6 +853,18 @@ const vtx = {
   // hardcoding, real monthly data, not a substitute presented as the
   // real thing. Keyed by series id, populated by loadYcHousingPermits().
   YC_HOUSING_PERMITS: {},
+
+  // Nonfarm Payrolls (search "NFP") — real FRED PAYEMS, the headline
+  // monthly jobs report. { points: [...] } | { failed: true } | null,
+  // populated by loadNfp().
+  YC_NFP: null,
+  // Housing Starts (search "HS") — real FRED HOUST (national starts,
+  // which Census only publishes nationally — see YC_HOUSING_PERMITS above
+  // for why the regional view uses permits instead) plus PERMIT (national
+  // building permits, the leading indicator for starts). Populated by
+  // loadHousingStarts() as { houst: [...]|null, permit: [...]|null } |
+  // { failed: true } | null.
+  YC_HOUSING_STARTS: null,
   YC_HOUSING_STATES: [
     { abbr: 'AL', name: "Alabama", id: 'ALSTHPI', permitsId: 'ALBPPRIVSA' },
     { abbr: 'AK', name: "Alaska", id: 'AKSTHPI', permitsId: 'AKBPPRIVSA' },
@@ -3330,6 +3352,151 @@ const vtx = {
       <div style="font-size:8.5px;color:var(--mut);padding:2px 2px 12px;opacity:.7;">Map: FHFA All-Transactions House Price Index, per state, via FRED — real quarterly data, not seasonally adjusted, not a forecast. Click any state for its full history, including real monthly building permits (new units authorized, seasonally adjusted) — the state-level construction-activity proxy, since the Census Bureau only publishes literal housing starts nationally and by region. Map geometry: US Census TIGER (Albers USA projection).</div>
     `;
   },
+  // "The jobs report" everyone means the month-over-month CHANGE in
+  // payrolls, not the raw employment level (which only ever trends up) —
+  // so that's what drives the headline figure and the trend chart here,
+  // computed from FRED PAYEMS's own consecutive readings rather than
+  // relying on a separate pre-differenced series.
+  renderNfpView() {
+    const el = document.getElementById('nfpView');
+    if (!el) return;
+    let bodyHtml;
+    if (!this.YC_NFP) {
+      bodyHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (this.YC_NFP.failed) {
+      bodyHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now. <button onclick="vtx.loadNfp()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else {
+      const pts = this.YC_NFP.points;
+      const changes = pts.slice(1).map((p, i) => ({ date: p.date, value: p.value - pts[i].value }));
+      const latest = pts[pts.length - 1];
+      const latestChange = changes[changes.length - 1];
+      const avgOf = n => changes.slice(-n).reduce((s, c) => s + c.value, 0) / Math.min(n, changes.length);
+      const avg3mo = avgOf(3), avg12mo = avgOf(12);
+      const changeColor = v => v >= 0 ? 'var(--pos)' : 'var(--neg)';
+
+      const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, '10Y': 365 * 10, 'MAX': Infinity };
+      const rangeDays = RANGE_DAYS[this.state.nfpRange] || RANGE_DAYS['5Y'];
+      const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
+      const filtered = changes.filter(c => Date.parse(c.date) >= cutoffTime);
+      const trendHtml = filtered.length >= 2
+        ? this.ycGlobalChart([{ id: 'PAYEMS_CHG', label: 'Monthly Change', color: '#34d3ff', points: filtered }], 760, 240, v => (v >= 0 ? '+' : '') + v.toFixed(0) + 'K')
+        : `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Not enough data in this range.</div>`;
+
+      const rangeBtn = (r, label) => `<button onclick="vtx.nfpSetRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.nfpRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.nfpRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.nfpRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+
+      bodyHtml = `
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;flex-wrap:wrap;gap:24px;padding:16px 18px;">
+            <div>
+              <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">Jobs Added (${latest.date.slice(0, 7)})</div>
+              <div style="font-family:var(--mono);font-size:26px;font-weight:800;color:${changeColor(latestChange.value)};">${latestChange.value >= 0 ? '+' : ''}${latestChange.value.toFixed(0)}K</div>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">Total Nonfarm Payrolls</div>
+              <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--txt);">${(latest.value / 1000).toFixed(1)}M</div>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">3-Month Avg</div>
+              <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:${changeColor(avg3mo)};">${avg3mo >= 0 ? '+' : ''}${avg3mo.toFixed(0)}K</div>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">12-Month Avg</div>
+              <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:${changeColor(avg12mo)};">${avg12mo >= 0 ? '+' : ''}${avg12mo.toFixed(0)}K</div>
+            </div>
+          </div>
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Monthly Change</span>
+            <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('10Y', '10Y')}${rangeBtn('MAX', 'MAX')}</div>
+          </div>
+          <div style="padding:16px 12px 10px;">${trendHtml}</div>
+        </div>`;
+    }
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Nonfarm Payrolls</span>
+        <span style="font-size:9px;color:var(--mut);">FRED PAYEMS · Bureau of Labor Statistics, seasonally adjusted</span>
+      </div>
+      ${bodyHtml}
+    `;
+  },
+  // Starts + permits paired on one chart (same unit — thousands of units,
+  // SAAR — so they're directly comparable), same reasoning the credit
+  // ladder's tier trend uses for sharing one axis across series.
+  renderHousingStartsView() {
+    const el = document.getElementById('housingStartsView');
+    if (!el) return;
+    let bodyHtml;
+    const d = this.YC_HOUSING_STARTS;
+    if (!d) {
+      bodyHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Loading…</div>`;
+    } else if (d.failed || (!d.houst && !d.permit)) {
+      bodyHtml = `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Unavailable right now. <button onclick="vtx.loadHousingStarts()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+    } else {
+      const houst = d.houst, permit = d.permit;
+      const latestHoust = houst ? houst[houst.length - 1] : null;
+      const latestPermit = permit ? permit[permit.length - 1] : null;
+      const priorHoust = houst && houst.length > 1 ? houst[houst.length - 2] : null;
+      const priorPermit = permit && permit.length > 1 ? permit[permit.length - 2] : null;
+      const momPct = (latest, prior) => (latest != null && prior) ? ((latest - prior) / prior * 100) : null;
+      const houstMom = latestHoust && priorHoust ? momPct(latestHoust.value, priorHoust.value) : null;
+      const permitMom = latestPermit && priorPermit ? momPct(latestPermit.value, priorPermit.value) : null;
+      const pctColor = v => v == null ? 'var(--mut)' : v >= 0 ? 'var(--pos)' : 'var(--neg)';
+
+      const RANGE_DAYS = { '1Y': 365, '5Y': 365 * 5, '10Y': 365 * 10, 'MAX': Infinity };
+      const rangeDays = RANGE_DAYS[this.state.housingStartsRange] || RANGE_DAYS['5Y'];
+      const cutoffTime = rangeDays === Infinity ? -Infinity : Date.now() - rangeDays * 86400000;
+      const series = [];
+      if (houst) { const f = houst.filter(p => Date.parse(p.date) >= cutoffTime); if (f.length >= 2) series.push({ id: 'HOUST', label: 'Housing Starts', color: '#34d3ff', points: f }); }
+      if (permit) { const f = permit.filter(p => Date.parse(p.date) >= cutoffTime); if (f.length >= 2) series.push({ id: 'PERMIT', label: 'Building Permits', color: '#f0c419', points: f }); }
+      const trendHtml = series.length
+        ? this.ycGlobalChart(series, 760, 240, v => v.toFixed(0) + 'K')
+        : `<div style="padding:60px 0;text-align:center;color:var(--mut);font-size:12px;">Not enough data in this range.</div>`;
+      const legendHtml = series.map(s => {
+        const last = s.points[s.points.length - 1];
+        return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);margin-right:12px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
+          ${s.label} <span style="font-family:var(--mono);color:var(--txt);font-weight:600;">${last.value.toFixed(0)}K</span>
+        </span>`;
+      }).join('');
+
+      const rangeBtn = (r, label) => `<button onclick="vtx.housingStartsSetRange('${r}')" style="font-size:10px;padding:3px 9px;border-radius:5px;border:1px solid ${this.state.housingStartsRange === r ? 'var(--acc2)' : 'var(--line)'};background:${this.state.housingStartsRange === r ? 'rgba(52,211,255,.12)' : 'rgba(255,255,255,.03)'};color:${this.state.housingStartsRange === r ? 'var(--acc2)' : 'var(--mut)'};cursor:pointer;">${label}</button>`;
+
+      bodyHtml = `
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;flex-wrap:wrap;gap:24px;padding:16px 18px;">
+            ${latestHoust ? `<div>
+              <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">Housing Starts (${latestHoust.date.slice(0, 7)})</div>
+              <div style="font-family:var(--mono);font-size:26px;font-weight:800;color:var(--txt);">${latestHoust.value.toFixed(0)}K <span style="font-size:12px;font-weight:600;color:${pctColor(houstMom)};">${houstMom != null ? (houstMom >= 0 ? '+' : '') + houstMom.toFixed(1) + '%' : ''}</span></div>
+              <div style="font-size:8.5px;color:var(--mut);">SAAR · m/m</div>
+            </div>` : ''}
+            ${latestPermit ? `<div>
+              <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">Building Permits (${latestPermit.date.slice(0, 7)})</div>
+              <div style="font-family:var(--mono);font-size:26px;font-weight:800;color:var(--txt);">${latestPermit.value.toFixed(0)}K <span style="font-size:12px;font-weight:600;color:${pctColor(permitMom)};">${permitMom != null ? (permitMom >= 0 ? '+' : '') + permitMom.toFixed(1) + '%' : ''}</span></div>
+              <div style="font-size:8.5px;color:var(--mut);">SAAR · m/m · leading indicator</div>
+            </div>` : ''}
+          </div>
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Historical Trend</span>
+            <div style="margin-left:auto;display:flex;gap:5px;">${rangeBtn('1Y', '1Y')}${rangeBtn('5Y', '5Y')}${rangeBtn('10Y', '10Y')}${rangeBtn('MAX', 'MAX')}</div>
+          </div>
+          <div style="padding:16px 12px 10px;">
+            ${trendHtml}
+            ${legendHtml ? `<div style="padding:8px 4px 2px;">${legendHtml}</div>` : ''}
+          </div>
+        </div>`;
+    }
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Housing Starts</span>
+        <span style="font-size:9px;color:var(--mut);">FRED HOUST/PERMIT · Census Bureau, seasonally adjusted annual rate</span>
+      </div>
+      ${bodyHtml}
+    `;
+  },
   selectIndicator(meta) {
     if (!meta || !meta.id) return;
     this.state.view = 'indicator';
@@ -3978,6 +4145,8 @@ const vtx = {
     else if (entry.type === 'creditLadder') this.selectCreditLadder();
     else if (entry.type === 'globalGdp') this.selectGlobalGdp();
     else if (entry.type === 'regionalHousing') this.selectRegionalHousing();
+    else if (entry.type === 'nfp') this.selectNfp();
+    else if (entry.type === 'housingStarts') this.selectHousingStarts();
     else this.viewTicker(entry.key, entry.label);
   },
   // "YC" as a search shortcut into the full Yield Curve view — matches the
@@ -4030,6 +4199,18 @@ const vtx = {
     const q = v.trim().toLowerCase();
     if (!q) return false;
     return q === 'rhh' || 'housing'.includes(q) || 'regional housing'.includes(q) || 'home prices'.includes(q);
+  },
+  // "NFP" into the standalone Nonfarm Payrolls view.
+  matchNfpShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'nfp' || 'nonfarm payrolls'.includes(q) || 'jobs report'.includes(q) || 'payrolls'.includes(q);
+  },
+  // "HS" into the standalone Housing Starts view.
+  matchHousingStartsShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'hs' || 'housing starts'.includes(q) || 'building permits'.includes(q);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
@@ -4156,7 +4337,7 @@ const vtx = {
       // Each row's own × removes just that entry (stopPropagation so it
       // doesn't also re-open the search); "Clear all" wipes the list.
       const recentRowHtml = e => {
-        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation'||e.type==='worldEquity'||e.type==='creditLadder'||e.type==='globalGdp'||e.type==='regionalHousing') ? '▤' : '';
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation'||e.type==='worldEquity'||e.type==='creditLadder'||e.type==='globalGdp'||e.type==='regionalHousing'||e.type==='nfp'||e.type==='housingStarts') ? '▤' : '';
         return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
@@ -4212,6 +4393,14 @@ const vtx = {
     if (this.matchRegionalHousingShortcut(this.state.query)) {
       toolRows += toolRow('RHH', 'Regional Housing Heatmap', '50 states + DC',
         "vtx.recordRecentSearch({type:'regionalHousing',key:'RHH',label:'RHH',sub:'Regional Housing Heatmap'});vtx.selectRegionalHousing()");
+    }
+    if (this.matchNfpShortcut(this.state.query)) {
+      toolRows += toolRow('NFP', 'Nonfarm Payrolls', 'Monthly jobs report',
+        "vtx.recordRecentSearch({type:'nfp',key:'NFP',label:'NFP',sub:'Nonfarm Payrolls'});vtx.selectNfp()");
+    }
+    if (this.matchHousingStartsShortcut(this.state.query)) {
+      toolRows += toolRow('HS', 'Housing Starts', 'Starts · Building Permits',
+        "vtx.recordRecentSearch({type:'housingStarts',key:'HS',label:'HS',sub:'Housing Starts'});vtx.selectHousingStarts()");
     }
     const ycHtml = toolRows ? `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>${toolRows}` : '';
     let html = searchFailedHtml + ycHtml + r.map(t => `
@@ -5054,6 +5243,63 @@ const vtx = {
     this.render();
     if (!Object.keys(this.YC_HOUSING).length) this.loadYcHousing();
     if (!Object.keys(this.YC_HOUSING_PERMITS).length) this.loadYcHousingPermits();
+  },
+  // Real FRED PAYEMS — Total Nonfarm Payrolls, seasonally adjusted, via
+  // the same generic econ-series proxy every other single-series view in
+  // this file already uses. Verified live before wiring in (159,075K as
+  // of Aug 2026, a real monthly BLS print).
+  async loadNfp() {
+    try {
+      const res = await fetch('/api/intel/econ-series?id=PAYEMS');
+      if (!res.ok) { this.YC_NFP = { failed: true }; if (this.state.view === 'nfp') this.renderNfpView(); return; }
+      const data = await res.json();
+      this.YC_NFP = (data.points && data.points.length) ? data : { failed: true };
+    } catch (e) { this.YC_NFP = { failed: true }; }
+    if (this.state.view === 'nfp') this.renderNfpView();
+  },
+  nfpSetRange(range) {
+    this.state.nfpRange = range;
+    this.renderNfpView();
+  },
+  selectNfp() {
+    this.state.view = 'nfp';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+    if (!this.YC_NFP) this.loadNfp();
+  },
+  // Real FRED HOUST (national housing starts) + PERMIT (national building
+  // permits, the leading indicator) — fetched together since they're
+  // always shown paired. Both verified live before wiring in (1,275K
+  // starts / 1,394K permits as of Aug 2026, real Census prints).
+  async loadHousingStarts() {
+    try {
+      const [houstRes, permitRes] = await Promise.all([
+        fetch('/api/intel/econ-series?id=HOUST'),
+        fetch('/api/intel/econ-series?id=PERMIT'),
+      ]);
+      const houst = houstRes.ok ? await houstRes.json() : null;
+      const permit = permitRes.ok ? await permitRes.json() : null;
+      const houstPts = houst && houst.points && houst.points.length ? houst.points : null;
+      const permitPts = permit && permit.points && permit.points.length ? permit.points : null;
+      this.YC_HOUSING_STARTS = (houstPts || permitPts) ? { houst: houstPts, permit: permitPts } : { failed: true };
+    } catch (e) { this.YC_HOUSING_STARTS = { failed: true }; }
+    if (this.state.view === 'housingStarts') this.renderHousingStartsView();
+  },
+  housingStartsSetRange(range) {
+    this.state.housingStartsRange = range;
+    this.renderHousingStartsView();
+  },
+  selectHousingStarts() {
+    this.state.view = 'housingStarts';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+    if (!this.YC_HOUSING_STARTS) this.loadHousingStarts();
   },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
@@ -6473,6 +6719,8 @@ const vtx = {
     document.getElementById('creditLadderView').style.display = s.view === 'creditLadder' ? 'flex' : 'none';
     document.getElementById('globalGdpView').style.display = s.view === 'globalGdp' ? 'flex' : 'none';
     document.getElementById('regionalHousingView').style.display = s.view === 'regionalHousing' ? 'flex' : 'none';
+    document.getElementById('nfpView').style.display = s.view === 'nfp' ? 'flex' : 'none';
+    document.getElementById('housingStartsView').style.display = s.view === 'housingStarts' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
@@ -6497,6 +6745,10 @@ const vtx = {
       this.renderGlobalGdpView();
     } else if (s.view === 'regionalHousing') {
       this.renderRegionalHousingView();
+    } else if (s.view === 'nfp') {
+      this.renderNfpView();
+    } else if (s.view === 'housingStarts') {
+      this.renderHousingStartsView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
