@@ -604,6 +604,8 @@ const vtx = {
     // (MACRO_SERIES catalog) as the same honestly-labeled substitute.
     { id: 'GACDFSA066MSFRBPHI', label: 'Philly Fed Mfg. Index', transform: 'level', offset: 0, suffix: '' },
     { id: 'ICSA', label: 'Jobless Claims', transform: 'thousands' },
+    { id: 'RSAFS', label: 'Retail Sales m/m', transform: 'mom' },
+    { id: 'UMCSENT', label: 'Consumer Sentiment', transform: 'level', offset: 0, suffix: '' },
   ],
   // Click-through metadata for the Macro Indicators rows above — routes
   // into the existing generic indicator detail view (selectIndicator),
@@ -632,6 +634,21 @@ const vtx = {
     // claims, which run ~9x larger and would make the initial-claims line
     // unreadable on a shared axis).
     ICSA: { title: 'Initial Jobless Claims', units: 'Number, weekly', frequency: 'Weekly, Ending Saturday', seasonalAdjustment: 'SA', compareId: 'IC4WSA', compareLabel: '4-Week Moving Average' },
+    // Compared against retail sales ex autos (RSFSXMV) — same dollar
+    // units as the headline series, so the gap between the two lines is
+    // literally how much of a given month's retail sales move came from
+    // auto sales, which are lumpy enough to swing the headline on their
+    // own. transform:'mom' (see momSeries) applies to both, since month-
+    // over-month is the figure actually reported for this release, not
+    // the raw dollar level.
+    RSAFS: { title: 'Advance Retail Sales: Retail Trade and Food Services', units: 'Month-over-month % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'mom', compareId: 'RSFSXMV', compareLabel: 'Retail Sales Ex Autos' },
+    // No compareId — searched live for a free companion (UMich's own
+    // Current Conditions/Expectations sub-indices, the Conference Board's
+    // Consumer Confidence Index) and neither is freely available via
+    // FRED's search API, unlike every other compareId above. A single-
+    // series drill-down here is still real and still useful; it just
+    // doesn't get a second line rather than getting a fabricated one.
+    UMCSENT: { title: 'University of Michigan: Consumer Sentiment', units: 'Index 1966:Q1=100', frequency: 'Monthly', seasonalAdjustment: 'NSA' },
   },
   YC_GLOBAL: {}, // populated by loadYcGlobal() — real FRED 10Y/long-term govt bond yields, keyed by series id
   // Every country's long-term (~10Y) government bond yield — the US leg is
@@ -2490,6 +2507,12 @@ const vtx = {
   yoySeries(points) {
     return points.slice(12).map((p, i) => ({ date: p.date, value: ((p.value / points[i].value) - 1) * 100 }));
   },
+  // Month-over-month % change series — same idea as yoySeries but one
+  // period back instead of twelve, for indicators (Retail Sales) where
+  // that's the conventionally-reported headline figure, not y/y.
+  momSeries(points) {
+    return points.slice(1).map((p, i) => ({ date: p.date, value: ((p.value / points[i].value) - 1) * 100 }));
+  },
   // Same rotate-around-the-vertical-axis + perspective-projection technique
   // as the decorative globe elsewhere in this file (initWorldMap) — reused
   // here for a Cartesian height-field instead of a sphere: maturity and
@@ -3710,16 +3733,18 @@ const vtx = {
     } else if (data.__failed) {
       bodyHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load this series.<br><button onclick="vtx.loadIndicatorData('${meta.id}')" style="margin-top:8px;background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
     } else {
-      // meta.transform: 'yoy' (CPI/PCE/PPI) applies the same year-over-year
-      // calc the Macro Indicators row itself uses to BOTH the headline
-      // figure and the chart below, via yoySeries() — every other caller
-      // of this view (Macro Dashboard tiles, search's Indicators results)
-      // never sets meta.transform, so they fall through to the original
-      // raw-level behavior unchanged.
-      const points = meta.transform === 'yoy' ? this.yoySeries(data.points) : data.points;
-      const unitSuffix = meta.transform === 'yoy' ? '%' : '';
+      // meta.transform: 'yoy' (CPI/PCE/PPI) or 'mom' (Retail Sales — the
+      // conventionally-reported headline figure for that one is month-
+      // over-month, not y/y) applies the same calc the Macro Indicators
+      // row itself uses to BOTH the headline figure and the chart below.
+      // Every other caller of this view (Macro Dashboard tiles, search's
+      // Indicators results) never sets meta.transform, so they fall
+      // through to the original raw-level behavior unchanged.
+      const applyTransform = pts => meta.transform === 'yoy' ? this.yoySeries(pts) : meta.transform === 'mom' ? this.momSeries(pts) : pts;
+      const points = applyTransform(data.points);
+      const unitSuffix = (meta.transform === 'yoy' || meta.transform === 'mom') ? '%' : '';
       if (!points.length) {
-        bodyHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Not enough history yet for a year-over-year figure.</div>`;
+        bodyHtml = `<div style="padding:60px 14px;text-align:center;color:var(--mut);font-size:11px;">Not enough history yet for this figure.</div>`;
       } else {
       const last = points[points.length - 1];
       const prev = points.length > 1 ? points[points.length - 2] : null;
@@ -3736,7 +3761,7 @@ const vtx = {
       // works exactly as before for every indicator without one.
       const compareData = meta.compareId && this._indicatorData && this._indicatorData[meta.compareId];
       const compareRawOk = compareData && !compareData.__failed && compareData.points && compareData.points.length;
-      const comparePoints = compareRawOk ? (meta.transform === 'yoy' ? this.yoySeries(compareData.points) : compareData.points) : null;
+      const comparePoints = compareRawOk ? applyTransform(compareData.points) : null;
 
       let chartSectionHtml;
       if (comparePoints && comparePoints.length >= 2) {
