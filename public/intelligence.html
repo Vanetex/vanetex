@@ -363,6 +363,20 @@ input{font-family:var(--ui)}
           <div id="finReportedBody" style="padding:8px 14px 14px;"></div>
         </div>
 
+        <!-- DCF — discounted cash flow, built from the exact same real 10-K
+             free-cash-flow and diluted-share history already fetched above
+             for Multi-Year Trends (zero new API calls). Growth/discount/
+             terminal-growth are explicit, user-editable assumptions, not a
+             computed "fair value" presented as fact — same disclosure
+             posture as the Bond Calculator's price-sensitivity note. -->
+        <div id="dcfCard" style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:baseline;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Discounted Cash Flow</span>
+            <span style="font-size:9px;color:var(--mut);margin-left:auto;">assumptions, not a price target</span>
+          </div>
+          <div id="dcfBody" style="padding:10px 14px 14px;"></div>
+        </div>
+
         <!-- ETF holdings composition — shown for any fund (real holdings if
              available, an honest explanation if not); hidden entirely for
              regular stocks. -->
@@ -595,7 +609,15 @@ const vtx = {
     // Bond Calculator — mode picks which of price/yield is solved FOR
     // from the other; both fields stay populated so switching mode
     // doesn't lose whichever one you weren't editing.
-    bondInputs: { faceValue: 1000, couponRate: 5, frequency: 2, years: 10, mode: 'yield', price: 950, yield: 5.5 }
+    bondInputs: { faceValue: 1000, couponRate: 5, frequency: 2, years: 10, mode: 'yield', price: 950, yield: 5.5 },
+    // DCF — growthRate/terminalGrowth/discountRate are seeded per-ticker
+    // (growthRate from that stock's own historical FCF CAGR) the first
+    // time its DCF card renders; `sym` tracks which ticker the current
+    // values were seeded for, so switching stocks reseeds instead of
+    // silently reusing e.g. Apple's growth rate on a newly-viewed biotech.
+    // Editing any field marks `touched` so a re-render never stomps a
+    // user's own input back to the auto-seed for the SAME ticker.
+    dcfInputs: { sym: null, growthRate: 8, years: 5, terminalGrowth: 2.5, discountRate: 9, touched: false }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -5720,6 +5742,17 @@ const vtx = {
     this.state.bondInputs = { ...this.state.bondInputs, mode };
     this.renderBondCalcView();
   },
+  // DCF lives inline in the ticker view (it's about a specific stock's own
+  // cash flows, not a standalone tool like the Bond Calculator), so there's
+  // no selectDcf()/searchable-view wiring — just this input handler, called
+  // from the card built inside render(). `touched:true` stops the next
+  // render's auto-seed (see dcfInputs in state) from overwriting whatever
+  // the user just typed.
+  setDcfInput(key, value) {
+    const num = parseFloat(value);
+    this.state.dcfInputs = { ...this.state.dcfInputs, [key]: isNaN(num) ? 0 : num, touched: true };
+    this.render();
+  },
   // Standard discrete-coupon bond math, m periods/year. cashflowAt(t)
   // returns each period's real cash flow (coupon, plus face value on the
   // final period) — shared by price/duration/convexity so all three
@@ -7807,6 +7840,114 @@ const vtx = {
         <div style="padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);">${pioHtml}</div>
         <div>${zHtml}</div>
         <div style="margin-top:10px;font-size:8px;color:var(--mut);opacity:.7;">Source: SEC 10-K filings via Finnhub, ${periods.length} year${periods.length===1?'':'s'} of history. Piotroski F-Score and Altman Z-Score are public, documented formulas computed from the raw statement data above — not a proprietary model, and not a substitute for reading the actual filing.</div>`;
+    }
+
+    // DCF — reuses finRep.periods (fcf + dilutedShares per fiscal year)
+    // fetched above for Multi-Year Trends, so this adds zero new network
+    // calls. Growth rate auto-seeds from this stock's own historical FCF
+    // CAGR the first time its card renders (or whenever the ticker changes
+    // and the user hasn't touched the inputs) so the starting point isn't
+    // a generic guess — but every assumption is a plain editable number
+    // sitting right next to the output, never presented as a bare "fair
+    // value" fact. Degrades the same honest way Multi-Year Trends does for
+    // filers with no comparable capex/FCF line (banks, ETFs with no 10-K).
+    const dcfEl = document.getElementById('dcfBody');
+    if (dcfEl) {
+      if (!finRep) {
+        dcfEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading…</div>`;
+      } else if (finRep.__failed || !finRep.periods || !finRep.periods.length) {
+        dcfEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">No SEC 10-K filing history available to build a DCF from.</div>`;
+      } else {
+        const periods = finRep.periods;
+        const withFcf = periods.filter(p => p.fcf != null);
+        const withShares = periods.filter(p => p.dilutedShares != null && p.dilutedShares > 0);
+        const baseFcf = withFcf.length ? withFcf[withFcf.length - 1].fcf : null;
+        const baseShares = withShares.length ? withShares[withShares.length - 1].dilutedShares : null;
+
+        if (baseFcf == null || baseShares == null) {
+          dcfEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">This filer doesn't report free cash flow or diluted shares in a form a DCF can use (common for banks/insurers, which don't tag a comparable capex line).</div>`;
+        } else {
+          const di = this.state.dcfInputs;
+          if (di.sym !== f.sym || !di.touched) {
+            let seededGrowth = 8;
+            if (withFcf.length >= 2) {
+              const first = withFcf[0], last = withFcf[withFcf.length - 1];
+              const nYears = last.year - first.year;
+              if (nYears > 0 && first.fcf > 0 && last.fcf > 0) seededGrowth = (Math.pow(last.fcf / first.fcf, 1 / nYears) - 1) * 100;
+            }
+            seededGrowth = Math.max(-10, Math.min(25, seededGrowth));
+            this.state.dcfInputs = { sym: f.sym, growthRate: Math.round(seededGrowth * 10) / 10, years: 5, terminalGrowth: 2.5, discountRate: 9, touched: false };
+          }
+          const d = this.state.dcfInputs;
+
+          const projected = [];
+          for (let y = 1; y <= d.years; y++) projected.push(baseFcf * Math.pow(1 + d.growthRate / 100, y));
+          const pvExplicit = projected.reduce((sum, cf, i) => sum + cf / Math.pow(1 + d.discountRate / 100, i + 1), 0);
+          const rateSpread = d.discountRate - d.terminalGrowth;
+          let equityValue = null, pvTerminal = null;
+          if (rateSpread > 0) {
+            const terminalValue = projected[projected.length - 1] * (1 + d.terminalGrowth / 100) / (rateSpread / 100);
+            pvTerminal = terminalValue / Math.pow(1 + d.discountRate / 100, d.years);
+            equityValue = pvExplicit + pvTerminal;
+          }
+          const fairValue = equityValue != null ? equityValue / baseShares : null;
+          const price = f.price;
+          const upside = (fairValue != null && price) ? (fairValue - price) / price * 100 : null;
+
+          const fmtUsdCompact = v => {
+            if (v == null) return '—';
+            const abs = Math.abs(v), sign = v < 0 ? '-' : '';
+            if (abs >= 1e12) return sign + '$' + (abs/1e12).toFixed(2) + 'T';
+            if (abs >= 1e9) return sign + '$' + (abs/1e9).toFixed(2) + 'B';
+            if (abs >= 1e6) return sign + '$' + (abs/1e6).toFixed(1) + 'M';
+            return sign + '$' + abs.toLocaleString();
+          };
+          const dcfInputField = (label, key, value, step, width) => `
+            <div>
+              <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">${label}</label>
+              <input type="number" value="${value}" step="${step || 'any'}" onchange="vtx.setDcfInput('${key}', this.value)" style="width:${width || 92}px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:7px 9px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;">
+            </div>`;
+
+          dcfEl.innerHTML = `
+            <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:14px;">
+              ${dcfInputField('FCF Growth, Yrs 1–' + d.years + ' (%)', 'growthRate', d.growthRate, '0.1')}
+              ${dcfInputField('Projection Years', 'years', d.years, '1', 76)}
+              ${dcfInputField('Terminal Growth (%)', 'terminalGrowth', d.terminalGrowth, '0.1')}
+              ${dcfInputField('Discount Rate (%)', 'discountRate', d.discountRate, '0.1')}
+            </div>
+            ${rateSpread <= 0 ? `<div style="padding:10px 12px;border-radius:8px;background:rgba(255,77,94,.08);border:1px solid rgba(255,77,94,.25);font-size:11px;color:#ff4d5e;">Discount rate must be higher than terminal growth — the terminal value formula doesn't converge otherwise.</div>` : `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">
+              <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">
+                <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Estimated Fair Value</div>
+                <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--acc2);">$${fairValue.toFixed(2)}</div>
+                <div style="font-size:9px;color:var(--mut);margin-top:2px;">per share, base case</div>
+              </div>
+              <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">
+                <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Current Price</div>
+                <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--txt);">${price ? '$' + price.toFixed(2) : '—'}</div>
+                <div style="font-size:9px;font-weight:700;color:${upside == null ? 'var(--mut)' : upside >= 0 ? 'var(--pos)' : 'var(--neg)'};margin-top:2px;">${upside == null ? '' : (upside >= 0 ? '+' : '') + upside.toFixed(1) + '% vs. fair value'}</div>
+              </div>
+              <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">
+                <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Terminal Value Share</div>
+                <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--txt);">${((pvTerminal / equityValue) * 100).toFixed(0)}%</div>
+                <div style="font-size:9px;color:var(--mut);margin-top:2px;">of total value — high is typical, watch if extreme</div>
+              </div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead><tr>
+                  <th style="text-align:left;padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);border-bottom:1px solid var(--line);">Year</th>
+                  ${projected.map((_, i) => `<th style="text-align:right;padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);border-bottom:1px solid var(--line);">Yr ${i+1}</th>`).join('')}
+                </tr></thead>
+                <tbody>
+                  <tr><td style="padding:5px 8px;font-size:10.5px;color:var(--mut);">Projected FCF</td>${projected.map(v => `<td style="text-align:right;padding:5px 8px;font-family:var(--mono);font-size:11px;color:var(--txt);">${fmtUsdCompact(v)}</td>`).join('')}</tr>
+                  <tr><td style="padding:5px 8px;font-size:10.5px;color:var(--mut);">Present Value</td>${projected.map((v,i) => `<td style="text-align:right;padding:5px 8px;font-family:var(--mono);font-size:11px;color:var(--txt);">${fmtUsdCompact(v / Math.pow(1 + d.discountRate / 100, i + 1))}</td>`).join('')}</tr>
+                </tbody>
+              </table>
+            </div>`}
+            <div style="margin-top:10px;font-size:8px;color:var(--mut);opacity:.7;">Base FCF ${fmtUsdCompact(baseFcf)} and ${(baseShares/1e6).toFixed(0)}M diluted shares from the most recent real 10-K on file. Growth rate seeded from this stock's own ${withFcf.length >= 2 ? (withFcf[withFcf.length-1].year - withFcf[0].year) + '-year historical FCF CAGR' : 'default (not enough FCF history to seed from)'} — edit any field to run your own case. Two-stage model: explicit-year growth, then Gordon-growth terminal value. Free cash flow is used as a proxy for cash available to equity holders, a simplification rather than a full FCFE build. Not investment advice.</div>`;
+        }
+      }
     }
 
     // Short interest & positioning — real FINRA Rule 4560 consolidated short
