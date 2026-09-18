@@ -341,6 +341,14 @@ input{font-family:var(--ui)}
           <div id="sectorScreenBody" style="padding:10px 14px 14px;"></div>
         </div>
 
+        <!-- Comps Table — the actual raw numbers behind the sector screen's
+             percentiles above (same fetch, same peer-percentile response,
+             just the real values instead of a rank). Sortable by column. -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Comps Table</div>
+          <div id="compsTableBody" style="overflow-x:auto;"></div>
+        </div>
+
         <!-- Competitors — real Finnhub peer set (same country + GICS
              sub-industry), not the sector screen's own larger internal
              universe. Named tickers, click through to any of them. -->
@@ -555,6 +563,7 @@ const vtx = {
     creditRange: '5Y',
     gdpRange: '10Y',
     gdpSort: { key: 'nominal', dir: -1 },
+    compsSort: { key: 'marketCap', dir: -1 },
     nfpRange: '5Y',
     housingStartsRange: '5Y',
     // Macro tab's Economic Calendar — 'relevance' matches the order the
@@ -5415,6 +5424,11 @@ const vtx = {
     this.state.gdpSort = { key, dir: s.key === key ? -s.dir : -1 };
     this.renderGlobalGdpView();
   },
+  setCompsSort(key) {
+    const s = this.state.compsSort;
+    this.state.compsSort = { key, dir: s.key === key ? -s.dir : -1 };
+    this.render();
+  },
   selectGlobalGdp() {
     this.state.view = 'globalGdp';
     this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
@@ -7386,6 +7400,65 @@ const vtx = {
             </div>
           </div>`;
       }).join('') + `<div style="margin-top:6px;font-size:8px;color:var(--mut);opacity:.7;">Real-time percentile vs. ${peerPct.peerCount} real, disclosed sector peers — each pillar stands alone. Not a combined score, star rating, or Buy/Sell call.</div>`;
+    }
+
+    // Comps Table — the same peer-percentile fetch's raw numbers, not
+    // just a rank. Sortable; the focus symbol's own row is pinned first
+    // and tinted so it doesn't get lost once sorted.
+    const compsEl = document.getElementById('compsTableBody');
+    if (compsEl) {
+      const comps = peerPct && peerPct.comps;
+      if (!peerPct) {
+        compsEl.innerHTML = `<div style="padding:14px;font-size:11px;color:var(--mut);">Loading comps…</div>`;
+      } else if (peerPct.__failed) {
+        compsEl.innerHTML = `<div style="padding:14px;font-size:11px;color:var(--mut);">Couldn't load comps. <button onclick="vtx.loadPeerPercentile('${f.sym}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else if (!peerPct.applicable || !comps || comps.length < 2) {
+        compsEl.innerHTML = `<div style="padding:14px;font-size:11px;color:var(--mut);">${(peerPct.applicable === false && peerPct.reason) || 'Not enough real peer data for a comps table.'}</div>`;
+      } else {
+        const cols = [
+          { key: 'marketCap', label: 'Mkt Cap', fmt: v => v==null?'—':v>=1e12?'$'+(v/1e12).toFixed(2)+'T':v>=1e9?'$'+(v/1e9).toFixed(1)+'B':'$'+(v/1e6).toFixed(0)+'M' },
+          { key: 'peTTM', label: 'P/E', fmt: v => v==null?'—':v.toFixed(1)+'x' },
+          { key: 'forwardPE', label: 'Fwd P/E', fmt: v => v==null?'—':v.toFixed(1)+'x' },
+          { key: 'evToEbitda', label: 'EV/EBITDA', fmt: v => v==null?'—':v.toFixed(1)+'x' },
+          { key: 'priceToSales', label: 'P/S', fmt: v => v==null?'—':v.toFixed(1)+'x' },
+          { key: 'revenueGrowthYoy', label: 'Rev Growth', fmt: v => v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%' },
+          { key: 'grossMargin', label: 'Gross Mgn', fmt: v => v==null?'—':v.toFixed(1)+'%' },
+          { key: 'roe', label: 'ROE', fmt: v => v==null?'—':v.toFixed(1)+'%' },
+          { key: 'debtToEquity', label: 'D/E', fmt: v => v==null?'—':v.toFixed(2)+'x' },
+          { key: 'dividendYield', label: 'Div Yield', fmt: v => v==null||v===0?'—':v.toFixed(2)+'%' },
+        ];
+        const sortState = this.state.compsSort;
+        const focusRow = comps.find(c => c.symbol === f.sym);
+        const otherRows = comps.filter(c => c.symbol !== f.sym);
+        otherRows.sort((a, b) => {
+          const av = a[sortState.key], bv = b[sortState.key];
+          if (av == null && bv == null) return 0;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          return (av - bv) * sortState.dir;
+        });
+        const sortedRows = focusRow ? [focusRow, ...otherRows] : otherRows;
+        const arrow = key => sortState.key === key ? (sortState.dir === -1 ? ' ▾' : ' ▴') : '';
+        compsEl.innerHTML = `
+          <table style="width:100%;border-collapse:collapse;min-width:720px;">
+            <thead><tr>
+              <th style="position:sticky;left:0;background:rgba(8,11,20,.96);text-align:left;padding:7px 10px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);border-bottom:1px solid var(--line);">Symbol</th>
+              ${cols.map(c => `<th onclick="vtx.setCompsSort('${c.key}')" style="cursor:pointer;text-align:right;padding:7px 10px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:${sortState.key===c.key?'var(--acc2)':'var(--mut)'};border-bottom:1px solid var(--line);white-space:nowrap;">${c.label}${arrow(c.key)}</th>`).join('')}
+            </tr></thead>
+            <tbody>
+              ${sortedRows.map(row => {
+                const isFocus = row.symbol === f.sym;
+                return `<tr style="background:${isFocus?'rgba(var(--glow),.1)':'transparent'};">
+                  <td style="position:sticky;left:0;background:${isFocus?'#0f1420':'rgba(8,11,20,.96)'};padding:7px 10px;border-bottom:1px solid var(--line);">
+                    <span class="symlink" onclick="vtx.jumpToTicker('${row.symbol}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:${isFocus?'var(--acc2)':'var(--txt)'};padding:1px 4px;">${row.symbol}${isFocus?' (you)':''}</span>
+                  </td>
+                  ${cols.map(c => `<td style="text-align:right;padding:7px 10px;font-family:var(--mono);font-size:11px;color:var(--txt);border-bottom:1px solid var(--line);white-space:nowrap;">${c.fmt(row[c.key])}</td>`).join('')}
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          <div style="padding:8px 10px;font-size:8px;color:var(--mut);opacity:.7;">Real-time Finnhub fundamentals vs. ${otherRows.length} real, disclosed sector peers — click any column to sort.</div>`;
+      }
     }
 
     // Competitors — real Finnhub peer set (same country + GICS sub-

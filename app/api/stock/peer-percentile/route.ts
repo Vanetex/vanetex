@@ -140,6 +140,24 @@ export async function GET(request: NextRequest) {
       return { percentile, rawValue: focusVal, peerCount };
     };
 
+    // Raw per-peer values for a real comps table — the exact same fetch
+    // the percentile pillars above already made, just the underlying
+    // numbers instead of a rank. Standard sell-side comps columns, picked
+    // out of financialsRatios.ts's much larger field set.
+    const toCompRow = (r: FinancialsRatios) => ({
+      symbol: r.symbol,
+      marketCap: r.marketCapitalization,
+      peTTM: r.peTTM,
+      forwardPE: r.forwardPE,
+      evToEbitda: r.evToEbitda,
+      priceToSales: r.priceToSales,
+      revenueGrowthYoy: r.revenueGrowthYoy,
+      grossMargin: r.grossMargin,
+      roe: r.roe,
+      debtToEquity: r.debtToEquity,
+      dividendYield: r.dividendYield,
+    });
+
     const body = {
       symbol: sym,
       sector,
@@ -154,6 +172,7 @@ export async function GET(request: NextRequest) {
         finHealth: buildPillar((r) => r.debtToEquity, false),
         momentum: buildPillar((r) => r.priceReturn52W, true),
       },
+      comps: [focus, ...peerRatios].map(toCompRow),
     };
 
     await kvSet(cacheKey, body, RESULT_CACHE_TTL_S);
