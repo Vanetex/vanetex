@@ -148,6 +148,18 @@ input{font-family:var(--ui)}
         <div style="font-size:8.5px;letter-spacing:.16em;color:var(--mut);">ET · NYSE</div>
       </div>
 
+      <!-- Price Alerts bell -->
+      <div style="position:relative;">
+        <button class="gearbtn" onclick="vtx.toggleAlertsPanel()" title="Price Alerts" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--mut);cursor:pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path><path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          <span id="alertsBadge" style="display:none;position:absolute;top:-4px;right:-4px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:var(--neg);color:#fff;font-family:var(--mono);font-size:8.5px;font-weight:800;align-items:center;justify-content:center;"></span>
+        </button>
+        <div id="alertsPanel" style="display:none;position:absolute;top:42px;right:0;z-index:60;width:300px;max-height:360px;overflow-y:auto;background:rgba(12,15,26,.97);border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.6);backdrop-filter:blur(20px);">
+          <div style="position:sticky;top:0;padding:10px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);background:rgba(12,15,26,.97);">Price Alerts</div>
+          <div id="alertsPanelBody"></div>
+        </div>
+      </div>
+
       <!-- Settings -->
       <button class="gearbtn" onclick="vtx.openSettings()" title="Settings" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);color:var(--mut);cursor:pointer;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M19.4 13a7.97 7.97 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a8 8 0 0 0-1.7-1L15 2.6h-4l-.3 2.3a8 8 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.97 7.97 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a8 8 0 0 0 1.7 1l.3 2.3h4l.3-2.3a8 8 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.6"></circle></svg>
@@ -284,6 +296,16 @@ input{font-family:var(--ui)}
             </div>
             <div id="depthBody" style="padding:8px 12px;"></div>
           </div>
+        </div>
+
+        <!-- Price Alerts — client-side only, checked against whatever price
+             is already live in this ticker's row (WS trades or the 60s poll)
+             on a 5s tick. See vtx.checkAlerts(). Only meaningful for a
+             symbol on the watchlist, since that's the only set with a
+             continuously-updated live price. -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Price Alerts</div>
+          <div id="priceAlertsBody" style="padding:10px 14px 14px;"></div>
         </div>
 
         <!-- earnings history -->
@@ -617,7 +639,10 @@ const vtx = {
     // silently reusing e.g. Apple's growth rate on a newly-viewed biotech.
     // Editing any field marks `touched` so a re-render never stomps a
     // user's own input back to the auto-seed for the SAME ticker.
-    dcfInputs: { sym: null, growthRate: 8, years: 5, terminalGrowth: 2.5, discountRate: 9, touched: false }
+    dcfInputs: { sym: null, growthRate: 8, years: 5, terminalGrowth: 2.5, discountRate: 9, touched: false },
+    // Price Alerts draft form — reseeded per-ticker in render() (see
+    // priceAlertsBody), same pattern as dcfInputs.
+    alertInputs: { sym: null, condition: 'above', threshold: 0 }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -627,6 +652,7 @@ const vtx = {
   NEWS_SCOPE_CATEGORY: null, // instrument scope only: 'crypto' | 'general' — which pool it fell back to
   CAL: [], // populated by loadCalendar() — real Finnhub earnings data, no seed
   IPO_CAL: null, // populated by loadIpoCalendar() — real Finnhub /calendar/ipo data, no seed
+  DIV: null, // populated by loadDividends() — real Yahoo ex-dividend history, watchlist-scoped, no seed
   ECON: [], // populated by loadEconCalendar() — real FRED + FOMC data, no seed
   YIELD_CURVE: null, // populated by loadYieldCurve() — real FRED Treasury data, no seed
   MACRO_DASH: {}, // populated by loadMacroDashboard() — real FRED data per series id, no seed
@@ -1588,6 +1614,16 @@ const vtx = {
   ACCENT_KEY: 'vtx_accent',
   RECENT_SEARCHES_KEY: 'vtx_recent_searches',
   RECENT_SEARCHES: [], // loaded from localStorage in init() — {type, key, label, sub, meta?}[], most recent first
+  ALERTS_KEY: 'vtx_alerts',
+  // Price alerts — pure client-side, no server component. Checked against
+  // whatever price is already live in state.tickers (from the WS trade
+  // feed or the 60s quote poll, whichever this browser is on), on a
+  // 5s in-memory tick started in init() — see checkAlerts(). Each alert:
+  // {id, sym, condition:'above'|'below', threshold, createdAt, triggered,
+  // triggeredAt, seen}. `seen` gates the header bell's badge count, not
+  // whether the alert fired — a triggered alert stays visible until the
+  // user opens the bell dropdown, then flips to seen but stays in the list.
+  ALERTS: [], // loaded from localStorage in init()
 
   init() {
     this._clockOffsetMs = 0;
@@ -1620,6 +1656,24 @@ const vtx = {
       const savedRecent = JSON.parse(localStorage.getItem(this.RECENT_SEARCHES_KEY));
       if (Array.isArray(savedRecent)) this.RECENT_SEARCHES = savedRecent;
     } catch(e) {}
+
+    try {
+      const savedAlerts = JSON.parse(localStorage.getItem(this.ALERTS_KEY));
+      if (Array.isArray(savedAlerts)) this.ALERTS = savedAlerts;
+    } catch(e) {}
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('alertsPanel');
+      if (panel && panel.style.display === 'block' && !panel.contains(e.target) && !e.target.closest('[title="Price Alerts"]')) {
+        panel.style.display = 'none';
+      }
+    });
+    this.renderAlertsBell();
+    // No immediate checkAlerts() call here — state.tickers still holds
+    // last-session prices at this point in init(), not a fresh quote, and
+    // comparing against that could spuriously fire an alert on reload.
+    // The first real check happens on this interval's first tick, by
+    // which point loadQuotes() has had time to land current prices.
+    pollWhileVisible(() => this.checkAlerts(), 5000);
 
     this.state.marketOpen = this.isMarketOpen();
     this.applyVariant();
@@ -1685,6 +1739,7 @@ const vtx = {
     this.loadHeatmap();
     this.loadCalendar();
     this.loadIpoCalendar();
+    this.loadDividends();
     this.loadEconCalendar();
     this.loadYieldCurve();
     this.loadMacroDashboard();
@@ -1700,6 +1755,7 @@ const vtx = {
     pollWhileVisible(() => this.loadHeatmap(), 5 * 60 * 1000);
     pollWhileVisible(() => this.loadCalendar(), 30 * 60 * 1000);
     pollWhileVisible(() => this.loadIpoCalendar(), 6 * 60 * 60 * 1000);
+    pollWhileVisible(() => this.loadDividends(), 6 * 60 * 60 * 1000);
     pollWhileVisible(() => this.loadEconCalendar(), 6 * 60 * 60 * 1000);
     pollWhileVisible(() => this.loadYieldCurve(), 6 * 60 * 60 * 1000);
     pollWhileVisible(() => this.loadMacroDashboard(), 6 * 60 * 60 * 1000);
@@ -4178,16 +4234,6 @@ const vtx = {
     return maxDd; // negative fraction, e.g. -0.23
   },
   openSector(name) { this.state.moversSector = name; this.renderRight(); },
-  // Cross-linking: click a ticker anywhere (news, calendar, dark pools) and
-  // land on it — focus it if it's already on the watchlist, otherwise add
-  // it (same behavior as searching for it), rather than dead-ending on a
-  // plain-text symbol.
-  jumpToTicker(sym) {
-    if (!sym) return;
-    sym = sym.toUpperCase();
-    if (this.state.tickers.some(t => t.sym === sym)) { this.selectTicker(sym); return; }
-    this.addTicker(sym);
-  },
   jumpToSector(sector) {
     this.state.tab = 'movers';
     this.state.moversSector = this.sectorBucket(sector);
@@ -4269,6 +4315,94 @@ const vtx = {
     try { localStorage.setItem(this.WATCHLIST_KEY, JSON.stringify(data)); }
     catch(e) { console.error('[vtx] Failed to persist watchlist — changes will be lost on reload.', e); }
   },
+  saveAlerts() {
+    try { localStorage.setItem(this.ALERTS_KEY, JSON.stringify(this.ALERTS)); }
+    catch(e) { console.error('[vtx] Failed to persist alerts.', e); }
+  },
+  addAlert(sym, condition, threshold) {
+    sym = (sym || '').toUpperCase();
+    threshold = parseFloat(threshold);
+    if (!sym || !threshold || threshold <= 0) return;
+    this.ALERTS.push({ id: Math.random().toString(36).slice(2), sym, condition, threshold, createdAt: Date.now(), triggered: false, triggeredAt: null, seen: true });
+    this.saveAlerts();
+    // Asking on first alert creation, not on page load, so it's tied to an
+    // action the user just took rather than an unexplained prompt on open.
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
+    this.renderAlertsBell();
+    if (this.state.view === 'ticker') this.render(); // refreshes the Price Alerts card's own list
+  },
+  removeAlert(id) {
+    this.ALERTS = this.ALERTS.filter(a => a.id !== id);
+    this.saveAlerts();
+    this.renderAlertsBell();
+    this.renderAlertsPanel();
+    if (this.state.view === 'ticker') this.render();
+  },
+  // Opens the bell dropdown and marks every triggered alert "seen" — the
+  // badge count is about unread triggers, not about how many alerts exist.
+  toggleAlertsPanel() {
+    const panel = document.getElementById('alertsPanel');
+    if (!panel) return;
+    const opening = panel.style.display === 'none' || !panel.style.display;
+    panel.style.display = opening ? 'block' : 'none';
+    if (opening) {
+      this.ALERTS.forEach(a => { if (a.triggered) a.seen = true; });
+      this.saveAlerts();
+      this.renderAlertsBell();
+    }
+    this.renderAlertsPanel();
+  },
+  renderAlertsPanel() {
+    const panel = document.getElementById('alertsPanelBody');
+    if (!panel) return;
+    const sorted = [...this.ALERTS].sort((a, b) => (b.triggeredAt || b.createdAt) - (a.triggeredAt || a.createdAt));
+    panel.innerHTML = !sorted.length
+      ? `<div style="padding:22px 16px;text-align:center;color:var(--mut);font-size:11.5px;">No price alerts yet. Open any stock and add one from its Price Alerts card.</div>`
+      : sorted.map(a => `
+        <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid var(--line);">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:11.5px;font-weight:700;color:${a.triggered ? 'var(--txt)' : 'var(--mut)'};">
+              <span class="symlink" onclick="vtx.viewTicker('${a.sym}')" style="font-family:var(--mono);color:var(--acc2);padding:1px 3px;">${a.sym}</span>
+              ${a.condition === 'above' ? 'above' : 'below'} $${a.threshold}
+            </div>
+            <div style="font-size:9.5px;color:var(--mut);margin-top:2px;">${a.triggered ? 'Triggered ' + new Date(a.triggeredAt).toLocaleString() : 'Watching…'}</div>
+          </div>
+          <button onclick="vtx.removeAlert('${a.id}')" title="Remove" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;">×</button>
+        </div>`).join('');
+  },
+  // Pure in-memory comparison against whatever price is already live in
+  // state.tickers (WS trades or the 60s quote poll, whichever this browser
+  // is on) — no network call of its own, so a 5s tick (see init()) costs
+  // nothing. Alerts only exist for watchlist symbols, since that's the
+  // only set with a continuously-updated live price.
+  checkAlerts() {
+    let changed = false;
+    this.ALERTS.forEach(a => {
+      if (a.triggered) return;
+      const t = this.state.tickers.find(x => x.sym === a.sym);
+      if (!t || t.price == null) return;
+      const crossed = a.condition === 'above' ? t.price >= a.threshold : t.price <= a.threshold;
+      if (!crossed) return;
+      a.triggered = true; a.triggeredAt = Date.now(); a.seen = false;
+      changed = true;
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification(`${a.sym} ${a.condition === 'above' ? 'crossed above' : 'fell below'} $${a.threshold}`, { body: `Now $${t.price.toFixed(2)} — Vanetex Intelligence` }); } catch(e) {}
+      }
+    });
+    if (changed) {
+      this.saveAlerts();
+      this.renderAlertsBell();
+      const panel = document.getElementById('alertsPanel');
+      if (panel && panel.style.display === 'block') this.renderAlertsPanel();
+    }
+  },
+  renderAlertsBell() {
+    const badge = document.getElementById('alertsBadge');
+    if (!badge) return;
+    const unseen = this.ALERTS.filter(a => a.triggered && !a.seen).length;
+    badge.style.display = unseen ? 'flex' : 'none';
+    badge.textContent = unseen > 9 ? '9+' : String(unseen);
+  },
   async addTicker(sym, name, sector) {
     sym = sym.toUpperCase();
     if (this.state.tickers.some(t=>t.sym===sym)) { this.selectTicker(sym); return; }
@@ -4315,14 +4449,22 @@ const vtx = {
       this.render();
       this.loadDarkPool();
       this.loadCalendar();
+      this.loadDividends();
     } catch(e) {}
   },
-  // Search results land here, not addTicker() — looking a symbol up
-  // shouldn't silently commit it to the permanent watchlist. Mirrors
+  // The universal "click a ticker to look at it" handler — search results,
+  // Competitors, Comps Table, Screener rows, ETF holdings, Gainers/Losers,
+  // the Calendar, Smart Money's insider/dark-pool feeds, all of it. Not
+  // addTicker() — looking a symbol up (or browsing a list of many of them)
+  // shouldn't silently commit each one to the permanent watchlist. Mirrors
   // addTicker()'s fetch/render sequence but writes into previewTicker
   // instead of pushing into state.tickers, so it never reaches
   // saveWatchlist() or the sidebar list unless the user explicitly
-  // opts in via addPreviewToWatchlist().
+  // opts in via addPreviewToWatchlist(). (This used to be split across two
+  // functions — viewTicker here, plus a jumpToTicker that auto-added an
+  // unrecognized symbol — but that split was the actual bug: every list
+  // added after the first one defaulted to the auto-adding version. One
+  // function, one behavior, everywhere.)
   async viewTicker(sym, name, sector) {
     sym = sym.toUpperCase();
     if (this.state.tickers.some(t=>t.sym===sym)) { this.selectTicker(sym); return; }
@@ -4386,6 +4528,7 @@ const vtx = {
     this.render();
     this.loadDarkPool();
     this.loadCalendar();
+    this.loadDividends();
     this.loadNews();
   },
   removeTicker(sym) {
@@ -5109,6 +5252,24 @@ const vtx = {
     if (this.state.tab === 'calendar') this.renderRight();
   },
 
+  // Watchlist-scoped, like loadCalendar() — real ex-dividend history per
+  // holding, not a market-wide list. See app/api/intel/dividends for why
+  // this comes from Yahoo instead of Finnhub (whose dividend endpoints are
+  // Premium-only, confirmed live before building this).
+  async loadDividends() {
+    const symbols = this.state.tickers.map(t => t.sym).join(',');
+    if (!symbols) { this.DIV = []; if (this.state.tab === 'calendar') this.renderRight(); return; }
+    try {
+      const res = await fetch(`/api/intel/dividends?symbols=${encodeURIComponent(symbols)}`);
+      if (!res.ok) { this.DIV = { failed: true }; if (this.state.tab === 'calendar') this.renderRight(); return; }
+      const data = await res.json();
+      this.DIV = data.rows || [];
+    } catch (e) {
+      this.DIV = { failed: true };
+    }
+    if (this.state.tab === 'calendar') this.renderRight();
+  },
+
   async loadEconCalendar() {
     try {
       const res = await fetch(`/api/intel/econ-calendar`);
@@ -5751,6 +5912,10 @@ const vtx = {
   setDcfInput(key, value) {
     const num = parseFloat(value);
     this.state.dcfInputs = { ...this.state.dcfInputs, [key]: isNaN(num) ? 0 : num, touched: true };
+    this.render();
+  },
+  setAlertInput(key, value) {
+    this.state.alertInputs = { ...this.state.alertInputs, [key]: value };
     this.render();
   },
   // Standard discrete-coupon bond math, m periods/year. cashflowAt(t)
@@ -7401,6 +7566,39 @@ const vtx = {
         <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${m.color};">${m.value}</span>
       </div>`).join('');
 
+    // Price Alerts — only meaningful for a real watchlist member (previewed-
+    // but-not-added tickers never get a second price update, so an alert on
+    // one would never actually fire). state.alertInputs is a single shared
+    // draft, reseeded per-ticker the same way dcfInputs is, so switching
+    // stocks doesn't leave a stale threshold from the last one on screen.
+    const paEl = document.getElementById('priceAlertsBody');
+    if (paEl) {
+      const onWatchlist = T.some(x => x.sym === f.sym);
+      if (!onWatchlist) {
+        paEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Add ${f.sym} to your watchlist to set price alerts on it — a preview isn't kept updated in real time.</div>`;
+      } else {
+        const ai = this.state.alertInputs;
+        if (ai.sym !== f.sym) this.state.alertInputs = { sym: f.sym, condition: 'above', threshold: f.price ? Math.round(f.price * 1.05 * 100) / 100 : 0 };
+        const ain = this.state.alertInputs;
+        const mine = this.ALERTS.filter(a => a.sym === f.sym).sort((a, b) => (b.triggeredAt || b.createdAt) - (a.triggeredAt || a.createdAt));
+        const condBtn = (val, label) => `<button onclick="vtx.setAlertInput('condition','${val}')" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:5px 10px;border:none;border-radius:6px;cursor:pointer;background:${ain.condition===val?'rgba(var(--glow),.2)':'transparent'};color:${ain.condition===val?'var(--acc2)':'var(--mut)'};">${label}</button>`;
+        paEl.innerHTML = `
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:${mine.length ? '12px' : '2px'};">
+            <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;">${condBtn('above','Above')}${condBtn('below','Below')}</div>
+            <div>
+              <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">Price ($)</label>
+              <input id="alertThresholdInput" type="number" value="${ain.threshold}" step="0.01" style="width:100px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:7px 9px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;">
+            </div>
+            <button onclick="vtx.addAlert('${f.sym}', vtx.state.alertInputs.condition, document.getElementById('alertThresholdInput').value)" style="padding:8px 14px;border-radius:7px;border:1px solid rgba(var(--glow),.4);background:rgba(var(--glow),.14);color:var(--acc2);font-size:11px;font-weight:700;cursor:pointer;">+ Add Alert</button>
+          </div>
+          ${mine.length ? `<div style="display:flex;flex-direction:column;gap:6px;">` + mine.map(a => `
+            <div style="display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.02);">
+              <span style="flex:1;font-size:11px;color:${a.triggered?'var(--txt)':'var(--mut)'};">${a.condition==='above'?'Above':'Below'} <span style="font-family:var(--mono);font-weight:700;color:var(--txt);">$${a.threshold}</span> ${a.triggered ? `— triggered ${new Date(a.triggeredAt).toLocaleDateString()}` : '— watching'}</span>
+              <button onclick="vtx.removeAlert('${a.id}')" title="Remove" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;">×</button>
+            </div>`).join('') + `</div>` : ''}`;
+      }
+    }
+
     // Earnings history — real quarterly EPS actual vs. estimate (Finnhub),
     // capped at the last 4 quarters (that's what the free tier returns).
     const eh = f.earnHistory;
@@ -7711,7 +7909,7 @@ const vtx = {
                 const isFocus = row.symbol === f.sym;
                 return `<tr style="background:${isFocus?'rgba(var(--glow),.1)':'transparent'};">
                   <td style="position:sticky;left:0;background:${isFocus?'#0f1420':'rgba(8,11,20,.96)'};padding:7px 10px;border-bottom:1px solid var(--line);">
-                    <span class="symlink" onclick="vtx.jumpToTicker('${row.symbol}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:${isFocus?'var(--acc2)':'var(--txt)'};padding:1px 4px;">${row.symbol}${isFocus?' (you)':''}</span>
+                    <span class="symlink" onclick="vtx.viewTicker('${row.symbol}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:${isFocus?'var(--acc2)':'var(--txt)'};padding:1px 4px;">${row.symbol}${isFocus?' (you)':''}</span>
                   </td>
                   ${cols.map(c => `<td style="text-align:right;padding:7px 10px;font-family:var(--mono);font-size:11px;color:var(--txt);border-bottom:1px solid var(--line);white-space:nowrap;">${c.fmt(row[c.key])}</td>`).join('')}
                 </tr>`;
@@ -8051,7 +8249,7 @@ const vtx = {
         <div style="position:relative;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 14px;font-size:11px;">
           <div style="position:absolute;left:0;top:2px;bottom:2px;width:${(h.weight/maxW*100).toFixed(1)}%;background:rgba(52,211,255,.08);border-radius:4px;"></div>
           <div style="position:relative;min-width:0;display:flex;align-items:center;gap:8px;">
-            ${h.ticker ? `<span class="symlink" onclick="event.stopPropagation();vtx.jumpToTicker('${h.ticker}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);padding:1px 4px;">${h.ticker}</span>` : ''}
+            ${h.ticker ? `<span class="symlink" onclick="event.stopPropagation();vtx.viewTicker('${h.ticker}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);padding:1px 4px;">${h.ticker}</span>` : ''}
             <span style="color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${h.name}</span>
           </div>
           <span style="position:relative;font-family:var(--mono);font-weight:700;color:var(--txt);flex-shrink:0;">${h.weight.toFixed(2)}%</span>
@@ -8220,7 +8418,7 @@ const vtx = {
     const gainers = all.filter(c => c.changePct > 0).sort((a,b) => b.changePct - a.changePct).slice(0, 5);
     const losers = all.filter(c => c.changePct < 0).sort((a,b) => a.changePct - b.changePct).slice(0, 5);
     const row = c => `<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:5px 13px;font-family:var(--mono);font-size:11px;">
-      <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span class="symlink" onclick="vtx.jumpToTicker('${c.sym}')" style="font-weight:700;color:var(--acc2);cursor:pointer;">${c.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${c.name}</span></span>
+      <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span class="symlink" onclick="vtx.viewTicker('${c.sym}')" style="font-weight:700;color:var(--acc2);cursor:pointer;">${c.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${c.name}</span></span>
       <span style="text-align:right;font-weight:600;color:${c.changePct>=0?'var(--pos)':'var(--neg)'};">${c.changePct>=0?'+':''}${c.changePct.toFixed(2)}%</span>
     </div>`;
     document.getElementById('timeSalesBody').innerHTML = `
@@ -8233,7 +8431,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['tx','Smart Money'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['analytics','Analytics'],['compare','Compare'],['ai','Assistant']];
+    const tabDefs = [['news','News'],['tx','Smart Money'],['calendar','Calendar'],['econ','Macro'],['movers','Sectors'],['analytics','Analytics'],['compare','Compare'],['ai','Assistant']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -8251,7 +8449,7 @@ const vtx = {
       // keyword-matched news or a fallback to the broader category pool).
       let scopeHtml;
       if (this.NEWS_SCOPE_TYPE === 'ticker') {
-        scopeHtml = `<span class="symlink" onclick="vtx.jumpToTicker('${this.NEWS_SCOPE}')" style="font-family:var(--mono);">${this.NEWS_SCOPE}</span> News`;
+        scopeHtml = `<span class="symlink" onclick="vtx.viewTicker('${this.NEWS_SCOPE}')" style="font-family:var(--mono);">${this.NEWS_SCOPE}</span> News`;
       } else if (this.NEWS_SCOPE_TYPE === 'instrument') {
         const inst = this.INSTRUMENTS[this.NEWS_SCOPE];
         scopeHtml = this.NEWS_SCOPE_MATCHED
@@ -8283,7 +8481,7 @@ const vtx = {
             <div class="newscard" onclick="window.open(${JSON.stringify(n.url).replace(/"/g,'&quot;')}, '_blank', 'noopener')" style="padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.02);cursor:pointer;">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
                 ${n.sym
-                  ? `<span class="symlink" onclick="event.stopPropagation(); vtx.jumpToTicker('${n.sym}')" style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;">${n.sym}</span>`
+                  ? `<span class="symlink" onclick="event.stopPropagation(); vtx.viewTicker('${n.sym}')" style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;">${n.sym}</span>`
                   : showInstrumentBadge
                   ? `<span style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--acc2);padding:1px 4px;" title="${this.NEWS_SCOPE.replace(/"/g,'&quot;')}">${instrumentBadgeLabel}</span>`
                   : `<span style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 5px;">MARKET</span>`}
@@ -8346,7 +8544,7 @@ const vtx = {
               ? `<div style="padding:20px 4px;text-align:center;color:var(--mut);font-size:11px;">No dark-pool prints cleared FINRA's reporting threshold this week for your watchlist.</div>`
               : this.DARK.map(d => `
               <div style="display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
-                <span class="symlink" onclick="vtx.jumpToTicker('${d.sym}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);padding:1px 4px;">${d.sym}</span>
+                <span class="symlink" onclick="vtx.viewTicker('${d.sym}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);padding:1px 4px;">${d.sym}</span>
                 <div>
                   <div style="font-family:var(--mono);font-size:11.5px;font-weight:600;">${d.size} <span style="color:var(--mut);font-weight:400;">sh</span></div>
                   <div style="font-size:9.5px;color:var(--mut);">${d.venue} · ${d.pct} ADV</div>
@@ -8371,7 +8569,7 @@ const vtx = {
             <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
               <div>
                 <div style="display:flex;align-items:center;gap:7px;">
-                  <span class="symlink" onclick="vtx.jumpToTicker('${f.sym}')" style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--acc2);padding:1px 4px;">${f.sym}</span>
+                  <span class="symlink" onclick="vtx.viewTicker('${f.sym}')" style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--acc2);padding:1px 4px;">${f.sym}</span>
                   <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${f.tone};border:1px solid ${f.toneBorder};border-radius:5px;padding:1px 6px;">${f.act}</span>
                 </div>
                 <div style="font-size:11px;color:var(--txt);margin-top:4px;">${f.who} <span style="color:var(--mut);">· ${f.role}</span></div>
@@ -8420,7 +8618,7 @@ const vtx = {
               </div>
               <div>
                 <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${c.event}</div>
-                <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;"><span class="symlink" onclick="vtx.jumpToTicker('${c.sym}')" style="padding:1px 4px;">${c.sym}</span> · ${c.time} EST</div>
+                <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;"><span class="symlink" onclick="vtx.viewTicker('${c.sym}')" style="padding:1px 4px;">${c.sym}</span> · ${c.time} EST</div>
               </div>
               <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${c.tone};border:1px solid ${c.toneBorder};border-radius:5px;padding:2px 7px;">${c.imp}</span>
             </div>`).join('') + `</div>`;
@@ -8446,7 +8644,7 @@ const vtx = {
           <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
             <div>
               <div style="font-size:11.5px;font-weight:600;color:var(--txt);line-height:1.35;">${r.name}</div>
-              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${r.symbol ? `<span class="symlink" onclick="vtx.jumpToTicker('${r.symbol}')" style="padding:1px 4px;">${r.symbol}</span> · ` : ''}${r.date}${r.exchange ? ' · '+r.exchange : ''}</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:3px;">${r.symbol ? `<span class="symlink" onclick="vtx.viewTicker('${r.symbol}')" style="padding:1px 4px;">${r.symbol}</span> · ` : ''}${r.date}${r.exchange ? ' · '+r.exchange : ''}</div>
             </div>
             <div style="text-align:right;">
               <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${tone};border:1px solid ${border};border-radius:5px;padding:2px 7px;">${r.status}</span>
@@ -8462,7 +8660,47 @@ const vtx = {
           </div>`;
       }
 
-      el.innerHTML = earningsHtml + ipoHtml;
+      // Dividends — real ex-dividend history per watchlist holding (see
+      // loadDividends() for why this is Yahoo, not Finnhub). A row only
+      // appears for a real payer; the estimate line is always labeled as
+      // one, never shown as an announced date.
+      const dv = this.DIV;
+      let dividendsHtml;
+      if (!dv) {
+        dividendsHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Loading dividends…</div>`;
+      } else if (dv.failed) {
+        dividendsHtml = `<div style="padding:20px 14px;text-align:center;color:var(--mut);font-size:11px;">Couldn't load dividend history. <button onclick="vtx.loadDividends()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else if (!dv.length) {
+        dividendsHtml = `<div style="padding:11px 14px;border-top:1px solid var(--line);"><div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:6px;">Dividends</div><div style="font-size:11px;color:var(--mut);">None of your watchlist symbols pay a dividend.</div></div>`;
+      } else {
+        const rowHtml = (r) => {
+          const t = T.find(x => x.sym === r.symbol);
+          const yieldPct = (r.trailingTotal != null && t && t.price) ? (r.trailingTotal / t.price * 100) : null;
+          return `
+          <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+            <div>
+              <div style="display:flex;align-items:center;gap:7px;">
+                <span class="symlink" onclick="vtx.viewTicker('${r.symbol}')" style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--acc2);padding:1px 4px;">${r.symbol}</span>
+                <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 6px;">${r.frequency || '—'}</span>
+              </div>
+              <div style="font-size:10.5px;color:var(--mut);margin-top:4px;">Last ex-div ${r.lastExDate} · $${r.lastAmount.toFixed(3)}/sh</div>
+              ${r.estimatedNextExDate ? `<div style="font-size:9.5px;color:var(--mut);margin-top:2px;opacity:.75;">Est. next ~${r.estimatedNextExDate} (projected from cadence, not announced)</div>` : ''}
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--txt);">${yieldPct != null ? yieldPct.toFixed(2) + '%' : '—'}</div>
+              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);">trailing yield</div>
+            </div>
+          </div>`;
+        };
+        dividendsHtml = `
+          <div style="padding:11px 14px 4px;border-top:1px solid var(--line);">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px;">Dividends <span style="opacity:.6;font-weight:400;text-transform:none;letter-spacing:normal;">· real ex-div history, your watchlist</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px;">${dv.map(rowHtml).join('')}</div>
+            <div style="font-size:8px;color:var(--mut);margin-top:11px;padding-bottom:9px;opacity:.7;">Real historical ex-dividend dates and amounts (Yahoo Finance) · trailing yield = last 12 real payments ÷ current price · "Est. next" is this stock's own historical cadence projected forward, not a confirmed or announced date.</div>
+          </div>`;
+      }
+
+      el.innerHTML = earningsHtml + ipoHtml + dividendsHtml;
     }
     else if (s.tab === 'econ') {
       // Yield curve and the calendar are two independent real data sources —
@@ -8829,7 +9067,7 @@ const vtx = {
               </tr></thead>
               <tbody>
                 ${screenerRows.length ? screenerRows.map(r => `<tr style="border-top:1px solid var(--line);">
-                  <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.jumpToTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${r.sector}</span></td>
+                  <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.viewTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${r.sector}</span></td>
                   ${src==='watchlist' ? `<td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${this.fmt(r.price)}</td>` : ''}
                   ${src==='watchlist' ? `<td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.chg>=0?'var(--pos)':'var(--neg)'};">${(r.chg>=0?'+':'')+r.chg.toFixed(2)}%</td>` : ''}
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${r.mcap!=null?this.mktCapFromFin(r.mcap):'—'}</td>
@@ -8907,7 +9145,7 @@ const vtx = {
               </tr></thead>
               <tbody>
                 ${rows.map(r => `<tr style="border-top:1px solid var(--line);">
-                  <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.jumpToTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span></td>
+                  <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.viewTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span></td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.totalReturn==null?'var(--mut)':(r.totalReturn>=0?'var(--pos)':'var(--neg)')};">${pctOrDash(r.totalReturn)}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${r.vol==null?'—':(r.vol*100).toFixed(1)+'%'}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${numOrDash(r.beta)}</td>
