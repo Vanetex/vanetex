@@ -563,7 +563,15 @@ const vtx = {
     econSort: 'relevance',
     // Regional Housing Heatmap — which state's detail panel is open, or
     // null when none is selected (clicking a selected state again clears it).
-    housingSelected: null
+    housingSelected: null,
+    // Smart Money tab — which section(s) show: 'all' | 'insider' |
+    // 'institutional' | 'darkpool'. Sections are shown/hidden, not
+    // interleaved into one merged list — the three sources report
+    // fundamentally different time grains (Form 4/13F give real
+    // timestamps; FINRA dark-pool data is a weekly aggregate), so forcing
+    // them into a single chronological sort would fake a precision none
+    // of them actually share.
+    txFilter: 'all'
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -1117,6 +1125,7 @@ const vtx = {
   ],
   FIL: null, // populated by loadFilings() — real SEC EDGAR Form 4 data; null = not loaded yet, [] = loaded and genuinely empty
   DARK: null, // populated by loadDarkPool() — real FINRA weekly dark-pool data; null = not loaded yet, [] = loaded and genuinely empty
+  INSTITUTIONAL: null, // populated by loadInstitutionalFilings() — real SEC EDGAR 13F-HR data; null = not loaded yet, [] = loaded and genuinely empty
 
   hashN(str, salt) { let h = salt || 0; for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return (h % 1000) / 1000; },
   // Every trade print in the tape needs to read in ET, same as the header
@@ -1620,6 +1629,7 @@ const vtx = {
 
     this.loadFilings();
     this.loadDarkPool();
+    this.loadInstitutionalFilings();
     this.loadHeatmap();
     this.loadCalendar();
     this.loadIpoCalendar();
@@ -1634,6 +1644,7 @@ const vtx = {
     this.loadNews();
     pollWhileVisible(() => this.loadFilings(), 5 * 60 * 1000);
     pollWhileVisible(() => this.loadDarkPool(), 10 * 60 * 1000);
+    pollWhileVisible(() => this.loadInstitutionalFilings(), 5 * 60 * 1000);
     pollWhileVisible(() => this.loadHeatmap(), 5 * 60 * 1000);
     pollWhileVisible(() => this.loadCalendar(), 30 * 60 * 1000);
     pollWhileVisible(() => this.loadIpoCalendar(), 6 * 60 * 60 * 1000);
@@ -3927,6 +3938,7 @@ const vtx = {
     }
   },
   setTab(id) { this.state.tab = id; this.state.moversSector = null; if (id === 'analytics') this.loadAnalyticsData(); this.renderRight(); },
+  setTxFilter(filter) { this.state.txFilter = filter; this.renderRight(); },
   econSetSort(mode) { this.state.econSort = mode; this.renderRight(); },
   setScreenerSort(key) {
     const s = this.state.screenerSort;
@@ -4856,7 +4868,7 @@ const vtx = {
         OTHER: { tone: 'var(--warn)', toneBorder: 'rgba(245,165,36,.4)' },
       };
       this.FIL = data.filings.map(f => ({ ...f, ...toneMap[f.act] }));
-      if (this.state.tab === 'filings') this.renderRight();
+      if (this.state.tab === 'tx') this.renderRight();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -4874,7 +4886,25 @@ const vtx = {
         const label = isNaN(dt) ? d.time : `Week of ${dt.getMonth()+1}/${dt.getDate()}`;
         return { ...d, time: label };
       });
-      if (this.state.tab === 'dark') this.renderRight();
+      if (this.state.tab === 'tx') this.renderRight();
+    } catch (e) { /* keep previous data on failure */ }
+  },
+
+  // Real SEC EDGAR 13F-HR filings, market-wide — same real-time-feed
+  // scraping technique as loadFilings()'s Form 4 feed, just a different
+  // form type. Each row is a filer's single largest reported holding by
+  // value (13F reports each position by company name + CUSIP, never a
+  // ticker — there's no free CUSIP-to-ticker mapping, so topHolding is
+  // shown as plain text, not a clickable symbol like everywhere else in
+  // this file).
+  async loadInstitutionalFilings() {
+    try {
+      const res = await fetch('/api/intel/institutional');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.filings) return;
+      this.INSTITUTIONAL = data.filings;
+      if (this.state.tab === 'tx') this.renderRight();
     } catch (e) { /* keep previous data on failure */ }
   },
 
@@ -7761,7 +7791,7 @@ const vtx = {
 
   renderTabs() {
     const s = this.state;
-    const tabDefs = [['news','News'],['dark','Dark Pools'],['filings','Filings'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['analytics','Analytics'],['compare','Compare'],['ai','Assistant']];
+    const tabDefs = [['news','News'],['tx','Smart Money'],['calendar','Earnings'],['econ','Macro'],['movers','Sectors'],['analytics','Analytics'],['compare','Compare'],['ai','Assistant']];
     document.getElementById('tabsBar').innerHTML = tabDefs.map(([id,label]) => `
       <button onclick="vtx.setTab('${id}')" style="font-family:var(--ui);font-size:11px;font-weight:600;white-space:nowrap;padding:6px 11px;border:1px solid ${s.tab===id?'rgba(var(--glow),.35)':'var(--line)'};border-radius:8px;cursor:pointer;background:${s.tab===id?'rgba(var(--glow),.16)':'transparent'};color:${s.tab===id?'var(--acc2)':'var(--mut)'};">${label}</button>`).join('');
   },
@@ -7822,75 +7852,119 @@ const vtx = {
             </div>`).join('') + `</div>`;
       }
     }
-    else if (s.tab === 'dark') {
-      const f = T.find(t=>t.sym===s.focus) || (s.previewTicker && s.previewTicker.sym===s.focus ? s.previewTicker : null) || T[0];
-      const focusRow = (this.DARK||[]).find(d=>d.sym===f.sym);
-      const hasReal = focusRow && focusRow.dpiPct != null && focusRow.litPct != null;
-      const dpi = hasReal ? focusRow.dpiPct.toFixed(1)+'%' : '—';
-      const litPct = hasReal ? focusRow.litPct.toFixed(1)+'%' : '—';
-      const summaryTag = hasReal
-        ? '<span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--pos);">EST. FROM FINRA + AVG VOL</span>'
-        : '<span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--mut);">NO DATA FOR '+f.sym+'</span>';
-      el.innerHTML = `<div style="padding:10px;">
-        <div style="display:flex;gap:9px;margin-bottom:10px;">
-          <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:rgba(52,211,255,.05);">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
-              <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Dark Pool Index</span>
-              ${summaryTag}
+    else if (s.tab === 'tx') {
+      // Smart Money — unified insider (Form 4) + institutional (13F-HR) +
+      // dark-pool tracker. Shown as filterable sections, not one merged
+      // chronological list: Form 4/13F carry real timestamps but FINRA's
+      // dark-pool data is a weekly aggregate, so interleaving all three
+      // into a single sorted feed would fake a time precision none of
+      // them actually share.
+      const txf = s.txFilter || 'all';
+      const chip = (key, label) => `<button onclick="vtx.setTxFilter('${key}')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;padding:5px 11px;border-radius:7px;border:1px solid ${txf===key?'rgba(var(--glow),.35)':'var(--line)'};cursor:pointer;background:${txf===key?'rgba(var(--glow),.16)':'transparent'};color:${txf===key?'var(--acc2)':'var(--mut)'};">${label}</button>`;
+      const chipsHtml = `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 10px 2px;">${chip('all','All')}${chip('insider','Insider')}${chip('institutional','Institutional')}${chip('darkpool','Dark Pool')}</div>`;
+
+      let darkHtml = '';
+      if (txf === 'all' || txf === 'darkpool') {
+        const f = T.find(t=>t.sym===s.focus) || (s.previewTicker && s.previewTicker.sym===s.focus ? s.previewTicker : null) || T[0];
+        const focusRow = (this.DARK||[]).find(d=>d.sym===f.sym);
+        const hasReal = focusRow && focusRow.dpiPct != null && focusRow.litPct != null;
+        const dpi = hasReal ? focusRow.dpiPct.toFixed(1)+'%' : '—';
+        const litPct = hasReal ? focusRow.litPct.toFixed(1)+'%' : '—';
+        const summaryTag = hasReal
+          ? '<span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--pos);">EST. FROM FINRA + AVG VOL</span>'
+          : '<span style="font-size:7.5px;font-weight:700;letter-spacing:.06em;color:var(--mut);">NO DATA FOR '+f.sym+'</span>';
+        darkHtml = `
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:12px 2px 8px;padding:0 8px;">Dark Pool</div>
+          <div style="padding:0 10px;">
+          <div style="display:flex;gap:9px;margin-bottom:10px;">
+            <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:rgba(52,211,255,.05);">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap;">
+                <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Dark Pool Index</span>
+                ${summaryTag}
+              </div>
+              <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--acc2);">${dpi}</div>
+              <div style="font-size:9.5px;color:var(--mut);margin-top:2px;">of consolidated volume off-exchange (weekly, ~6-8wk lag)</div>
             </div>
-            <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--acc2);">${dpi}</div>
-            <div style="font-size:9.5px;color:var(--mut);margin-top:2px;">of consolidated volume off-exchange (weekly, ~6-8wk lag)</div>
+            <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+                <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Lit / Dark Split</span>
+              </div>
+              <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.05);">
+                <div style="width:${hasReal?litPct:'0%'};background:var(--acc);"></div>
+                <div style="flex:1;background:var(--acc2);opacity:.6;"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:6px;"><span>LIT ${litPct}</span><span>DARK ${dpi}</span></div>
+            </div>
           </div>
-          <div style="flex:1;border:1px solid var(--line);border-radius:11px;padding:11px 13px;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
-              <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);">Lit / Dark Split</span>
-            </div>
-            <div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.05);">
-              <div style="width:${hasReal?litPct:'0%'};background:var(--acc);"></div>
-              <div style="flex:1;background:var(--acc2);opacity:.6;"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--mut);margin-top:6px;"><span>LIT ${litPct}</span><span>DARK ${dpi}</span></div>
-          </div>
-        </div>
-        <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:4px 2px 8px;">Recent Block Prints</div>
-        <div style="display:flex;flex-direction:column;gap:6px;">` +
-          (!this.DARK
-            ? `<div style="padding:20px 4px;text-align:center;color:var(--mut);font-size:11px;">Loading dark-pool prints…</div>`
-            : !this.DARK.length
-            ? `<div style="padding:20px 4px;text-align:center;color:var(--mut);font-size:11px;">No dark-pool prints cleared FINRA's reporting threshold this week for your watchlist.</div>`
-            : this.DARK.map(d => `
-            <div style="display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
-              <span class="symlink" onclick="vtx.jumpToTicker('${d.sym}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);padding:1px 4px;">${d.sym}</span>
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:4px 2px 8px;">Recent Block Prints</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">` +
+            (!this.DARK
+              ? `<div style="padding:20px 4px;text-align:center;color:var(--mut);font-size:11px;">Loading dark-pool prints…</div>`
+              : !this.DARK.length
+              ? `<div style="padding:20px 4px;text-align:center;color:var(--mut);font-size:11px;">No dark-pool prints cleared FINRA's reporting threshold this week for your watchlist.</div>`
+              : this.DARK.map(d => `
+              <div style="display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+                <span class="symlink" onclick="vtx.jumpToTicker('${d.sym}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);padding:1px 4px;">${d.sym}</span>
+                <div>
+                  <div style="font-family:var(--mono);font-size:11.5px;font-weight:600;">${d.size} <span style="color:var(--mut);font-weight:400;">sh</span></div>
+                  <div style="font-size:9.5px;color:var(--mut);">${d.venue} · ${d.pct} ADV</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-family:var(--mono);font-size:11.5px;font-weight:700;">${d.notional}</div>
+                  <div style="font-family:var(--mono);font-size:9px;color:var(--mut);">${d.time}</div>
+                </div>
+              </div>`).join('')) + `</div></div>`;
+      }
+
+      let insiderHtml = '';
+      if (txf === 'all' || txf === 'insider') {
+        insiderHtml = `
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:14px 2px 8px;padding:0 8px;">Insider Transactions <span style="opacity:.6;font-weight:400;text-transform:none;letter-spacing:normal;">· real-time SEC Form 4, market-wide</span></div>
+          <div style="padding:0 10px;display:flex;flex-direction:column;gap:6px;">` +
+          (!this.FIL
+            ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading insider filings…</div>`
+            : !this.FIL.length
+            ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">No qualifying Form 4 insider filings in the current SEC EDGAR feed.</div>`
+            : this.FIL.map(f => `
+            <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
               <div>
-                <div style="font-family:var(--mono);font-size:11.5px;font-weight:600;">${d.size} <span style="color:var(--mut);font-weight:400;">sh</span></div>
-                <div style="font-size:9.5px;color:var(--mut);">${d.venue} · ${d.pct} ADV</div>
+                <div style="display:flex;align-items:center;gap:7px;">
+                  <span class="symlink" onclick="vtx.jumpToTicker('${f.sym}')" style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--acc2);padding:1px 4px;">${f.sym}</span>
+                  <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${f.tone};border:1px solid ${f.toneBorder};border-radius:5px;padding:1px 6px;">${f.act}</span>
+                </div>
+                <div style="font-size:11px;color:var(--txt);margin-top:4px;">${f.who} <span style="color:var(--mut);">· ${f.role}</span></div>
               </div>
               <div style="text-align:right;">
-                <div style="font-family:var(--mono);font-size:11.5px;font-weight:700;">${d.notional}</div>
-                <div style="font-family:var(--mono);font-size:9px;color:var(--mut);">${d.time}</div>
+                <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${f.tone};">${f.value}</div>
+                <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);">${f.shares} sh · ${f.time}</div>
               </div>
-            </div>`).join('')) + `</div></div>`;
-    }
-    else if (s.tab === 'filings') {
-      el.innerHTML = `<div style="padding:8px;display:flex;flex-direction:column;gap:6px;">` +
-        (!this.FIL
-          ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading insider filings…</div>`
-          : !this.FIL.length
-          ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">No qualifying Form 4 insider filings in the current SEC EDGAR feed.</div>`
-          : this.FIL.map(f => `
-          <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
-            <div>
-              <div style="display:flex;align-items:center;gap:7px;">
-                <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--acc2);">${f.sym}</span>
-                <span style="font-size:8.5px;font-weight:700;letter-spacing:.06em;color:${f.tone};border:1px solid ${f.toneBorder};border-radius:5px;padding:1px 6px;">${f.act}</span>
+            </div>`).join('')) + `</div>`;
+      }
+
+      let instHtml = '';
+      if (txf === 'all' || txf === 'institutional') {
+        instHtml = `
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:14px 2px 8px;padding:0 8px;">Institutional Filings <span style="opacity:.6;font-weight:400;text-transform:none;letter-spacing:normal;">· real-time SEC 13F-HR, market-wide</span></div>
+          <div style="padding:0 10px 10px;display:flex;flex-direction:column;gap:6px;">` +
+          (!this.INSTITUTIONAL
+            ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading institutional filings…</div>`
+            : !this.INSTITUTIONAL.length
+            ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">No 13F-HR filings in the current SEC EDGAR feed.</div>`
+            : this.INSTITUTIONAL.map(i => `
+            <a href="${i.filingUrl}" target="_blank" rel="noopener" style="text-decoration:none;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);">
+              <div style="min-width:0;">
+                <div style="font-size:11.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.institution}</div>
+                <div style="font-size:10.5px;color:var(--mut);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.topHolding ? `Top holding: ${i.topHolding}` : `${i.holdingsCount} holdings`}</div>
               </div>
-              <div style="font-size:11px;color:var(--txt);margin-top:4px;">${f.who} <span style="color:var(--mut);">· ${f.role}</span></div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${f.tone};">${f.value}</div>
-              <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);">${f.shares} sh · ${f.time}</div>
-            </div>
-          </div>`).join('')) + `</div>`;
+              <div style="text-align:right;flex-shrink:0;">
+                ${i.topHoldingValue ? `<div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--txt);">${i.topHoldingValue}</div>` : ''}
+                <div style="font-family:var(--mono);font-size:9.5px;color:var(--mut);">${i.holdingsCount} holdings · ${i.time}</div>
+              </div>
+            </a>`).join('')) + `</div>
+          <div style="padding:0 18px 10px;font-size:8.5px;color:var(--mut);opacity:.7;">13F reports each holding by company name, never a ticker — top holding shown as plain text, not a clickable symbol.</div>`;
+      }
+
+      el.innerHTML = chipsHtml + darkHtml + insiderHtml + instHtml;
     }
     else if (s.tab === 'calendar') {
       const earningsHtml = !this.CAL.length
