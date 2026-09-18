@@ -1198,6 +1198,7 @@ const vtx = {
   FIL: null, // populated by loadFilings() — real SEC EDGAR Form 4 data; null = not loaded yet, [] = loaded and genuinely empty
   DARK: null, // populated by loadDarkPool() — real FINRA weekly dark-pool data; null = not loaded yet, [] = loaded and genuinely empty
   INSTITUTIONAL: null, // populated by loadInstitutionalFilings() — real SEC EDGAR 13F-HR data; null = not loaded yet, [] = loaded and genuinely empty
+  CONGRESS: null, // populated by loadCongressTrades() — real House Clerk PTR filings (STOCK Act); null = not loaded yet, [] = loaded and genuinely empty
   // populated by loadScreenerUniverse() — real S&P 500 roster (Wikipedia)
   // + real Finnhub fundamentals (warmed daily by the refresh-screener
   // cron, which rotates through the ~503-symbol universe over a few days
@@ -1736,6 +1737,7 @@ const vtx = {
     this.loadFilings();
     this.loadDarkPool();
     this.loadInstitutionalFilings();
+    this.loadCongressTrades();
     this.loadHeatmap();
     this.loadCalendar();
     this.loadIpoCalendar();
@@ -1752,6 +1754,11 @@ const vtx = {
     pollWhileVisible(() => this.loadFilings(), 5 * 60 * 1000);
     pollWhileVisible(() => this.loadDarkPool(), 10 * 60 * 1000);
     pollWhileVisible(() => this.loadInstitutionalFilings(), 5 * 60 * 1000);
+    // New PTRs post continuously but not fast — the server's own index
+    // cache is already 6h (see app/api/intel/congress-trades), so a
+    // faster client poll would just keep re-fetching the same cached
+    // response.
+    pollWhileVisible(() => this.loadCongressTrades(), 6 * 60 * 60 * 1000);
     pollWhileVisible(() => this.loadHeatmap(), 5 * 60 * 1000);
     pollWhileVisible(() => this.loadCalendar(), 30 * 60 * 1000);
     pollWhileVisible(() => this.loadIpoCalendar(), 6 * 60 * 60 * 1000);
@@ -5228,6 +5235,21 @@ const vtx = {
     } catch (e) { /* keep previous data on failure */ }
   },
 
+  // Real House Clerk Periodic Transaction Reports (STOCK Act), market-wide
+  // — see app/api/intel/congress-trades for how the free bulk ZIP index
+  // and each real filing PDF get turned into structured rows server-side.
+  async loadCongressTrades() {
+    try {
+      const res = await fetch('/api/intel/congress-trades');
+      if (!res.ok) { this.CONGRESS = { failed: true }; if (this.state.tab === 'tx') this.renderRight(); return; }
+      const data = await res.json();
+      this.CONGRESS = data.filings || [];
+    } catch (e) {
+      this.CONGRESS = { failed: true };
+    }
+    if (this.state.tab === 'tx') this.renderRight();
+  },
+
   async loadCalendar() {
     try {
       const symbols = this.state.tickers.map(t => t.sym).join(',');
@@ -8501,7 +8523,7 @@ const vtx = {
       // them actually share.
       const txf = s.txFilter || 'all';
       const chip = (key, label) => `<button onclick="vtx.setTxFilter('${key}')" style="font-family:var(--ui);font-size:10.5px;font-weight:600;padding:5px 11px;border-radius:7px;border:1px solid ${txf===key?'rgba(var(--glow),.35)':'var(--line)'};cursor:pointer;background:${txf===key?'rgba(var(--glow),.16)':'transparent'};color:${txf===key?'var(--acc2)':'var(--mut)'};">${label}</button>`;
-      const chipsHtml = `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 10px 2px;">${chip('all','All')}${chip('insider','Insider')}${chip('institutional','Institutional')}${chip('darkpool','Dark Pool')}</div>`;
+      const chipsHtml = `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 10px 2px;">${chip('all','All')}${chip('insider','Insider')}${chip('institutional','Institutional')}${chip('congress','Congress')}${chip('darkpool','Dark Pool')}</div>`;
 
       let darkHtml = '';
       if (txf === 'all' || txf === 'darkpool') {
@@ -8604,7 +8626,43 @@ const vtx = {
           <div style="padding:0 18px 10px;font-size:8.5px;color:var(--mut);opacity:.7;">13F reports each holding by company name, never a ticker — top holding shown as plain text, not a clickable symbol.</div>`;
       }
 
-      el.innerHTML = chipsHtml + darkHtml + insiderHtml + instHtml;
+      let congressHtml = '';
+      if (txf === 'all' || txf === 'congress') {
+        const MAX_ROWS_SHOWN = 6;
+        congressHtml = `
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:14px 2px 8px;padding:0 8px;">Congressional Trading <span style="opacity:.6;font-weight:400;text-transform:none;letter-spacing:normal;">· real House PTRs (STOCK Act), market-wide</span></div>
+          <div style="padding:0 10px 10px;display:flex;flex-direction:column;gap:8px;">` +
+          (!this.CONGRESS
+            ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading congressional trading disclosures…</div>`
+            : this.CONGRESS.failed
+            ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Couldn't load congressional filings. <button onclick="vtx.loadCongressTrades()" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`
+            : !this.CONGRESS.length
+            ? `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">No recent House Periodic Transaction Reports on file.</div>`
+            : this.CONGRESS.filter(f => f.transactions.length).map(f => `
+            <div style="border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);overflow:hidden;">
+              <div style="display:flex;align-items:baseline;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);">
+                <span style="font-size:11.5px;font-weight:700;color:var(--txt);">${f.member}</span>
+                <span style="font-size:9.5px;color:var(--mut);">${f.stateDst}</span>
+                <span style="margin-left:auto;font-size:9.5px;color:var(--mut);">filed ${f.filingDate}</span>
+              </div>
+              <div>` +
+                f.transactions.slice(0, MAX_ROWS_SHOWN).map(t => `
+                <div style="display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);">
+                  <span class="symlink" onclick="vtx.viewTicker('${t.ticker}')" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--acc2);padding:1px 4px;">${t.ticker}</span>
+                  <span style="font-size:10.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.asset}</span>
+                  <span style="text-align:right;font-size:9.5px;">
+                    <span style="font-weight:700;color:${t.txType.startsWith('S')?'var(--neg)':t.txType==='E'?'var(--warn)':'var(--pos)'};">${t.txType.startsWith('S')?'SELL':t.txType==='E'?'EXCHANGE':'BUY'}</span>
+                    <span style="font-family:var(--mono);color:var(--mut);"> $${t.amountLow.toLocaleString()}-$${t.amountHigh.toLocaleString()}</span>
+                  </span>
+                </div>`).join('') +
+              (f.transactions.length > MAX_ROWS_SHOWN ? `<div style="padding:6px 12px;font-size:9.5px;color:var(--mut);">+${f.transactions.length - MAX_ROWS_SHOWN} more line item${f.transactions.length - MAX_ROWS_SHOWN===1?'':'s'} in this filing</div>` : '') + `
+              </div>
+              <div style="padding:6px 12px;"><a href="${f.pdfUrl}" target="_blank" rel="noopener" style="font-size:9.5px;color:var(--acc2);text-decoration:underline;">View full filing (PDF)</a></div>
+            </div>`).join('')) + `</div>
+          <div style="padding:0 18px 10px;font-size:8.5px;color:var(--mut);opacity:.7;">Parsed from the real PDF each member files with the House Clerk under the STOCK Act — not a summary or an estimate. A transaction whose asset type this parser doesn't recognize (bonds, options) is skipped rather than guessed at, and a spouse/joint/dependent-child holding occasionally keeps a leading owner code (SP/JT/DC) when it can't be told apart from a real company name. It is unlawful to use these disclosures for a commercial purpose — Vanetex is free and non-commercial.</div>`;
+      }
+
+      el.innerHTML = chipsHtml + darkHtml + insiderHtml + instHtml + congressHtml;
     }
     else if (s.tab === 'calendar') {
       const earningsHtml = !this.CAL.length
