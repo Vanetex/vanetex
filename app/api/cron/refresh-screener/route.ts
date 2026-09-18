@@ -2,31 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { kvHashSetFields } from "@/lib/kvCache";
 import { getSp500List } from "@/lib/sp500List";
 import { getFinancialsRatios } from "@/lib/financialsRatios";
+import { SCREENER_HASH_KEY, SCREENER_FIELD_TTL_S, type ScreenerFields } from "@/lib/screenerShared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export const SCREENER_HASH_KEY = "screener:fundamentals:v1";
-// Outlasts several rotation cycles (see ROTATION_SIZE below) so a symbol
-// refreshed early in a cycle is still on file by the time the next cycle
-// reaches it again — fundamentals don't need to be fresher than this.
-export const SCREENER_FIELD_TTL_S = 10 * 24 * 60 * 60;
 // Hobby-tier crons run once a day, so — unlike the heatmap's live-request
 // rotation — the whole ~503-symbol universe has to be covered by
 // multiple daily firings, not multiple requests within one. ~130/day
 // clears comfortably inside the 60s budget (see the pacing below) and
 // cycles the full roster in about 4 days.
 const ROTATION_SIZE = 130;
-
-export type ScreenerFields = {
-  marketCap: number | null;
-  peTTM: number | null;
-  forwardPE: number | null;
-  revenueGrowthYoy: number | null;
-  beta: number | null;
-  dividendYield: number | null;
-  priceReturn52W: number | null;
-};
 
 export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {

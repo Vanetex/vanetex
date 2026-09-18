@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, clientIdFromRequest } from "@/lib/rateLimit";
 import { kvHashGetAll } from "@/lib/kvCache";
 import { getSp500List } from "@/lib/sp500List";
-import { SCREENER_HASH_KEY, type ScreenerFields } from "@/app/api/cron/refresh-screener/route";
+import { SCREENER_HASH_KEY, type ScreenerFields } from "@/lib/screenerShared";
 
 export const runtime = "nodejs";
 
