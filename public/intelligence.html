@@ -623,7 +623,17 @@ const vtx = {
   YC_MACRO_DETAIL: {
     CPIAUCSL: { title: 'Consumer Price Index for All Urban Consumers: All Items', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'yoy', compareId: 'CPILFESL', compareLabel: 'Core CPI (ex Food & Energy)' },
     PCEPI: { title: 'Personal Consumption Expenditures Price Index', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'yoy', compareId: 'PCEPILFE', compareLabel: "Core PCE — the Fed's preferred inflation gauge" },
-    PPIACO: { title: 'Producer Price Index by Commodity: All Commodities', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'NSA', transform: 'yoy' },
+    // Compared against PPICOR — the BLS's own official "Core PPI" (Final
+    // Demand Less Food & Energy). A genuine methodology note, not swept
+    // under the rug: PPIACO is the older, broader "All Commodities" index
+    // this row has always used, while PPICOR sits under BLS's newer
+    // "Final Demand" framework — different underlying baskets, not a
+    // same-index headline/core split the way CPI/CPILFESL is. It's paired
+    // here anyway because PPICOR is unambiguously what every financial
+    // report means by "Core PPI." The classic crude/intermediate/finished-
+    // goods stage-of-processing series (PPICRM, WPUSOP2000, ...) were
+    // checked first and ruled out — BLS discontinued all of them in 2015.
+    PPIACO: { title: 'Producer Price Index by Commodity: All Commodities', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'NSA', transform: 'yoy', compareId: 'PPICOR', compareLabel: 'Core PPI — Final Demand Less Food & Energy (BLS)' },
     // Real BEA "Contributions to percent change in real GDP" for each
     // major component — the classic C+I+G+(X-M) decomposition, in the
     // exact same percentage-point units as the headline growth rate
