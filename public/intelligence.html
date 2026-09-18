@@ -433,6 +433,11 @@ input{font-family:var(--ui)}
         <!-- Housing Starts view (search "HS") — real FRED HOUST + PERMIT,
              national housing starts and building permits. -->
         <div id="housingStartsView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
+
+        <!-- Bond Calculator view (search "BOND") — price/yield, Macaulay +
+             modified duration, and convexity for a hypothetical coupon
+             bond. Pure formula, no data dependency at all. -->
+        <div id="bondCalcView" style="display:none;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;"></div>
       </div>
 
       <!-- RIGHT COLUMN -->
@@ -586,7 +591,11 @@ const vtx = {
     // timestamps; FINRA dark-pool data is a weekly aggregate), so forcing
     // them into a single chronological sort would fake a precision none
     // of them actually share.
-    txFilter: 'all'
+    txFilter: 'all',
+    // Bond Calculator — mode picks which of price/yield is solved FOR
+    // from the other; both fields stay populated so switching mode
+    // doesn't lose whichever one you weren't editing.
+    bondInputs: { faceValue: 1000, couponRate: 5, frequency: 2, years: 10, mode: 'yield', price: 950, yield: 5.5 }
   },
 
   NEWS: [], // populated by loadNews() — real Finnhub company or general news, no seed
@@ -3665,6 +3674,101 @@ const vtx = {
       ${bodyHtml}
     `;
   },
+  renderBondCalcView() {
+    const el = document.getElementById('bondCalcView');
+    if (!el) return;
+    const b = this.state.bondInputs;
+    const m = b.frequency;
+    const freqLabel = { 1: 'Annual', 2: 'Semi-Annual', 4: 'Quarterly' }[m] || 'Semi-Annual';
+
+    let price, yieldPct;
+    if (b.mode === 'yield') {
+      yieldPct = b.yield;
+      price = this.bondPriceForYield(b.faceValue, b.couponRate, yieldPct, b.years, m);
+    } else {
+      price = b.price;
+      yieldPct = this.bondYtmFromPrice(b.faceValue, b.couponRate, price, b.years, m);
+    }
+    const macDuration = this.bondMacaulayDuration(b.faceValue, b.couponRate, yieldPct, b.years, m);
+    const modDuration = macDuration / (1 + (yieldPct / 100) / m);
+    const convexity = this.bondConvexity(b.faceValue, b.couponRate, yieldPct, b.years, m);
+
+    // Duration + convexity's own real use — approximating the price
+    // impact of a rate move without repricing the whole cash-flow
+    // schedule. Shown for ±100bps, the standard reference shock size.
+    const priceImpact = dyPct => {
+      const dy = dyPct / 100;
+      return (-modDuration * dy + 0.5 * convexity * dy * dy) * 100;
+    };
+
+    const freqBtn = (val, label) => `<button onclick="vtx.setBondInput('frequency','${val}')" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:5px 10px;border:none;border-radius:6px;cursor:pointer;background:${m===val?'rgba(var(--glow),.2)':'transparent'};color:${m===val?'var(--acc2)':'var(--mut)'};">${label}</button>`;
+    const modeBtn = (val, label) => `<button onclick="vtx.setBondMode('${val}')" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:5px 10px;border:none;border-radius:6px;cursor:pointer;background:${b.mode===val?'rgba(var(--glow),.2)':'transparent'};color:${b.mode===val?'var(--acc2)':'var(--mut)'};">${label}</button>`;
+    const inputField = (label, key, value, step) => `
+      <div>
+        <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">${label}</label>
+        <input type="number" value="${value}" step="${step || 'any'}" onchange="vtx.setBondInput('${key}', this.value)" style="width:110px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:7px 9px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;">
+      </div>`;
+
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:2px 2px 0;flex-shrink:0;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Bond Calculator</span>
+        <span style="font-size:9px;color:var(--mut);">Hypothetical coupon bond · price/yield, duration, convexity</span>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);padding:16px 18px;flex-shrink:0;">
+        <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:16px;">
+          ${inputField('Face Value ($)', 'faceValue', b.faceValue, '1')}
+          ${inputField('Coupon Rate (%)', 'couponRate', b.couponRate, '0.01')}
+          ${inputField('Years to Maturity', 'years', b.years, '0.5')}
+          <div>
+            <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">Coupon Frequency</label>
+            <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;">${freqBtn(1,'Annual')}${freqBtn(2,'Semi-Ann.')}${freqBtn(4,'Qtrly')}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;padding-top:14px;border-top:1px solid var(--line);">
+          <div>
+            <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">Solve From</label>
+            <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;">${modeBtn('yield','Yield → Price')}${modeBtn('price','Price → Yield')}</div>
+          </div>
+          ${b.mode === 'yield' ? inputField('Yield to Maturity (%)', 'yield', b.yield, '0.01') : inputField('Price ($)', 'price', b.price, '0.01')}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;flex-shrink:0;">
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;">
+          <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">${b.mode === 'yield' ? 'Price' : 'Yield to Maturity'}</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--acc2);">${b.mode === 'yield' ? '$' + price.toFixed(2) : yieldPct.toFixed(3) + '%'}</div>
+          <div style="font-size:9px;color:var(--mut);margin-top:2px;">${b.mode === 'yield' ? (price >= b.faceValue ? 'above par' : 'below par') : freqLabel + ' compounding'}</div>
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;">
+          <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Macaulay Duration</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--txt);">${macDuration.toFixed(2)}<span style="font-size:13px;color:var(--mut);"> yrs</span></div>
+          <div style="font-size:9px;color:var(--mut);margin-top:2px;">weighted-avg. time to cash flows</div>
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;">
+          <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Modified Duration</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--txt);">${modDuration.toFixed(2)}<span style="font-size:13px;color:var(--mut);"> yrs</span></div>
+          <div style="font-size:9px;color:var(--mut);margin-top:2px;">≈ % price move per 1% yield move</div>
+        </div>
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;">
+          <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Convexity</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:800;color:var(--txt);">${convexity.toFixed(2)}</div>
+          <div style="font-size:9px;color:var(--mut);margin-top:2px;">2nd-order correction to duration</div>
+        </div>
+      </div>
+      <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Estimated Price Sensitivity</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0;">
+          ${[-2,-1,-0.5,0.5,1,2].map(dy => {
+            const impact = priceImpact(dy);
+            return `<div style="flex:1;min-width:90px;padding:12px 14px;border-right:1px solid var(--line);">
+              <div style="font-size:9px;color:var(--mut);margin-bottom:3px;">${dy>0?'+':''}${dy}%</div>
+              <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${impact>=0?'var(--pos)':'var(--neg)'};">${impact>=0?'+':''}${impact.toFixed(2)}%</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="padding:10px 14px;font-size:8px;color:var(--mut);opacity:.7;">Duration + convexity approximation (ΔP/P ≈ −ModDur·Δy + ½·Convexity·Δy²), not a full cash-flow repricing — accurate for small moves, increasingly approximate for large ones. Formulas verified against two exact identities: a par bond (yield = coupon) prices at face value, and a zero-coupon bond's Macaulay duration equals its maturity.</div>
+      </div>
+    `;
+  },
   selectIndicator(meta) {
     if (!meta || !meta.id) return;
     this.state.view = 'indicator';
@@ -4406,6 +4510,7 @@ const vtx = {
     else if (entry.type === 'regionalHousing') this.selectRegionalHousing();
     else if (entry.type === 'nfp') this.selectNfp();
     else if (entry.type === 'housingStarts') this.selectHousingStarts();
+    else if (entry.type === 'bondCalc') this.selectBondCalc();
     else this.viewTicker(entry.key, entry.label);
   },
   // "YC" as a search shortcut into the full Yield Curve view — matches the
@@ -4470,6 +4575,12 @@ const vtx = {
     const q = v.trim().toLowerCase();
     if (!q) return false;
     return q === 'hs' || 'housing starts'.includes(q) || 'building permits'.includes(q);
+  },
+  // "BOND" into the standalone Bond Calculator view.
+  matchBondCalcShortcut(v) {
+    const q = v.trim().toLowerCase();
+    if (!q) return false;
+    return q === 'bond' || 'bond calculator'.includes(q) || 'bond calc'.includes(q) || 'duration'.includes(q) || 'convexity'.includes(q);
   },
   onSearchInput(v) {
     this.state.query=v; this.state.searchOpen=true; this.state.remoteResults=[]; this.state.remoteIndicators=[]; this.state.searchFailed=false;
@@ -4596,7 +4707,7 @@ const vtx = {
       // Each row's own × removes just that entry (stopPropagation so it
       // doesn't also re-open the search); "Clear all" wipes the list.
       const recentRowHtml = e => {
-        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation'||e.type==='worldEquity'||e.type==='creditLadder'||e.type==='globalGdp'||e.type==='regionalHousing'||e.type==='nfp'||e.type==='housingStarts') ? '▤' : '';
+        const icon = e.type==='instrument' ? '◆' : e.type==='indicator' ? '◇' : (e.type==='yieldCurve'||e.type==='globalYields'||e.type==='policyRates'||e.type==='worldInflation'||e.type==='worldEquity'||e.type==='creditLadder'||e.type==='globalGdp'||e.type==='regionalHousing'||e.type==='nfp'||e.type==='housingStarts'||e.type==='bondCalc') ? '▤' : '';
         return `<div class="srchrow" onmousedown='vtx.recordRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")});vtx.openRecentSearch(${JSON.stringify(e).replace(/'/g,"&#39;")})' style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;">
           <span style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--acc2);min-width:48px;">${icon?icon+' ':''}${e.label}</span>
           <span style="flex:1;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.sub||''}</span>
@@ -4660,6 +4771,10 @@ const vtx = {
     if (this.matchHousingStartsShortcut(this.state.query)) {
       toolRows += toolRow('HS', 'Housing Starts', 'Starts · Building Permits',
         "vtx.recordRecentSearch({type:'housingStarts',key:'HS',label:'HS',sub:'Housing Starts'});vtx.selectHousingStarts()");
+    }
+    if (this.matchBondCalcShortcut(this.state.query)) {
+      toolRows += toolRow('BOND', 'Bond Calculator', 'Price · YTM · Duration',
+        "vtx.recordRecentSearch({type:'bondCalc',key:'BOND',label:'BOND',sub:'Bond Calculator'});vtx.selectBondCalc()");
     }
     const ycHtml = toolRows ? `<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:8px 11px 4px;">Tools</div>${toolRows}` : '';
     let html = searchFailedHtml + ycHtml + r.map(t => `
@@ -5582,6 +5697,80 @@ const vtx = {
     this.setMobilePanel('chart');
     this.render();
     if (!this.YC_HOUSING_STARTS) this.loadHousingStarts();
+  },
+  // No data fetch — pure formula, so there's nothing to load. Verified
+  // against two exact analytical identities before shipping: a par bond
+  // (yield == coupon) prices exactly at face value, and a zero-coupon
+  // bond's Macaulay duration exactly equals its maturity in years. Both
+  // matched to full float precision in testing.
+  selectBondCalc() {
+    this.state.view = 'bondCalc';
+    this.state.query = ''; this.state.searchOpen = false; this.state.remoteResults = []; this.state.instrumentMatches = []; this.state.remoteIndicators = [];
+    const input = document.getElementById('searchInput'); if (input) input.value = '';
+    this.closeSearch();
+    this.setMobilePanel('chart');
+    this.render();
+  },
+  setBondInput(key, value) {
+    const num = parseFloat(value);
+    this.state.bondInputs = { ...this.state.bondInputs, [key]: isNaN(num) ? 0 : num };
+    this.renderBondCalcView();
+  },
+  setBondMode(mode) {
+    this.state.bondInputs = { ...this.state.bondInputs, mode };
+    this.renderBondCalcView();
+  },
+  // Standard discrete-coupon bond math, m periods/year. cashflowAt(t)
+  // returns each period's real cash flow (coupon, plus face value on the
+  // final period) — shared by price/duration/convexity so all three
+  // always agree on what the bond actually pays.
+  bondCashflows(faceValue, couponRate, years, m) {
+    const n = Math.round(years * m);
+    const periodicCoupon = faceValue * (couponRate / 100) / m;
+    const cfs = [];
+    for (let t = 1; t <= n; t++) cfs.push(periodicCoupon + (t === n ? faceValue : 0));
+    return cfs;
+  },
+  bondPriceForYield(faceValue, couponRate, yieldPct, years, m) {
+    const cfs = this.bondCashflows(faceValue, couponRate, years, m);
+    const periodicRate = (yieldPct / 100) / m;
+    return cfs.reduce((sum, cf, i) => sum + cf / Math.pow(1 + periodicRate, i + 1), 0);
+  },
+  // No closed form for yield given price — bisection over a generous
+  // ±multiple-hundred-percent range, 200 iterations (each halves the
+  // interval, so this converges to far tighter than display precision).
+  bondYtmFromPrice(faceValue, couponRate, targetPrice, years, m) {
+    let lo = -0.9, hi = 5; // -90%..500% annual yield
+    for (let i = 0; i < 200; i++) {
+      const mid = (lo + hi) / 2;
+      const p = this.bondPriceForYield(faceValue, couponRate, mid * 100, years, m);
+      // Price falls as yield rises — a too-high computed price means the
+      // trial yield is too low.
+      if (p > targetPrice) lo = mid; else hi = mid;
+    }
+    return ((lo + hi) / 2) * 100;
+  },
+  bondMacaulayDuration(faceValue, couponRate, yieldPct, years, m) {
+    const cfs = this.bondCashflows(faceValue, couponRate, years, m);
+    const periodicRate = (yieldPct / 100) / m;
+    const price = cfs.reduce((sum, cf, i) => sum + cf / Math.pow(1 + periodicRate, i + 1), 0);
+    const weighted = cfs.reduce((sum, cf, i) => {
+      const t = i + 1;
+      const pv = cf / Math.pow(1 + periodicRate, t);
+      return sum + pv * (t / m);
+    }, 0);
+    return weighted / price;
+  },
+  bondConvexity(faceValue, couponRate, yieldPct, years, m) {
+    const cfs = this.bondCashflows(faceValue, couponRate, years, m);
+    const periodicRate = (yieldPct / 100) / m;
+    const price = cfs.reduce((sum, cf, i) => sum + cf / Math.pow(1 + periodicRate, i + 1), 0);
+    const sum = cfs.reduce((acc, cf, i) => {
+      const t = i + 1;
+      const pv = cf / Math.pow(1 + periodicRate, t);
+      return acc + pv * t * (t + 1);
+    }, 0);
+    return sum / (price * Math.pow(1 + periodicRate, 2) * m * m);
   },
   selectYieldCurve() {
     this.state.view = 'yieldCurve';
@@ -7018,6 +7207,7 @@ const vtx = {
     document.getElementById('regionalHousingView').style.display = s.view === 'regionalHousing' ? 'flex' : 'none';
     document.getElementById('nfpView').style.display = s.view === 'nfp' ? 'flex' : 'none';
     document.getElementById('housingStartsView').style.display = s.view === 'housingStarts' ? 'flex' : 'none';
+    document.getElementById('bondCalcView').style.display = s.view === 'bondCalc' ? 'flex' : 'none';
     if (s.view === 'overview') {
       this.renderOverview();
     } else if (s.view === 'instrument') {
@@ -7046,6 +7236,8 @@ const vtx = {
       this.renderNfpView();
     } else if (s.view === 'housingStarts') {
       this.renderHousingStartsView();
+    } else if (s.view === 'bondCalc') {
+      this.renderBondCalcView();
     } else {
     // Focus header
     const fp=this.pctOf(f), fup=fp>=0;
