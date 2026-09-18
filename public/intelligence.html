@@ -624,7 +624,20 @@ const vtx = {
     CPIAUCSL: { title: 'Consumer Price Index for All Urban Consumers: All Items', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'yoy', compareId: 'CPILFESL', compareLabel: 'Core CPI (ex Food & Energy)' },
     PCEPI: { title: 'Personal Consumption Expenditures Price Index', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'yoy', compareId: 'PCEPILFE', compareLabel: "Core PCE — the Fed's preferred inflation gauge" },
     PPIACO: { title: 'Producer Price Index by Commodity: All Commodities', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'NSA', transform: 'yoy' },
-    A191RL1Q225SBEA: { title: 'Real Gross Domestic Product Growth', units: 'Percent change from preceding period, SAAR', frequency: 'Quarterly', seasonalAdjustment: 'SA' },
+    // Real BEA "Contributions to percent change in real GDP" for each
+    // major component — the classic C+I+G+(X-M) decomposition, in the
+    // exact same percentage-point units as the headline growth rate
+    // itself (so no transform needed) and verified live to actually sum
+    // to it: 2.31 + 0.48 - 0.16 - 1.14 = 1.49, matching the reported 1.5%
+    // for 2026 Q2 within rounding. compareSeries (plural) is the general
+    // form of compareId, used here since a real breakdown needs all four
+    // components at once, not just one second line.
+    A191RL1Q225SBEA: { title: 'Real Gross Domestic Product Growth', units: 'Percent change from preceding period, SAAR', frequency: 'Quarterly', seasonalAdjustment: 'SA', compareSeries: [
+      { id: 'DPCERY2Q224SBEA', label: 'Personal Consumption', color: '#f0c419' },
+      { id: 'A006RY2Q224SBEA', label: 'Private Investment', color: '#c084fc' },
+      { id: 'A822RY2Q224SBEA', label: 'Government Spending', color: '#33d38f' },
+      { id: 'A019RY2Q224SBEA', label: 'Net Exports', color: '#ff6b6b' },
+    ] },
     UNRATE: { title: 'Unemployment Rate', units: 'Percent', frequency: 'Monthly', seasonalAdjustment: 'SA', compareId: 'U6RATE', compareLabel: 'U-6 (Total Unemployed + Underemployed + Marginally Attached)' },
     T10YIE: { title: '10-Year Breakeven Inflation Rate', units: 'Percent', frequency: 'Daily', seasonalAdjustment: 'NSA' },
     GACDFSA066MSFRBPHI: { title: 'Philadelphia Fed Manufacturing Business Outlook Survey — Current General Activity', units: 'Diffusion index (>0 = expansion)', frequency: 'Monthly', seasonalAdjustment: 'SA', compareId: 'GACDISA066MSFRBNY', compareLabel: 'Empire State Mfg. Index (NY Fed)' },
@@ -3589,8 +3602,11 @@ const vtx = {
     this.loadIndicatorData(meta.id);
     // meta.compareId (Core CPI/PCE, U-6, ...) is a second real FRED series
     // fetched the exact same way — see YC_MACRO_DETAIL for which
-    // indicators carry one.
+    // indicators carry one. meta.compareSeries is the plural form for a
+    // genuine multi-part breakdown (GDP's C+I+G+NX components) — every
+    // one of them fetched the same way too.
     if (meta.compareId) this.loadIndicatorData(meta.compareId);
+    if (meta.compareSeries) meta.compareSeries.forEach(s => this.loadIndicatorData(s.id));
     this.loadNews();
   },
   async loadIndicatorData(id) {
@@ -3601,11 +3617,12 @@ const vtx = {
     } catch (e) {
       this._indicatorData[id] = { __failed: true };
     }
-    // Also re-render on the compare series landing, not just the primary
-    // one — both fetches are in flight together from selectIndicator, and
-    // whichever resolves second should still trigger the redraw.
+    // Also re-render on any compare series landing, not just the primary
+    // one — every fetch is in flight together from selectIndicator, and
+    // whichever resolves should still trigger a redraw.
     const meta = this.state.indicatorMeta;
-    if (this.state.view === 'indicator' && meta && (meta.id === id || meta.compareId === id)) this.renderIndicatorView();
+    const inCompareSeries = meta && meta.compareSeries && meta.compareSeries.some(s => s.id === id);
+    if (this.state.view === 'indicator' && meta && (meta.id === id || meta.compareId === id || inCompareSeries)) this.renderIndicatorView();
   },
   // Same chart geometry as buildChart (574x150 viewBox) so it drops into
   // the same SVG skeleton, but deliberately simpler — a real economic
@@ -3752,22 +3769,32 @@ const vtx = {
       const cPos = 'var(--pos)', cNeg = 'var(--neg)';
       const fmtVal = v => unitSuffix ? v.toFixed(1) + unitSuffix : v.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
-      // meta.compareId (Core CPI/PCE, U-6, ...) — a real second FRED
-      // series, plotted alongside the primary one via the same shared-axis
-      // multi-line chart the Yield Curve/Credit Ladder/GDP views already
-      // use, rather than the single-series buildIndicatorChart below.
-      // Falls back to the single-series chart whenever there's no
-      // compareId, or its fetch hasn't landed/failed — this view still
+      // meta.compareId (Core CPI/PCE, U-6, ...) is a single real second
+      // FRED series; meta.compareSeries (GDP's C+I+G+NX components) is the
+      // plural form for a genuine multi-part breakdown. Either way, every
+      // one that actually loaded gets plotted alongside the primary line
+      // via the same shared-axis multi-line chart the Yield Curve/Credit
+      // Ladder/GDP views already use, instead of the single-series
+      // buildIndicatorChart below. Falls back to that single-series chart
+      // whenever there's neither, or nothing loaded yet — this view still
       // works exactly as before for every indicator without one.
-      const compareData = meta.compareId && this._indicatorData && this._indicatorData[meta.compareId];
-      const compareRawOk = compareData && !compareData.__failed && compareData.points && compareData.points.length;
-      const comparePoints = compareRawOk ? applyTransform(compareData.points) : null;
+      const loadedSeriesFor = (id, label, color) => {
+        const d = this._indicatorData && this._indicatorData[id];
+        if (!d || d.__failed || !d.points || !d.points.length) return null;
+        const pts = applyTransform(d.points);
+        return pts.length >= 2 ? { id, label, color, points: pts } : null;
+      };
+      const extraSeries = meta.compareId
+        ? [loadedSeriesFor(meta.compareId, meta.compareLabel, '#f0c419')].filter(Boolean)
+        : meta.compareSeries
+        ? meta.compareSeries.map(s => loadedSeriesFor(s.id, s.label, s.color)).filter(Boolean)
+        : [];
 
       let chartSectionHtml;
-      if (comparePoints && comparePoints.length >= 2) {
+      if (extraSeries.length) {
         const series = [
           { id: meta.id, label: meta.label || meta.title, color: '#34d3ff', points },
-          { id: meta.compareId, label: meta.compareLabel, color: '#f0c419', points: comparePoints },
+          ...extraSeries,
         ];
         const legendHtml = series.map(s => {
           const l = s.points[s.points.length - 1];
@@ -3801,7 +3828,7 @@ const vtx = {
         </div>
         <div style="font-size:11px;color:var(--mut);margin-bottom:14px;">${meta.units} · as of ${last.date}</div>
         ${chartSectionHtml}
-        <div style="margin-top:6px;font-size:9px;color:var(--mut);opacity:.75;">Real historical data from FRED (Federal Reserve Economic Data) — ${meta.frequency}${meta.seasonalAdjustment && meta.seasonalAdjustment !== 'NSA' ? ', ' + meta.seasonalAdjustment : ''}${meta.compareId ? (comparePoints ? ` · compared against ${meta.compareLabel}` : '') : ''}.</div>
+        <div style="margin-top:6px;font-size:9px;color:var(--mut);opacity:.75;">Real historical data from FRED (Federal Reserve Economic Data) — ${meta.frequency}${meta.seasonalAdjustment && meta.seasonalAdjustment !== 'NSA' ? ', ' + meta.seasonalAdjustment : ''}${extraSeries.length ? ` · compared against ${extraSeries.map(s => s.label).join(', ')}` : ''}.</div>
       `;
       }
     }
