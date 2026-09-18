@@ -614,6 +614,13 @@ const vtx = {
     { id: 'ICSA', label: 'Jobless Claims', transform: 'thousands' },
     { id: 'RSAFS', label: 'Retail Sales m/m', transform: 'mom' },
     { id: 'UMCSENT', label: 'Consumer Sentiment', transform: 'level', offset: 0, suffix: '' },
+    // Raw value is already in thousands per FRED's own units for this
+    // series (7271 means 7,271,000 openings) — 'millions' divides once
+    // more for a clean "7.27M" read, unlike 'thousands' (used by Jobless
+    // Claims above), which is for a series whose raw value is actual
+    // units and needs exactly one /1000.
+    { id: 'JTSJOL', label: 'JOLTS Job Openings', transform: 'millions' },
+    { id: 'CES0500000003', label: 'Avg Hourly Earnings y/y', transform: 'yoy' },
   ],
   // Click-through metadata for the Macro Indicators rows above — routes
   // into the existing generic indicator detail view (selectIndicator),
@@ -680,6 +687,19 @@ const vtx = {
     // series drill-down here is still real and still useful; it just
     // doesn't get a second line rather than getting a fabricated one.
     UMCSENT: { title: 'University of Michigan: Consumer Sentiment', units: 'Index 1966:Q1=100', frequency: 'Monthly', seasonalAdjustment: 'NSA' },
+    // Compared against Hires (JTSHIL) — same "thousands of workers" units
+    // as Job Openings itself, so directly comparable as raw levels (no
+    // transform needed, unlike Quits Rate, which would've been the more
+    // obvious pairing but is a % and would sit flat at the bottom of a
+    // shared axis against six- and seven-figure counts, the same scale
+    // problem Initial Claims vs. Continuing Claims had).
+    JTSJOL: { title: 'Job Openings: Total Nonfarm', units: 'Thousands, SA', frequency: 'Monthly', seasonalAdjustment: 'SA', compareId: 'JTSHIL', compareLabel: 'Hires' },
+    // Compared against CPI y/y — same yoy transform applied to both,
+    // which is exactly what turns "wages grew 3.9%" into "real wages
+    // rose/fell": AHE above the CPI line means pay is outpacing
+    // inflation, below means it isn't. Reuses CPIAUCSL, already wired in
+    // above — no new series.
+    CES0500000003: { title: 'Average Hourly Earnings of All Employees, Total Private', units: 'Year-over-year % change', frequency: 'Monthly', seasonalAdjustment: 'SA', transform: 'yoy', compareId: 'CPIAUCSL', compareLabel: 'CPI y/y (inflation) — above this line means real wages are rising' },
   },
   YC_GLOBAL: {}, // populated by loadYcGlobal() — real FRED 10Y/long-term govt bond yields, keyed by series id
   // Every country's long-term (~10Y) government bond yield — the US leg is
@@ -2382,6 +2402,11 @@ const vtx = {
         // other row here uses a small enough number for.
         const lastI = pts.length - 1;
         display = (pts[lastI].value / 1000).toFixed(0) + 'K'; dateLabel = pts[lastI].date;
+      } else if (entry.transform === 'millions') {
+        // JOLTS Job Openings' raw value is already in thousands (7271 =
+        // 7,271,000 openings) — one more /1000 for a clean "7.27M".
+        const lastI = pts.length - 1;
+        display = (pts[lastI].value / 1000).toFixed(2) + 'M'; dateLabel = pts[lastI].date;
       } else {
         const idx = pts.length - 1 - (entry.offset || 0);
         if (idx >= 0) { display = pts[idx].value.toFixed(1) + (entry.suffix || ''); dateLabel = pts[idx].date; }
