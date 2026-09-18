@@ -341,6 +341,14 @@ input{font-family:var(--ui)}
           <div id="sectorScreenBody" style="padding:10px 14px 14px;"></div>
         </div>
 
+        <!-- Competitors — real Finnhub peer set (same country + GICS
+             sub-industry), not the sector screen's own larger internal
+             universe. Named tickers, click through to any of them. -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Competitors</div>
+          <div id="competitorsBody" style="padding:10px 14px 14px;"></div>
+        </div>
+
         <!-- multi-year trends + quality scores (Piotroski F-Score, Altman Z-Score) — real 10-K data, up to 16 years -->
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
           <div style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Multi-Year Trends &amp; Quality Scores</div>
@@ -1668,7 +1676,7 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.setMobilePanel('chart'); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadShortInterest(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.setMobilePanel('chart'); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadCompetitors(sym); this.loadShortInterest(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
   backToOverview() { this.state.view = 'overview'; this.setMobilePanel('chart'); this.render(); this.loadNews(); },
   selectInstrument(code) {
     const inst = this.INSTRUMENTS[code];
@@ -4079,6 +4087,7 @@ const vtx = {
     this.loadEtfHoldings(sym);
     this.loadFinancialsReported(sym);
     this.loadPeerPercentile(sym);
+    this.loadCompetitors(sym);
     this.loadShortInterest(sym);
     this.loadFederalContracts(sym, name);
     this.loadSparklines([sym]);
@@ -4130,6 +4139,7 @@ const vtx = {
     this.loadEtfHoldings(sym);
     this.loadFinancialsReported(sym);
     this.loadPeerPercentile(sym);
+    this.loadCompetitors(sym);
     this.loadShortInterest(sym);
     this.loadFederalContracts(sym, name);
     this.loadSparklines([sym]);
@@ -5867,6 +5877,21 @@ const vtx = {
     if (this.state.focus === sym && this.state.view === 'ticker') this.render();
   },
 
+  // Real Finnhub peer set (same country + GICS sub-industry) — a named,
+  // clickable competitor list, distinct from the sector screen's own
+  // larger internal 93-ticker universe (which only ever surfaces a
+  // percentile, never the actual peer names).
+  async loadCompetitors(sym) {
+    if (!this._competitors) this._competitors = {};
+    try {
+      const res = await fetch(`/api/stock/competitors?symbol=${encodeURIComponent(sym)}`);
+      this._competitors[sym] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._competitors[sym] = { __failed: true };
+    }
+    if (this.state.focus === sym && this.state.view === 'ticker') this.render();
+  },
+
   // Scoped to whatever's actually on screen rather than always mixing
   // the whole watchlist together: a focused ticker gets its own company
   // news, anything else (Overview, an instrument/indicator view with no
@@ -7306,6 +7331,34 @@ const vtx = {
             </div>
           </div>`;
       }).join('') + `<div style="margin-top:6px;font-size:8px;color:var(--mut);opacity:.7;">Real-time percentile vs. ${peerPct.peerCount} real, disclosed sector peers — each pillar stands alone. Not a combined score, star rating, or Buy/Sell call.</div>`;
+    }
+
+    // Competitors — real Finnhub peer set (same country + GICS sub-
+    // industry, the narrowest grouping the endpoint offers), distinct
+    // from the sector screen's own larger 93-ticker universe above. Just
+    // tickers (Finnhub's peers endpoint returns symbols, not names) —
+    // each one a real nav target via selectTicker, not a static list.
+    const competitors = this._competitors && this._competitors[f.sym];
+    const compEl = document.getElementById('competitorsBody');
+    if (compEl) {
+      if (!competitors) {
+        compEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading competitors…</div>`;
+      } else if (competitors.__failed) {
+        compEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Couldn't load competitors. <button onclick="vtx.loadCompetitors('${f.sym}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else if (!competitors.peers || !competitors.peers.length) {
+        compEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">No same-industry peers on file for this ticker.</div>`;
+      } else {
+        // viewTicker, not selectTicker — a competitor is almost never
+        // already in the user's own watchlist, and selectTicker assumes
+        // its symbol already exists in state.tickers (it just sets focus,
+        // it doesn't look anything up); for an unfamiliar symbol like
+        // these, render() would silently fall back to watchlist[0]. This
+        // is the exact same reason the "Other results" search rows below
+        // already call viewTicker instead of selectTicker.
+        compEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;">` +
+          competitors.peers.map(p => `<button onclick="vtx.viewTicker('${p}')" style="font-family:var(--mono);font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--acc2);cursor:pointer;">${p}</button>`).join('') +
+          `</div><div style="margin-top:8px;font-size:8px;color:var(--mut);opacity:.7;">Same country and industry classification, via Finnhub — not a ranking or recommendation.</div>`;
+      }
     }
 
     // Multi-year trends & quality scores — real 10-K line items (up to 16
