@@ -514,6 +514,12 @@ const vtx = {
     // (t.fin/t.analyst, batch-fetched once for the whole watchlist) —
     // '' means "no filter" for every numeric field.
     screenerFilters: { sector: 'All', mcapMin: '', peMax: '', revGrowthMin: '', changeMin: '', divYieldMin: '', betaMax: '', ratingMin: 'Any' },
+    // 'watchlist' (default, unchanged) screens whatever's on the user's
+    // own list; 'sp500' screens the real ~503-company index roster (see
+    // loadScreenerUniverse) — day change % and analyst rating aren't
+    // available for that source (no live quote/recommendation fetch for
+    // 500 symbols), so those two filters/columns only apply in watchlist mode.
+    screenerSource: 'watchlist',
     leaderboardTf: '1Y',
     compareSet: [], compareTf: '6M',
     // A ticker viewed from search but not yet added to the real
@@ -1135,6 +1141,12 @@ const vtx = {
   FIL: null, // populated by loadFilings() — real SEC EDGAR Form 4 data; null = not loaded yet, [] = loaded and genuinely empty
   DARK: null, // populated by loadDarkPool() — real FINRA weekly dark-pool data; null = not loaded yet, [] = loaded and genuinely empty
   INSTITUTIONAL: null, // populated by loadInstitutionalFilings() — real SEC EDGAR 13F-HR data; null = not loaded yet, [] = loaded and genuinely empty
+  // populated by loadScreenerUniverse() — real S&P 500 roster (Wikipedia)
+  // + real Finnhub fundamentals (warmed daily by the refresh-screener
+  // cron, which rotates through the ~503-symbol universe over a few days
+  // rather than fetching all of them live on every request). Shape:
+  // { rows: [...], universeSize, warmCount } | { __failed: true } | null.
+  SCREENER_UNIVERSE: null,
 
   hashN(str, salt) { let h = salt || 0; for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return (h % 1000) / 1000; },
   // Every trade print in the tape needs to read in ET, same as the header
@@ -3961,6 +3973,25 @@ const vtx = {
   clearScreenerFilters() {
     this.state.screenerFilters = { sector: 'All', mcapMin: '', peMax: '', revGrowthMin: '', changeMin: '', divYieldMin: '', betaMax: '', ratingMin: 'Any' };
     this.renderRight();
+  },
+  setScreenerSource(source) {
+    this.state.screenerSource = source;
+    // Chg/Rating aren't available for the S&P 500 source — cleared so a
+    // filter set while in Watchlist mode can't silently no-op once
+    // switched (the field would just be undefined on every sp500 row,
+    // so the threshold check would never remove anything).
+    if (source === 'sp500') this.state.screenerFilters = { ...this.state.screenerFilters, changeMin: '', ratingMin: 'Any' };
+    if (source === 'sp500' && !this.SCREENER_UNIVERSE) this.loadScreenerUniverse();
+    this.renderRight();
+  },
+  async loadScreenerUniverse() {
+    try {
+      const res = await fetch('/api/stock/screener');
+      this.SCREENER_UNIVERSE = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this.SCREENER_UNIVERSE = { __failed: true };
+    }
+    if (this.state.tab === 'analytics') this.renderRight();
   },
   // Loads 1Y weekly history for the whole watchlist plus the S&P 500
   // benchmark (^GSPC — same Yahoo symbol Instrument View uses), via the
@@ -8354,20 +8385,33 @@ const vtx = {
       // for the whole watchlist; this surfaces 9 of them.
       const ss = s.screenerSort;
       const f = s.screenerFilters;
-      const allRows = s.tickers.map(t => {
-        const chg = this.pctOf(t);
-        const pe = t.fin ? t.fin.peTTM : null;
-        const revGrowth = t.fin ? t.fin.revenueGrowthYoy : null;
-        const avgVol = t.fin ? t.fin.avgVolume3M : null; // already in millions
-        const volRatio = (t.volume != null && avgVol) ? (t.volume/1e6) / avgVol : null;
-        const w52pos = (t.week52Low != null && t.week52High != null && t.week52High > t.week52Low)
-          ? (t.price - t.week52Low) / (t.week52High - t.week52Low) * 100 : null;
-        const mcap = t.fin ? t.fin.marketCapitalization : null; // millions
-        const divYield = t.fin ? t.fin.dividendYield : null;
-        const beta = t.fin ? t.fin.beta : null;
-        const rating = this.computeAnalystConsensus(t.analyst);
-        return { sym:t.sym, sector:t.sector, price:t.price, chg, pe, revGrowth, volRatio, w52pos, mcap, divYield, beta, rating };
-      });
+      const src = s.screenerSource || 'watchlist';
+      const su = this.SCREENER_UNIVERSE;
+      // Same row shape either way (chg/volRatio/w52pos/rating just stay
+      // null for the sp500 source, which has no live quote or analyst-
+      // recommendation fetch for ~500 symbols) — everything downstream
+      // (filtering, sorting) runs unmodified regardless of source.
+      const allRows = src === 'sp500'
+        ? (su && su.rows ? su.rows.map(r => ({
+            sym: r.symbol, sector: r.sector, price: null, chg: null,
+            pe: r.peTTM, revGrowth: r.revenueGrowthYoy, volRatio: null, w52pos: null,
+            mcap: r.marketCap, divYield: r.dividendYield, beta: r.beta, rating: null,
+            ret52w: r.priceReturn52W,
+          })) : [])
+        : s.tickers.map(t => {
+          const chg = this.pctOf(t);
+          const pe = t.fin ? t.fin.peTTM : null;
+          const revGrowth = t.fin ? t.fin.revenueGrowthYoy : null;
+          const avgVol = t.fin ? t.fin.avgVolume3M : null; // already in millions
+          const volRatio = (t.volume != null && avgVol) ? (t.volume/1e6) / avgVol : null;
+          const w52pos = (t.week52Low != null && t.week52High != null && t.week52High > t.week52Low)
+            ? (t.price - t.week52Low) / (t.week52High - t.week52Low) * 100 : null;
+          const mcap = t.fin ? t.fin.marketCapitalization : null; // millions
+          const divYield = t.fin ? t.fin.dividendYield : null;
+          const beta = t.fin ? t.fin.beta : null;
+          const rating = this.computeAnalystConsensus(t.analyst);
+          return { sym:t.sym, sector:t.sector, price:t.price, chg, pe, revGrowth, volRatio, w52pos, mcap, divYield, beta, rating, ret52w: null };
+        });
       const sectors = [...new Set(allRows.map(r => r.sector).filter(Boolean))].sort();
       const RATING_MIN_SCORE = { 'Hold or better': 2.5, 'Buy or better': 3.5, 'Strong Buy only': 4.5 };
       let screenerRows = allRows.filter(r => {
@@ -8395,6 +8439,11 @@ const vtx = {
           <input type="number" value="${f[key]}" onchange="vtx.setScreenerFilter('${key}', this.value)" placeholder="${placeholder}" style="width:64px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:5px 7px;color:var(--txt);font-family:var(--mono);font-size:10.5px;outline:none;">
         </div>`;
       const filtersActive = f.sector!=='All' || f.mcapMin || f.peMax || f.revGrowthMin || f.changeMin || f.divYieldMin || f.betaMax || f.ratingMin!=='Any';
+      const sourceToggleHtml = `
+        <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;">
+          <button onclick="vtx.setScreenerSource('watchlist')" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:5px 10px;border:none;border-radius:6px;cursor:pointer;background:${src==='watchlist'?'rgba(var(--glow),.2)':'transparent'};color:${src==='watchlist'?'var(--acc2)':'var(--mut)'};">Watchlist</button>
+          <button onclick="vtx.setScreenerSource('sp500')" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:5px 10px;border:none;border-radius:6px;cursor:pointer;background:${src==='sp500'?'rgba(var(--glow),.2)':'transparent'};color:${src==='sp500'?'var(--acc2)':'var(--mut)'};">S&amp;P 500</button>
+        </div>`;
       const filterBarHtml = `
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:11px;">
           <div>
@@ -8407,47 +8456,73 @@ const vtx = {
           ${numField('Mkt Cap ≥ ($B)', 'mcapMin', 'Any')}
           ${numField('P/E ≤', 'peMax', 'Any')}
           ${numField('Rev Gr. ≥ (%)', 'revGrowthMin', 'Any')}
-          ${numField('Chg ≥ (%)', 'changeMin', 'Any')}
+          ${src==='watchlist' ? numField('Chg ≥ (%)', 'changeMin', 'Any') : ''}
           ${numField('Div Yield ≥ (%)', 'divYieldMin', 'Any')}
           ${numField('Beta ≤', 'betaMax', 'Any')}
+          ${src==='watchlist' ? `
           <div>
             <label style="display:block;font-size:7.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:3px;">Analyst Rating</label>
             <select onchange="vtx.setScreenerFilter('ratingMin', this.value)" style="background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:5px 7px;color:var(--txt);font-family:var(--ui);font-size:10.5px;outline:none;">
               ${['Any','Hold or better','Buy or better','Strong Buy only'].map(o => `<option value="${o}" ${f.ratingMin===o?'selected':''}>${o}</option>`).join('')}
             </select>
-          </div>
+          </div>` : ''}
           ${filtersActive ? `<button onclick="vtx.clearScreenerFilters()" style="font-family:var(--ui);font-size:10px;font-weight:700;color:var(--mut);background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;">Clear filters</button>` : ''}
         </div>`;
-      const screenerHtml = `
-        <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
-          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:9px;">
-            <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Watchlist Screener</span>
-            <span style="font-size:9.5px;color:var(--mut);">${screenerRows.length} of ${allRows.length}</span>
-          </div>
+
+      let screenerBodyHtml;
+      if (src === 'sp500' && !su) {
+        screenerBodyHtml = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Loading the S&amp;P 500 roster…</div>`;
+      } else if (src === 'sp500' && su.__failed) {
+        screenerBodyHtml = `<div style="padding:24px 14px;text-align:center;color:var(--mut);font-size:11.5px;">Couldn't load the S&amp;P 500 screener. <button onclick="vtx.loadScreenerUniverse()" style="background:none;border:none;color:var(--acc2);font-size:11.5px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        const coverageHtml = src === 'sp500'
+          ? `<div style="font-size:8.5px;color:var(--warn);margin-bottom:8px;">${su.warmCount} of ${su.universeSize} real S&P 500 companies have fundamentals loaded so far — a daily background job rotates through the full roster over a few days; the rest show as "—" until reached, not zero.</div>`
+          : '';
+        screenerBodyHtml = `
           ${filterBarHtml}
+          ${coverageHtml}
           <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:11px;">
               <thead><tr style="color:var(--mut);font-size:9px;letter-spacing:.05em;text-transform:uppercase;">
                 <th style="text-align:left;padding:6px 8px;">Ticker</th>
-                ${sHeader('price','Price')}${sHeader('chg','Change %')}${sHeader('mcap','Mkt Cap')}${sHeader('pe','P/E')}${sHeader('revGrowth','Rev Growth YoY')}${sHeader('rating','Rating')}${sHeader('divYield','Div Yield')}${sHeader('volRatio','Vol vs Avg')}${sHeader('w52pos','52W Range Pos.')}
+                ${src==='watchlist' ? sHeader('price','Price') : ''}
+                ${src==='watchlist' ? sHeader('chg','Change %') : ''}
+                ${sHeader('mcap','Mkt Cap')}${sHeader('pe','P/E')}${sHeader('revGrowth','Rev Growth YoY')}
+                ${src==='watchlist' ? sHeader('rating','Rating') : ''}
+                ${sHeader('divYield','Div Yield')}
+                ${src==='watchlist' ? sHeader('volRatio','Vol vs Avg') : ''}
+                ${src==='watchlist' ? sHeader('w52pos','52W Range Pos.') : sHeader('ret52w','52W Return')}
+                ${sHeader('beta','Beta')}
               </tr></thead>
               <tbody>
                 ${screenerRows.length ? screenerRows.map(r => `<tr style="border-top:1px solid var(--line);">
                   <td style="padding:7px 8px;"><span class="symlink" onclick="vtx.jumpToTicker('${r.sym}')" style="font-family:var(--mono);font-weight:700;color:var(--acc2);">${r.sym}</span> <span style="color:var(--mut);font-size:9.5px;">${r.sector}</span></td>
-                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${this.fmt(r.price)}</td>
-                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.chg>=0?'var(--pos)':'var(--neg)'};">${(r.chg>=0?'+':'')+r.chg.toFixed(2)}%</td>
+                  ${src==='watchlist' ? `<td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${this.fmt(r.price)}</td>` : ''}
+                  ${src==='watchlist' ? `<td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.chg>=0?'var(--pos)':'var(--neg)'};">${(r.chg>=0?'+':'')+r.chg.toFixed(2)}%</td>` : ''}
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${r.mcap!=null?this.mktCapFromFin(r.mcap):'—'}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.pe, v=>v.toFixed(1)+'x')}</td>
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.revGrowth==null?'var(--txt)':(r.revGrowth>=0?'var(--pos)':'var(--neg)')};">${dashOr(r.revGrowth, v=>(v>=0?'+':'')+v.toFixed(1)+'%')}</td>
-                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.rating?r.rating.color:'var(--mut)'};">${r.rating?r.rating.label:'—'}</td>
+                  ${src==='watchlist' ? `<td style="text-align:right;padding:7px 8px;font-family:var(--mono);font-weight:700;color:${r.rating?r.rating.color:'var(--mut)'};">${r.rating?r.rating.label:'—'}</td>` : ''}
                   <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.divYield, v=>v.toFixed(2)+'%')}</td>
-                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.volRatio!=null&&r.volRatio>=1.5?'var(--warn)':'var(--txt)'};">${dashOr(r.volRatio, v=>v.toFixed(2)+'x')}</td>
-                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.w52pos, v=>v.toFixed(0)+'%')}</td>
-                </tr>`).join('') : `<tr><td colspan="10" style="padding:18px 8px;text-align:center;color:var(--mut);font-size:11px;">No watchlist tickers match these filters.</td></tr>`}
+                  ${src==='watchlist'
+                    ? `<td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.volRatio!=null&&r.volRatio>=1.5?'var(--warn)':'var(--txt)'};">${dashOr(r.volRatio, v=>v.toFixed(2)+'x')}</td>
+                       <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.w52pos, v=>v.toFixed(0)+'%')}</td>`
+                    : `<td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:${r.ret52w==null?'var(--txt)':(r.ret52w>=0?'var(--pos)':'var(--neg)')};">${dashOr(r.ret52w, v=>(v>=0?'+':'')+v.toFixed(1)+'%')}</td>`}
+                  <td style="text-align:right;padding:7px 8px;font-family:var(--mono);color:var(--txt);">${dashOr(r.beta, v=>v.toFixed(2))}</td>
+                </tr>`).join('') : `<tr><td colspan="10" style="padding:18px 8px;text-align:center;color:var(--mut);font-size:11px;">No ${src==='watchlist'?'watchlist tickers':'S&P 500 companies'} match these filters.</td></tr>`}
               </tbody>
             </table>
           </div>
-          <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Click a column to sort · Vol vs Avg above 1.5x is flagged as unusual · 52W Range Pos. is 0% at the 52-week low, 100% at the 52-week high · Rating is the same 5-tier analyst consensus shown on each ticker's own page.</div>
+          <div style="font-size:8px;color:var(--mut);margin-top:8px;opacity:.7;">Click a column to sort${src==='watchlist' ? ' · Vol vs Avg above 1.5x is flagged as unusual · 52W Range Pos. is 0% at the 52-week low, 100% at the 52-week high · Rating is the same 5-tier analyst consensus shown on each ticker view' : ' · real Finnhub fundamentals + the real Wikipedia S&P 500 roster, not a sample'}.</div>`;
+      }
+      const screenerHtml = `
+        <div style="padding:12px 14px;border-bottom:1px solid var(--line);">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:9px;">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);">Screener</span>
+            <span style="font-size:9.5px;color:var(--mut);">${screenerRows.length} of ${allRows.length}</span>
+            <div style="margin-left:auto;">${sourceToggleHtml}</div>
+          </div>
+          ${screenerBodyHtml}
         </div>`;
 
       const syms = s.tickers.map(t => t.sym);
