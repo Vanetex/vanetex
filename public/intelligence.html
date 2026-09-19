@@ -298,6 +298,19 @@ input{font-family:var(--ui)}
           </div>
         </div>
 
+        <!-- Volatility Rank — real 20-day annualized realized volatility
+             (2 years of real daily closes, Yahoo) ranked against its own
+             trailing range. The free, realized-vol stand-in for the
+             options-IV Rank screens Bloomberg has — real IV data isn't
+             free anywhere. See vtx.volRankFor(). -->
+        <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 18px 46px rgba(0,0,0,.42);flex-shrink:0;">
+          <div style="display:flex;align-items:baseline;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);">Volatility Rank</span>
+            <span style="font-size:9px;color:var(--mut);margin-left:auto;">realized, not implied — see note</span>
+          </div>
+          <div id="volRankBody" style="padding:10px 14px 14px;"></div>
+        </div>
+
         <!-- Price Alerts — client-side only, checked against whatever price
              is already live in this ticker's row (WS trades or the 60s poll)
              on a 5s tick. See vtx.checkAlerts(). Only meaningful for a
@@ -1822,7 +1835,7 @@ const vtx = {
   },
   openSettings() { document.getElementById('settingsOverlay').style.display='flex'; const picker=document.getElementById('accentPicker'); if (picker) picker.value = this.state.customAccent || getComputedStyle(document.documentElement).getPropertyValue('--acc').trim() || '#2F7BFF'; },
   closeSettings() { document.getElementById('settingsOverlay').style.display='none'; },
-  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.setMobilePanel('chart'); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadCompetitors(sym); this.loadShortInterest(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
+  selectTicker(sym) { this.state.focus = sym; this.state.view = 'ticker'; this.state.query=''; this.state.searchOpen=false; this.state.remoteResults=[]; this.state.instrumentMatches=[]; this.state.remoteIndicators=[]; document.getElementById('searchInput').value=''; this.closeSearch(); this.setMobilePanel('chart'); this.render(); this.loadChartData(sym, this.state.tf); this.loadDepth(sym); this.loadEtfHoldings(sym); this.loadFinancialsReported(sym); this.loadPeerPercentile(sym); this.loadCompetitors(sym); this.loadShortInterest(sym); this.loadVolatilityHistory(sym); this.loadNews(); const wt = this.state.tickers.find(x=>x.sym===sym); this.loadFederalContracts(sym, wt && wt.name); },
   backToOverview() { this.state.view = 'overview'; this.setMobilePanel('chart'); this.render(); this.loadNews(); },
   selectInstrument(code) {
     const inst = this.INSTRUMENTS[code];
@@ -4432,7 +4445,7 @@ const vtx = {
     this.loadFinancialsReported(sym);
     this.loadPeerPercentile(sym);
     this.loadCompetitors(sym);
-    this.loadShortInterest(sym);
+    this.loadShortInterest(sym); this.loadVolatilityHistory(sym);
     this.loadFederalContracts(sym, name);
     this.loadSparklines([sym]);
     this.loadNews();
@@ -4492,7 +4505,7 @@ const vtx = {
     this.loadFinancialsReported(sym);
     this.loadPeerPercentile(sym);
     this.loadCompetitors(sym);
-    this.loadShortInterest(sym);
+    this.loadShortInterest(sym); this.loadVolatilityHistory(sym);
     this.loadFederalContracts(sym, name);
     this.loadSparklines([sym]);
     this.loadNews();
@@ -6332,6 +6345,55 @@ const vtx = {
     if (this.state.focus === sym && this.state.view === 'ticker') this.render();
   },
 
+  // 2 years of real daily closes (Yahoo, via the existing candles route —
+  // its "2Y" range mode exists specifically for this: daily granularity
+  // over a long window, unlike the main chart which steps down to
+  // weekly/monthly bars past 1Y). Feeds volRankFor() below; no separate
+  // backend route needed since this is pure math over data already free.
+  async loadVolatilityHistory(sym) {
+    if (!this._volHistory) this._volHistory = {};
+    try {
+      const res = await fetch(`/api/stock/candles?symbol=${encodeURIComponent(sym)}&range=2Y`);
+      this._volHistory[sym] = res.ok ? await res.json() : { __failed: true };
+    } catch (e) {
+      this._volHistory[sym] = { __failed: true };
+    }
+    if (this.state.focus === sym && this.state.view === 'ticker') this.render();
+  },
+  // Standard HV-Rank/HV-Percentile methodology (the free, realized-vol
+  // analog of the IV Rank options traders use — real options IV isn't
+  // free anywhere, confirmed earlier this session): a rolling 20-trading-
+  // day annualized realized volatility series over the full window, then
+  // today's reading is ranked against its own history in two
+  // complementary ways — Rank (position within the min/max range) and
+  // Percentile (share of days strictly below today). Needs ~1 extra
+  // month of data beyond the rank window so the rolling series itself has
+  // a real range to rank against, not just a couple of points.
+  volRankFor(prices, windowDays) {
+    windowDays = windowDays || 20;
+    if (!prices || prices.length < windowDays + 30) return null;
+    const logReturns = [];
+    for (let i = 1; i < prices.length; i++) {
+      if (prices[i] > 0 && prices[i - 1] > 0) logReturns.push(Math.log(prices[i] / prices[i - 1]));
+      else logReturns.push(null);
+    }
+    const annualize = Math.sqrt(252);
+    const series = [];
+    for (let i = windowDays; i <= logReturns.length; i++) {
+      const win = logReturns.slice(i - windowDays, i);
+      if (win.some(v => v == null)) continue;
+      const mean = win.reduce((a, b) => a + b, 0) / win.length;
+      const variance = win.reduce((a, b) => a + (b - mean) * (b - mean), 0) / (win.length - 1);
+      series.push(Math.sqrt(variance) * annualize * 100);
+    }
+    if (series.length < 20) return null;
+    const current = series[series.length - 1];
+    const min = Math.min(...series), max = Math.max(...series);
+    const rank = max > min ? ((current - min) / (max - min)) * 100 : null;
+    const below = series.filter(v => v < current).length;
+    const percentile = (below / series.length) * 100;
+    return { current, min, max, rank, percentile, series };
+  },
   // Real FINRA Rule 4560 consolidated short interest — bi-monthly, official,
   // no API key. A symbol with no short position on file (thin float, brand
   // new listing) genuinely returns zero points; that's not a failure.
@@ -7587,6 +7649,50 @@ const vtx = {
         <span style="font-size:10.5px;color:var(--mut);">${m.label}</span>
         <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${m.color};">${m.value}</span>
       </div>`).join('');
+
+    // Volatility Rank — real 20-day annualized realized vol (2Y of real
+    // daily closes) ranked against its own trailing range. Rank = where
+    // today sits between the 2Y min and max; Percentile = share of the
+    // last 2 years' days that were calmer than today. Both verified
+    // against exact synthetic identities before shipping (constant-growth
+    // series -> 0 vol; a vol step ramping up/down at the end of the
+    // window -> rank pinned to 100/0 respectively).
+    const vrEl = document.getElementById('volRankBody');
+    if (vrEl) {
+      const vh = this._volHistory && this._volHistory[f.sym];
+      if (!vh) {
+        vrEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Loading…</div>`;
+      } else if (vh.__failed || !vh.prices || !vh.prices.length) {
+        vrEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Couldn't load price history for this calculation. <button onclick="vtx.loadVolatilityHistory('${f.sym}')" style="background:none;border:none;color:var(--acc2);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Try again</button></div>`;
+      } else {
+        const vr = this.volRankFor(vh.prices, 20);
+        if (!vr) {
+          vrEl.innerHTML = `<div style="font-size:11px;color:var(--mut);">Not enough trading history yet for this stock (needs ~2 months minimum, ideally 2 years).</div>`;
+        } else {
+          const rankColor = vr.rank == null ? 'var(--mut)' : vr.rank >= 70 ? 'var(--neg)' : vr.rank <= 30 ? 'var(--pos)' : 'var(--warn)';
+          vrEl.innerHTML = `
+            <div style="display:flex;gap:14px;align-items:center;margin-bottom:12px;">
+              <div>
+                <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">HV Rank (2Y)</div>
+                <div style="font-family:var(--mono);font-size:26px;font-weight:800;color:${rankColor};">${vr.rank == null ? '—' : vr.rank.toFixed(0)}</div>
+              </div>
+              <div>
+                <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">HV Percentile</div>
+                <div style="font-family:var(--mono);font-size:26px;font-weight:800;color:var(--txt);">${vr.percentile.toFixed(0)}</div>
+              </div>
+              <div style="margin-left:auto;text-align:right;">
+                <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;">20D Realized Vol</div>
+                <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--txt);">${vr.current.toFixed(1)}%</div>
+                <div style="font-size:9px;color:var(--mut);">2Y range ${vr.min.toFixed(1)}%–${vr.max.toFixed(1)}%</div>
+              </div>
+            </div>
+            <svg width="100%" height="30" viewBox="0 0 104 30" preserveAspectRatio="none" fill="none" style="display:block;margin-bottom:8px;">
+              <path d="${this.sparkPath(vr.series)}" stroke="var(--acc2)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"></path>
+            </svg>
+            <div style="font-size:8px;color:var(--mut);opacity:.7;">Annualized 20-trading-day realized volatility from real daily closes (Yahoo), ranked against its own trailing 2-year range. This is historical/realized volatility, not implied volatility — free options data isn't available anywhere for this. Rank = position within the 2Y range (0=calmest, 100=most volatile); Percentile = share of the last 2 years' trading days that were calmer than today.</div>`;
+        }
+      }
+    }
 
     // Price Alerts — only meaningful for a real watchlist member (previewed-
     // but-not-added tickers never get a second price update, so an alert on
