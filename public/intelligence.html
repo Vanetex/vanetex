@@ -3779,17 +3779,27 @@ const vtx = {
     const m = b.frequency;
     const freqLabel = { 1: 'Annual', 2: 'Semi-Annual', 4: 'Quarterly' }[m] || 'Semi-Annual';
 
-    let price, yieldPct;
-    if (b.mode === 'yield') {
-      yieldPct = b.yield;
-      price = this.bondPriceForYield(b.faceValue, b.couponRate, yieldPct, b.years, m);
-    } else {
-      price = b.price;
-      yieldPct = this.bondYtmFromPrice(b.faceValue, b.couponRate, price, b.years, m);
+    // years <= 0 makes bondCashflows() return an empty cash-flow array —
+    // confirmed live, this used to silently show "-90.000%" YTM (the
+    // bisection solver pins to its own lower bound once price is always
+    // computed as 0) and NaN for both durations and convexity, with
+    // nothing telling the user why. Guarded the same way DCF guards
+    // discountRate <= terminalGrowth: skip the math, say why, instead of
+    // rendering nonsense.
+    const yearsValid = b.years > 0;
+    let price, yieldPct, macDuration, modDuration, convexity;
+    if (yearsValid) {
+      if (b.mode === 'yield') {
+        yieldPct = b.yield;
+        price = this.bondPriceForYield(b.faceValue, b.couponRate, yieldPct, b.years, m);
+      } else {
+        price = b.price;
+        yieldPct = this.bondYtmFromPrice(b.faceValue, b.couponRate, price, b.years, m);
+      }
+      macDuration = this.bondMacaulayDuration(b.faceValue, b.couponRate, yieldPct, b.years, m);
+      modDuration = macDuration / (1 + (yieldPct / 100) / m);
+      convexity = this.bondConvexity(b.faceValue, b.couponRate, yieldPct, b.years, m);
     }
-    const macDuration = this.bondMacaulayDuration(b.faceValue, b.couponRate, yieldPct, b.years, m);
-    const modDuration = macDuration / (1 + (yieldPct / 100) / m);
-    const convexity = this.bondConvexity(b.faceValue, b.couponRate, yieldPct, b.years, m);
 
     // Duration + convexity's own real use — approximating the price
     // impact of a rate move without repricing the whole cash-flow
@@ -3801,10 +3811,10 @@ const vtx = {
 
     const freqBtn = (val, label) => `<button onclick="vtx.setBondInput('frequency','${val}')" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:5px 10px;border:none;border-radius:6px;cursor:pointer;background:${m===val?'rgba(var(--glow),.2)':'transparent'};color:${m===val?'var(--acc2)':'var(--mut)'};">${label}</button>`;
     const modeBtn = (val, label) => `<button onclick="vtx.setBondMode('${val}')" style="font-family:var(--ui);font-size:10px;font-weight:600;padding:5px 10px;border:none;border-radius:6px;cursor:pointer;background:${b.mode===val?'rgba(var(--glow),.2)':'transparent'};color:${b.mode===val?'var(--acc2)':'var(--mut)'};">${label}</button>`;
-    const inputField = (label, key, value, step) => `
+    const inputField = (label, key, value, step, min) => `
       <div>
         <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">${label}</label>
-        <input type="number" value="${value}" step="${step || 'any'}" onchange="vtx.setBondInput('${key}', this.value)" style="width:110px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:7px 9px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;">
+        <input type="number" value="${value}" step="${step || 'any'}"${min != null ? ` min="${min}"` : ''} onchange="vtx.setBondInput('${key}', this.value)" style="width:110px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:7px 9px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;">
       </div>`;
 
     el.innerHTML = `
@@ -3816,7 +3826,7 @@ const vtx = {
         <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:16px;">
           ${inputField('Face Value ($)', 'faceValue', b.faceValue, '1')}
           ${inputField('Coupon Rate (%)', 'couponRate', b.couponRate, '0.01')}
-          ${inputField('Years to Maturity', 'years', b.years, '0.5')}
+          ${inputField('Years to Maturity', 'years', b.years, '0.5', '0.5')}
           <div>
             <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">Coupon Frequency</label>
             <div style="display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;">${freqBtn(1,'Annual')}${freqBtn(2,'Semi-Ann.')}${freqBtn(4,'Qtrly')}</div>
@@ -3830,6 +3840,9 @@ const vtx = {
           ${b.mode === 'yield' ? inputField('Yield to Maturity (%)', 'yield', b.yield, '0.01') : inputField('Price ($)', 'price', b.price, '0.01')}
         </div>
       </div>
+      ${!yearsValid ? `
+      <div style="padding:10px 12px;border-radius:8px;background:rgba(255,77,94,.08);border:1px solid rgba(255,77,94,.25);font-size:11px;color:#ff4d5e;">Years to Maturity must be greater than 0 — a bond with no time to maturity has no cash flows to price.</div>
+      ` : `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;flex-shrink:0;">
         <div style="background:linear-gradient(180deg,rgba(18,22,38,.6),rgba(8,11,20,.72));border:1px solid var(--line);border-radius:16px;padding:14px 16px;">
           <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">${b.mode === 'yield' ? 'Price' : 'Yield to Maturity'}</div>
@@ -3865,6 +3878,7 @@ const vtx = {
         </div>
         <div style="padding:10px 14px;font-size:8px;color:var(--mut);opacity:.7;">Duration + convexity approximation (ΔP/P ≈ −ModDur·Δy + ½·Convexity·Δy²), not a full cash-flow repricing — accurate for small moves, increasingly approximate for large ones. Formulas verified against two exact identities: a par bond (yield = coupon) prices at face value, and a zero-coupon bond's Macaulay duration equals its maturity.</div>
       </div>
+      `}
     `;
   },
   selectIndicator(meta) {
@@ -4459,7 +4473,15 @@ const vtx = {
       this.state.tickers = this.state.tickers.map(x => {
         if (x.sym!==sym) return x;
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow, currency:q.currency}; }
+        // A failed/empty quote (bad symbol, delisted, network hiccup)
+        // otherwise left the $100 optimistic placeholder from above
+        // displayed as if it were real — confirmed live, with no
+        // indication anything went wrong, and for addTicker specifically
+        // it then got saved to localStorage and kept reappearing on every
+        // reload. quoteFailed tells the Focus Header and Key Statistics to
+        // show "unavailable" instead of that fake number.
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow, currency:q.currency, quoteFailed:false}; }
+        else { upd.quoteFailed = true; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -4518,7 +4540,11 @@ const vtx = {
       ]);
       const merge = (x) => {
         let upd = {...x};
-        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow, currency:q.currency}; }
+        // See addTicker()'s identical guard for why quoteFailed exists —
+        // without it, a bad/nonexistent symbol kept the $100 optimistic
+        // placeholder on screen looking like a real quote, forever.
+        if (q && q.price) { upd = {...upd, price:q.price, open:q.open||q.prevClose||q.price, prevClose:q.prevClose, changePct:q.changePct, name:q.name||upd.name, sector:q.industry||upd.sector, exchange:q.exchange||upd.exchange, logo:q.logo||null, ipo:q.ipo||null, website:q.website||null, isFund:q.isFund, dayHigh:q.dayHigh, dayLow:q.dayLow, currency:q.currency, quoteFailed:false}; }
+        else { upd.quoteFailed = true; }
         if (fin && !fin.error) upd.fin = fin;
         if (analyst && !analyst.error) upd.analyst = analyst;
         if (earn && !earn.error) upd.earnHistory = earn.quarters;
@@ -7462,11 +7488,13 @@ const vtx = {
           <div style="font-family:var(--mono);font-weight:700;font-size:12.5px;color:${isFocus?'var(--acc2)':'var(--txt)'};">${t.sym}</div>
           <div style="font-size:9.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div>
         </div>
-        <svg width="58" height="22" viewBox="0 0 104 30" preserveAspectRatio="none" fill="none"><path d="${this.sparkPath(t.hist)}" stroke="${up?cPos:cNeg}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path></svg>
+        ${t.quoteFailed ? `<span></span>` : `<svg width="58" height="22" viewBox="0 0 104 30" preserveAspectRatio="none" fill="none"><path d="${this.sparkPath(t.hist)}" stroke="${up?cPos:cNeg}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path></svg>`}
         <div style="text-align:right;">
-          <div style="font-family:var(--mono);font-weight:600;font-size:11.5px;">${this.fmt(t.price)}</div>
+          ${t.quoteFailed
+            ? `<div style="font-family:var(--mono);font-size:10px;font-weight:600;color:var(--neg);" title="No quote on file for ${t.sym}">unavailable</div>`
+            : `<div style="font-family:var(--mono);font-weight:600;font-size:11.5px;">${this.fmt(t.price)}</div>
           <div style="font-family:var(--mono);font-size:10px;font-weight:600;color:${up?cPos:cNeg};">${(up?'+':'')+p.toFixed(2)}%</div>
-          ${hasAhRow ? `<div style="font-family:var(--mono);font-size:8.5px;font-weight:600;color:var(--warn);margin-top:1px;" title="${this.extSessionLabel() || 'After Hours'}: ${this.fmt(t.ahPrice)}">${(ahPctRow>=0?'+':'')+ahPctRow.toFixed(2)}% AH</div>` : ''}
+          ${hasAhRow ? `<div style="font-family:var(--mono);font-size:8.5px;font-weight:600;color:var(--warn);margin-top:1px;" title="${this.extSessionLabel() || 'After Hours'}: ${this.fmt(t.ahPrice)}">${(ahPctRow>=0?'+':'')+ahPctRow.toFixed(2)}% AH</div>` : ''}`}
         </div>
         <button class="wlremove" onclick="event.stopPropagation();vtx.removeTicker('${t.sym}')" title="Remove from watchlist" style="opacity:0;transition:opacity .15s ease;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--mut);cursor:pointer;font-size:13px;line-height:1;">×</button>
       </div>`;
@@ -7543,7 +7571,9 @@ const vtx = {
             ${f.logo ? `<img src="${f.logo}" alt="" style="width:30px;height:30px;border-radius:7px;object-fit:contain;background:#fff;padding:2px;flex-shrink:0;" onerror="this.style.display='none'">` : ''}
             <span style="font-family:var(--mono);font-size:30px;font-weight:800;letter-spacing:-.01em;">${f.sym}</span>
             <span class="sectorlink" onclick="vtx.jumpToSector(${JSON.stringify(f.sector).replace(/"/g,'&quot;')})" title="View ${f.sector} in the sector heatmap" style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);border:1px solid rgba(52,211,255,.3);background:rgba(52,211,255,.08);border-radius:99px;padding:3px 10px;">${f.sector}</span>
-            <span style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--pos);"><span style="width:5px;height:5px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.5s ease infinite;"></span>LIVE</span>
+            ${f.quoteFailed
+              ? `<span style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--neg);"><span style="width:5px;height:5px;border-radius:50%;background:var(--neg);"></span>QUOTE UNAVAILABLE</span>`
+              : `<span style="display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--pos);"><span style="width:5px;height:5px;border-radius:50%;background:var(--pos);box-shadow:0 0 7px var(--pos);animation:pulse 1.5s ease infinite;"></span>LIVE</span>`}
           </div>
           <div style="font-size:13px;color:var(--mut);">${f.name}${f.exchange ? ' · '+f.exchange : ''}${f.currency && f.currency !== 'USD' ? ' · '+f.currency : ''}</div>
           ${(f.ipo || f.website) ? `<div style="display:flex;gap:12px;margin-top:4px;font-size:10.5px;color:var(--mut);">
@@ -7552,12 +7582,16 @@ const vtx = {
           </div>` : ''}
         </div>
         <div style="text-align:right;">
+          ${f.quoteFailed ? `
+          <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--mut);">—</div>
+          <div style="font-size:10.5px;color:var(--mut);margin-top:7px;">No quote on file for ${f.sym} — check the symbol, or this may not be a US-listed security.</div>
+          ` : `
           <div style="font-family:var(--mono);font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1;">${f.currency && f.currency !== 'USD' ? `<span style="font-size:15px;color:var(--mut);">${f.currency}</span> ` : ''}${this.fmt(f.price)}</div>
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:7px;">
             <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:${dollarUp?cPos:cNeg};">${(dollarUp?'+':'')+dollarChange.toFixed(2)}</span>
             <span style="font-family:var(--mono);font-size:11.5px;font-weight:700;color:${fup?cPos:cNeg};background:${fup?'rgba(31,209,151,.1)':'rgba(255,77,94,.1)'};border:1px solid ${fup?'rgba(31,209,151,.3)':'rgba(255,77,94,.3)'};border-radius:99px;padding:3px 9px;">${(fup?'+':'')+fp.toFixed(2)}% ${fup?'▲':'▼'}</span>
-          </div>
-          ${hasAh ? `
+          </div>`}
+          ${!f.quoteFailed && hasAh ? `
           <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:6px;">
             <span style="font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);">${this.extSessionLabel() || 'After Hours'}</span>
             <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--txt);">${this.fmt(f.ahPrice)}</span>
@@ -7579,7 +7613,7 @@ const vtx = {
     // confirmed live: NVDA showed 215.94–217.80 while the real Finnhub
     // range was 215.66–219.86, missing a real $2 move entirely.
     const headStats = [
-      {label:'Open',value:this.fmt(f.open),color:'var(--txt)'},
+      {label:'Open',value:f.quoteFailed ? '—' : this.fmt(f.open),color:'var(--txt)'},
       {label:'Day Low',value:f.dayLow!=null?this.fmt(f.dayLow):'—',color:'var(--txt)'},
       {label:'Day High',value:f.dayHigh!=null?this.fmt(f.dayHigh):'—',color:'var(--txt)'},
       {label:'Volume',value:f.volume != null ? (f.volume/1e6).toFixed(1)+'M' : '—',color:'var(--txt)'},
@@ -7636,7 +7670,7 @@ const vtx = {
     // forever for every non-dividend-paying stock (TSLA, COIN, PLTR...).
     const fin = f.fin || null;
     const metrics = [
-      {label:'Prev Close',value:this.fmt(f.prevClose || f.open),color:'var(--txt)'},
+      {label:'Prev Close',value:f.quoteFailed ? '—' : this.fmt(f.prevClose || f.open),color:'var(--txt)'},
       {label:'P/E Ratio',value:fin?.peTTM != null ? fin.peTTM.toFixed(1)+'x' : '—',color:'var(--txt)'},
       {label:'52W High',value:(fin?.week52High ?? f.week52High) != null ? this.fmt(fin?.week52High ?? f.week52High) : '—',color:'var(--pos)'},
       {label:'52W Low',value:(fin?.week52Low ?? f.week52Low) != null ? this.fmt(fin?.week52Low ?? f.week52Low) : '—',color:'var(--neg)'},
@@ -8206,12 +8240,18 @@ const vtx = {
           }
           const d = this.state.dcfInputs;
 
+          // years <= 0 leaves `projected` empty — confirmed live, this used
+          // to silently show "$NaN" fair value (projected[-1] is undefined,
+          // and NaN propagates through terminal value, upside %, and
+          // terminal-value-share) with no explanation. Same guard style as
+          // the existing rateSpread check just below.
+          const yearsValid = d.years > 0;
           const projected = [];
-          for (let y = 1; y <= d.years; y++) projected.push(baseFcf * Math.pow(1 + d.growthRate / 100, y));
+          if (yearsValid) for (let y = 1; y <= d.years; y++) projected.push(baseFcf * Math.pow(1 + d.growthRate / 100, y));
           const pvExplicit = projected.reduce((sum, cf, i) => sum + cf / Math.pow(1 + d.discountRate / 100, i + 1), 0);
           const rateSpread = d.discountRate - d.terminalGrowth;
           let equityValue = null, pvTerminal = null;
-          if (rateSpread > 0) {
+          if (yearsValid && rateSpread > 0) {
             const terminalValue = projected[projected.length - 1] * (1 + d.terminalGrowth / 100) / (rateSpread / 100);
             pvTerminal = terminalValue / Math.pow(1 + d.discountRate / 100, d.years);
             equityValue = pvExplicit + pvTerminal;
@@ -8228,20 +8268,20 @@ const vtx = {
             if (abs >= 1e6) return sign + '$' + (abs/1e6).toFixed(1) + 'M';
             return sign + '$' + abs.toLocaleString();
           };
-          const dcfInputField = (label, key, value, step, width) => `
+          const dcfInputField = (label, key, value, step, width, min) => `
             <div>
               <label style="display:block;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;">${label}</label>
-              <input type="number" value="${value}" step="${step || 'any'}" onchange="vtx.setDcfInput('${key}', this.value)" style="width:${width || 92}px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:7px 9px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;">
+              <input type="number" value="${value}" step="${step || 'any'}"${min != null ? ` min="${min}"` : ''} onchange="vtx.setDcfInput('${key}', this.value)" style="width:${width || 92}px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:7px;padding:7px 9px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;">
             </div>`;
 
           dcfEl.innerHTML = `
             <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:14px;">
               ${dcfInputField('FCF Growth, Yrs 1–' + d.years + ' (%)', 'growthRate', d.growthRate, '0.1')}
-              ${dcfInputField('Projection Years', 'years', d.years, '1', 76)}
+              ${dcfInputField('Projection Years', 'years', d.years, '1', 76, 1)}
               ${dcfInputField('Terminal Growth (%)', 'terminalGrowth', d.terminalGrowth, '0.1')}
               ${dcfInputField('Discount Rate (%)', 'discountRate', d.discountRate, '0.1')}
             </div>
-            ${rateSpread <= 0 ? `<div style="padding:10px 12px;border-radius:8px;background:rgba(255,77,94,.08);border:1px solid rgba(255,77,94,.25);font-size:11px;color:#ff4d5e;">Discount rate must be higher than terminal growth — the terminal value formula doesn't converge otherwise.</div>` : `
+            ${!yearsValid ? `<div style="padding:10px 12px;border-radius:8px;background:rgba(255,77,94,.08);border:1px solid rgba(255,77,94,.25);font-size:11px;color:#ff4d5e;">Projection Years must be greater than 0 — there's nothing to discount otherwise.</div>` : rateSpread <= 0 ? `<div style="padding:10px 12px;border-radius:8px;background:rgba(255,77,94,.08);border:1px solid rgba(255,77,94,.25);font-size:11px;color:#ff4d5e;">Discount rate must be higher than terminal growth — the terminal value formula doesn't converge otherwise.</div>` : `
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">
               <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:12px 14px;">
                 <div style="font-size:9px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Estimated Fair Value</div>
