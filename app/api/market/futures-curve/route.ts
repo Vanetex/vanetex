@@ -29,6 +29,15 @@ const CONTRACT_ROOTS: Record<string, { root: string; exch: string }> = {
   COFFEE: { root: "KC", exch: "NYB" },
   COTTON: { root: "CT", exch: "NYB" },
   SUGAR: { root: "SB", exch: "NYB" },
+  // Major-currency futures (Euro FX, Japanese Yen, British Pound) — same
+  // CME dated-contract convention, confirmed live (e.g. 6EZ25.CME,
+  // 6EH26.CME). These trade a quarterly cycle (Mar/Jun/Sep/Dec), so most
+  // of the other 8 candidate months below will come back empty — the
+  // existing "probe and keep only what's confirmed" logic already
+  // handles that the same way it handles Sugar skipping December.
+  EURUSD: { root: "6E", exch: "CME" },
+  USDJPY: { root: "6J", exch: "CME" },
+  GBPUSD: { root: "6B", exch: "CME" },
 };
 
 const MONTH_CODES = ["F", "G", "H", "J", "K", "M", "N", "Q", "U", "V", "X", "Z"];

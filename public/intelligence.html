@@ -1850,12 +1850,21 @@ const vtx = {
     this.loadInstrumentData(code);
     this.loadNews();
     if (inst.category === 'Crypto') this.loadCryptoDetail(code);
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+    if (this.MARKET_DYNAMICS_CATEGORIES.includes(inst.category)) {
       this.loadCftcCot(code); this.loadSeasonality(code); this.loadFuturesCurve(code);
       this.loadDollarCorrelation(code); this.loadVolatilityPercentile(code);
     }
   },
-  COMMODITY_CATEGORIES: ['Metals', 'Energy', 'Agriculture'],
+  // CFTC positioning, seasonality, forward curve, USD correlation, and
+  // realized-vol percentile were originally commodity-only, but none of
+  // the underlying data is actually commodity-specific — CFTC publishes
+  // real Commitment of Traders reports for the major currency futures too
+  // (confirmed live: "EURO FX"/"JAPANESE YEN"/"BRITISH POUND" all exist in
+  // the same real file), Yahoo carries the same dated-contract convention
+  // for currency futures (6E/6J/6B, confirmed live), and seasonality/
+  // correlation/vol-percentile only ever needed the price history every
+  // instrument already has. Forex was just never turned on.
+  MARKET_DYNAMICS_CATEGORIES: ['Metals', 'Energy', 'Agriculture', 'Forex'],
   // Real CFTC Commitment of Traders positioning — who's actually long/
   // short a given commodity's futures, broken out by trader type. Only
   // fetched for Metals/Energy/Agriculture instruments; not every
@@ -6991,7 +7000,7 @@ const vtx = {
     // Non-commercials are the speculative/managed-money crowd; commercials
     // are the producers/hedgers on the other side of that trade.
     let cftcCotHtml = '';
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+    if (this.MARKET_DYNAMICS_CATEGORIES.includes(inst.category)) {
       const cot = this._cftcCot && this._cftcCot[code];
       const bar = (long, short) => {
         const tot = long + short;
@@ -7042,16 +7051,15 @@ const vtx = {
                 <span style="color:${cNeg};">Short ${fmtCt(cot.commShort)}</span>
               </div>
             </div>
-            <div style="font-size:8px;color:var(--mut);opacity:.7;">CFTC Commitment of Traders, legacy futures-only report, as of ${cot.reportDate||'—'} · published weekly, Fridays.</div>
+            <div style="font-size:8px;color:var(--mut);opacity:.7;">CFTC Commitment of Traders, legacy futures-only report, as of ${cot.reportDate||'—'} · published weekly, Fridays.${code === 'USDJPY' ? ' Positioning shown is in the Japanese Yen future, quoted USD-per-JPY — the inverse of how USD/JPY is spot-quoted, so "Long" here means long the yen (bullish JPY, which is bearish/down for the USD/JPY pair as shown on this page).' : code === 'EURUSD' || code === 'GBPUSD' ? ' Positioning shown is in the underlying currency future, which quotes the same direction as the spot pair on this page (long the future = bullish the pair).' : ''}</div>
           </div>`;
       }
     }
 
-    // Commodity-only detail — average seasonal (month-over-month) pattern
-    // from real historical monthly closes. Same COMMODITY_CATEGORIES gate
-    // as CFTC above.
+    // Average seasonal (month-over-month) pattern from real historical
+    // monthly closes. Same MARKET_DYNAMICS_CATEGORIES gate as CFTC above.
     let seasonalityHtml = '';
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+    if (this.MARKET_DYNAMICS_CATEGORIES.includes(inst.category)) {
       const se = this._seasonality && this._seasonality[code];
       if (!se) {
         seasonalityHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading seasonal pattern…</div>`;
@@ -7087,7 +7095,7 @@ const vtx = {
     // contracts (not the continuous front-month root), revealing whether
     // the market is in contango or backwardation.
     let futuresCurveHtml = '';
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+    if (this.MARKET_DYNAMICS_CATEGORIES.includes(inst.category)) {
       const fc = this._futuresCurve && this._futuresCurve[code];
       if (!fc) {
         futuresCurveHtml = `<div style="padding:16px;text-align:center;color:var(--mut);font-size:11px;">Loading forward curve…</div>`;
@@ -7108,10 +7116,18 @@ const vtx = {
         const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(p.price).toFixed(1)}`).join(' ');
         const shapeColor = fc.shape === 'backwardation' ? 'var(--warn)' : fc.shape === 'contango' ? 'var(--acc2)' : 'var(--mut)';
         const shapeLabel = fc.shape === 'backwardation' ? 'Backwardation' : fc.shape === 'contango' ? 'Contango' : 'Flat';
+        // Commodity forward-curve shape is driven by storage/carry cost;
+        // an FX forward curve is driven by the interest-rate differential
+        // between the two currencies (covered interest rate parity) —
+        // "supply tightness" and "cost of carry for storable goods" are
+        // real explanations for one and wrong for the other, so this
+        // branches on category rather than reusing one description for
+        // both.
+        const isFx = inst.category === 'Forex';
         const shapeDesc = fc.shape === 'backwardation'
-          ? 'Further-dated contracts are cheaper than near-dated ones — often a sign of near-term supply tightness.'
+          ? (isFx ? 'Further-dated contracts are cheaper than near-dated ones — reflects the interest-rate differential between the two currencies (covered interest rate parity), not a physical supply signal.' : 'Further-dated contracts are cheaper than near-dated ones — often a sign of near-term supply tightness.')
           : fc.shape === 'contango'
-          ? 'Further-dated contracts are pricier than near-dated ones — the normal cost-of-carry state for storable commodities.'
+          ? (isFx ? 'Further-dated contracts are pricier than near-dated ones — reflects the interest-rate differential between the two currencies (covered interest rate parity), not a storage cost.' : 'Further-dated contracts are pricier than near-dated ones — the normal cost-of-carry state for storable commodities.')
           : 'Little slope across the currently listed contracts.';
         futuresCurveHtml = `
           <div style="padding:14px;">
@@ -7135,7 +7151,7 @@ const vtx = {
     // percentile, grouped into one "Market Dynamics" card (mirrors how
     // the crypto card bundles several stats rather than one-card-per-stat).
     let marketDynamicsHtml = '';
-    if (this.COMMODITY_CATEGORIES.includes(inst.category)) {
+    if (this.MARKET_DYNAMICS_CATEGORIES.includes(inst.category)) {
       const dc = this._dollarCorr && this._dollarCorr[code];
       const vp = this._volPercentile && this._volPercentile[code];
       let corrBlock;

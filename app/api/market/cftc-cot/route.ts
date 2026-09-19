@@ -28,6 +28,15 @@ const MARKET_NAMES: Record<string, string> = {
   SOYBEANS: "SOYBEANS - CHICAGO BOARD OF TRADE",
   COFFEE: "COFFEE C - ICE FUTURES U.S.",
   COTTON: "COTTON NO. 2 - ICE FUTURES U.S.",
+  // Major-currency futures (6E/6J/6B on CME) — confirmed live against the
+  // real file, same as every entry above. This app's forex codes are spot
+  // pairs, not the futures themselves, but CFTC positioning in the futures
+  // is the standard real-world proxy for speculative positioning in the
+  // pair — the same convention every real trading terminal uses, since
+  // spot FX has no CFTC report of its own.
+  EURUSD: "EURO FX - CHICAGO MERCANTILE EXCHANGE",
+  USDJPY: "JAPANESE YEN - CHICAGO MERCANTILE EXCHANGE",
+  GBPUSD: "BRITISH POUND - CHICAGO MERCANTILE EXCHANGE",
   SUGAR: "SUGAR NO. 11 - ICE FUTURES U.S.",
 };
 

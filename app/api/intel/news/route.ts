@@ -34,6 +34,24 @@ type NewsItem = {
 // Every phrase is matched with word boundaries (see matchesKeywords) so
 // e.g. "gold" never matches inside "Goldman" and "corn" never matches
 // inside "Cornerstone".
+// The currency name alone (e.g. "euro") misses most of what actually
+// moves a pair — central bank rate decisions and policy commentary
+// rarely say "euro" in the headline at all ("ECB holds rates steady" has
+// no word-boundary match for "euro"; "European" doesn't match it either,
+// since "europ" and "ean" share no boundary). Every major pair below has
+// USD as one leg, so Fed policy is a real, constant driver of all three
+// regardless of which currency the pair is named for — added alongside
+// each pair's own real central bank, its acronym, and its sitting
+// governor/president, since those headlines are the dominant actual
+// driver of FX moves, more so than stories that happen to name the
+// currency directly.
+// No bare "Fed" here on purpose — matchesKeywords is case-insensitive,
+// and "fed" is an ordinary English word ("investors fed up") that a
+// case-sensitive-only check isn't worth special-casing the shared
+// matcher for. "Federal Reserve"/"FOMC"/"Powell"/the rate-decision
+// phrases below already cover the real headlines this is after.
+const FED_KEYWORDS = ["Federal Reserve", "FOMC", "Powell", "interest rate", "rate decision", "rate cut", "rate hike"];
+
 const INSTRUMENT_NEWS_KEYWORDS: Record<string, string[]> = {
   SPX: ["S&P 500", "S&P500"],
   NDX: ["Nasdaq Composite", "Nasdaq index", "Nasdaq 100"],
@@ -67,9 +85,9 @@ const INSTRUMENT_NEWS_KEYWORDS: Record<string, string[]> = {
   UST5Y: ["Treasury yield", "5-year Treasury"],
   UST10Y: ["Treasury yield", "10-year Treasury", "10-year note"],
   UST30Y: ["Treasury yield", "30-year Treasury", "long bond"],
-  EURUSD: ["euro", "EUR/USD"],
-  USDJPY: ["yen", "USD/JPY"],
-  GBPUSD: ["pound sterling", "GBP/USD", "British pound"],
+  EURUSD: ["euro", "EUR/USD", "European Central Bank", "ECB", "eurozone", "Lagarde", ...FED_KEYWORDS],
+  USDJPY: ["yen", "USD/JPY", "Bank of Japan", "BOJ", "Ueda", ...FED_KEYWORDS],
+  GBPUSD: ["pound sterling", "GBP/USD", "British pound", "Bank of England", "BOE", "Bailey", ...FED_KEYWORDS],
   BTC: ["bitcoin", "BTC"],
   ETH: ["ethereum", "ETH"],
   SOL: ["solana"],
